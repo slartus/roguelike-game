@@ -10,9 +10,12 @@ const ENEMY_SCENES: Array[PackedScene] = [
 	preload("res://scenes/enemies/ranged_enemy.tscn"),
 ]
 const PICKUP_SCENE: PackedScene = preload("res://scenes/pickups/health_pickup.tscn")
+const CHEST_SCENE: PackedScene = preload("res://scenes/pickups/chest.tscn")
 
 const MIN_ENEMIES: int = 3
 const MAX_ENEMIES: int = 6
+const CHEST_SPAWN_INTERVAL: int = 3
+const CHEST_POSITION: Vector2 = Vector2(240, 60)
 
 @onready var _enemies_root: Node2D = $Enemies
 @onready var _player: CharacterBody2D = $Player
@@ -31,6 +34,7 @@ func _ready() -> void:
 	_hud.set_room(GameState.current_room_number)
 	_door.player_entered.connect(_on_door_entered)
 	_spawn_enemies()
+	_maybe_spawn_chest()
 
 func _spawn_room() -> void:
 	var scene: PackedScene = ROOM_SCENES.pick_random()
@@ -69,6 +73,13 @@ func _on_enemy_removed() -> void:
 	_alive_enemies -= 1
 	if _alive_enemies <= 0:
 		_open_door()
+
+func _maybe_spawn_chest() -> void:
+	if GameState.current_room_number % CHEST_SPAWN_INTERVAL != 0:
+		return
+	var chest := CHEST_SCENE.instantiate()
+	chest.global_position = CHEST_POSITION
+	add_child(chest)
 
 func _open_door() -> void:
 	_door.open()

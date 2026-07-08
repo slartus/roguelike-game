@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/weapon_resource.gd" id="1_wr"]
+
+[resource]
+script = ExtResource("1_wr")
+display_name = "Dagger"
+damage = 1
+fire_interval = 0.16
+bullet_speed = 280.0
+bullet_lifetime = 0.35
+bullet_color = Color(0.9, 0.95, 1.0, 1.0)
+bullets_per_shot = 1
+spread_angle_deg = 0.0
