@@ -56,11 +56,22 @@ func footprint_tiles_for_floor(floor_number: int) -> Vector2i:
 
 # --- BSP node (inner class) ---------------------------------------------
 
+# Sides bitmask — какие стороны leaf'а разрешено сдвигать при carving.
+# Стороны, разделяющие leaf с BSP-sibling'ом, помечаются "запрещёнными"
+# и не сдвигаются — гарантирует, что sibling walls имеют полный overlap
+# и MST всегда охватит все комнаты через дерево BSP.
+const INSET_TOP: int = 1
+const INSET_RIGHT: int = 2
+const INSET_BOTTOM: int = 4
+const INSET_LEFT: int = 8
+const INSET_ALL: int = INSET_TOP | INSET_RIGHT | INSET_BOTTOM | INSET_LEFT
+
 class BSPNode extends RefCounted:
 	var region: Rect2i          # tile-координаты
 	var left: BSPNode
 	var right: BSPNode
 	var room: Rect2i            # pixel-координаты, populated только у leaves
+	var inset_mask: int = 15    # какие стороны можно отступать (default: все)
 
 	func is_leaf() -> bool:
 		return left == null and right == null
@@ -96,9 +107,9 @@ func _generate_tower_floor(layout: DungeonLayout, rng: RandomNumberGenerator, fl
 	if leaves.is_empty():
 		leaves.append(root)
 
-	# Вырезаем комнату в каждом leaf
+	# Вырезаем комнату в каждом leaf (inset ограничен маской sibling'а)
 	for leaf in leaves:
-		leaf.room = _carve_room(leaf.region, rng)
+		leaf.room = _carve_room(leaf.region, leaf.inset_mask, rng)
 		layout.rooms.append(leaf.room)
 
 	# Строим граф смежности: edges = список {a: int, b: int, wall: Dictionary}
@@ -207,12 +218,20 @@ func _split(node: BSPNode, depth: int, rng: RandomNumberGenerator) -> void:
 			Vector2i(region.position.x, region.position.y + split_at + 1),
 			Vector2i(region.size.x, region.size.y - split_at - 1),
 		)
+		# Top ребёнок не сдвигает свою нижнюю сторону (общая стена с right).
+		# Bottom ребёнок не сдвигает свою верхнюю сторону.
+		left.inset_mask = node.inset_mask & ~INSET_BOTTOM
+		right.inset_mask = node.inset_mask & ~INSET_TOP
 	else:
 		left.region = Rect2i(region.position, Vector2i(split_at, region.size.y))
 		right.region = Rect2i(
 			Vector2i(region.position.x + split_at + 1, region.position.y),
 			Vector2i(region.size.x - split_at - 1, region.size.y),
 		)
+		# Left ребёнок не сдвигает свою правую сторону.
+		# Right ребёнок не сдвигает свою левую.
+		left.inset_mask = node.inset_mask & ~INSET_RIGHT
+		right.inset_mask = node.inset_mask & ~INSET_LEFT
 
 	node.left = left
 	node.right = right
@@ -230,33 +249,63 @@ func _collect_leaves(node: BSPNode, out: Array[BSPNode]) -> void:
 
 # --- Room carving в leaf-регионе ---------------------------------------
 
-func _carve_room(region: Rect2i, rng: RandomNumberGenerator) -> Rect2i:
-	# region в tile-координатах. Комната шринкается на 0..2 tiles с каждой
-	# стороны, но не меньше MIN_ROOM_TILES.
-	var max_left := mini(ROOM_INSET_MAX_TILES, (region.size.x - MIN_ROOM_TILES) / 2)
-	var max_top := mini(ROOM_INSET_MAX_TILES, (region.size.y - MIN_ROOM_TILES) / 2)
-	var inset_left: int = rng.randi_range(0, maxi(0, max_left))
-	var inset_top: int = rng.randi_range(0, maxi(0, max_top))
-	var max_right := mini(ROOM_INSET_MAX_TILES, region.size.x - MIN_ROOM_TILES - inset_left)
-	var max_bottom := mini(ROOM_INSET_MAX_TILES, region.size.y - MIN_ROOM_TILES - inset_top)
-	var inset_right: int = rng.randi_range(0, maxi(0, max_right))
-	var inset_bottom: int = rng.randi_range(0, maxi(0, max_bottom))
+func _carve_room(region: Rect2i, inset_mask: int, rng: RandomNumberGenerator) -> Rect2i:
+	# region в tile-координатах. Комната шринкается на 0..2 tiles только
+	# на сторонах, разрешённых inset_mask. Стороны, общие с BSP-sibling'ом,
+	# не двигаются — sibling-adjacency остаётся полной, MST охватывает все.
 
-	# Также ограничиваем сверху MAX_ROOM_TILES (большие комнаты обрезаем)
+	# Максимальный inset на каждой стороне: 0 если сторона запрещена, иначе
+	# ROOM_INSET_MAX_TILES.
+	var can_top: bool = (inset_mask & INSET_TOP) != 0
+	var can_right: bool = (inset_mask & INSET_RIGHT) != 0
+	var can_bottom: bool = (inset_mask & INSET_BOTTOM) != 0
+	var can_left: bool = (inset_mask & INSET_LEFT) != 0
+
+	var max_inset_left: int = ROOM_INSET_MAX_TILES if can_left else 0
+	var max_inset_top: int = ROOM_INSET_MAX_TILES if can_top else 0
+	var max_inset_right: int = ROOM_INSET_MAX_TILES if can_right else 0
+	var max_inset_bottom: int = ROOM_INSET_MAX_TILES if can_bottom else 0
+
+	# Гарантируем что комната >= MIN_ROOM_TILES
+	max_inset_left = mini(max_inset_left, (region.size.x - MIN_ROOM_TILES) / 2)
+	max_inset_right = mini(max_inset_right, region.size.x - MIN_ROOM_TILES - max_inset_left)
+	max_inset_top = mini(max_inset_top, (region.size.y - MIN_ROOM_TILES) / 2)
+	max_inset_bottom = mini(max_inset_bottom, region.size.y - MIN_ROOM_TILES - max_inset_top)
+
+	var inset_left: int = rng.randi_range(0, maxi(0, max_inset_left))
+	var inset_top: int = rng.randi_range(0, maxi(0, max_inset_top))
+	var inset_right: int = rng.randi_range(0, maxi(0, max_inset_right))
+	var inset_bottom: int = rng.randi_range(0, maxi(0, max_inset_bottom))
+
+	# Ограничиваем сверху MAX_ROOM_TILES — только на разрешённых сторонах.
 	var room_w: int = region.size.x - inset_left - inset_right
 	var room_h: int = region.size.y - inset_top - inset_bottom
 	if room_w > MAX_ROOM_TILES:
 		var extra: int = room_w - MAX_ROOM_TILES
-		var add_left: int = rng.randi_range(0, extra)
-		inset_left += add_left
-		inset_right += extra - add_left
-		room_w = MAX_ROOM_TILES
+		# Разбрасываем extra только по разрешённым сторонам.
+		if can_left and can_right:
+			var add_left: int = rng.randi_range(0, extra)
+			inset_left += add_left
+			inset_right += extra - add_left
+		elif can_left:
+			inset_left += extra
+		elif can_right:
+			inset_right += extra
+		# Если ни одна сторона не разрешена — оставляем большую комнату.
+		if can_left or can_right:
+			room_w = MAX_ROOM_TILES
 	if room_h > MAX_ROOM_TILES:
 		var extra_h: int = room_h - MAX_ROOM_TILES
-		var add_top: int = rng.randi_range(0, extra_h)
-		inset_top += add_top
-		inset_bottom += extra_h - add_top
-		room_h = MAX_ROOM_TILES
+		if can_top and can_bottom:
+			var add_top: int = rng.randi_range(0, extra_h)
+			inset_top += add_top
+			inset_bottom += extra_h - add_top
+		elif can_top:
+			inset_top += extra_h
+		elif can_bottom:
+			inset_bottom += extra_h
+		if can_top or can_bottom:
+			room_h = MAX_ROOM_TILES
 
 	var tile_pos := Vector2i(region.position.x + inset_left, region.position.y + inset_top)
 	var tile_size := Vector2i(room_w, room_h)

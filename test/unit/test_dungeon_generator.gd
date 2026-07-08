@@ -149,11 +149,17 @@ func test_rooms_vary_in_size() -> void:
 		"largest room should be at least 2x smallest (varied sizes)")
 
 func test_all_rooms_reachable_via_doorways() -> void:
-	var layout = _gen.generate(42, 4, false)
-	# BFS от rooms[0] через corridor-соседей
-	var visited := _bfs_reachable_rooms(layout, 0)
-	assert_eq(visited.size(), layout.rooms.size(),
-		"all rooms must be connected via doorways (MST guarantees this)")
+	# Проверяем для нескольких seed'ов и разных этажей, чтобы поймать
+	# ситуации где sibling-inset ломал adjacency graph.
+	var seeds := [42, 100, 777, 1234, 9999]
+	var floors := [1, 4, 7, 10]
+	for seed_v in seeds:
+		for floor_num in floors:
+			var layout = _gen.generate(seed_v, floor_num, false)
+			var visited := _bfs_reachable_rooms(layout, 0)
+			assert_eq(visited.size(), layout.rooms.size(),
+				"seed=%d floor=%d: %d/%d rooms reachable via doorways" % [
+					seed_v, floor_num, visited.size(), layout.rooms.size()])
 
 func test_start_reaches_exit_via_doorways() -> void:
 	var layout = _gen.generate(42, 4, false)
