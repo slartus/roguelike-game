@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/rooms/door.tscn" id="1_door"]
 
@@ -7,6 +7,9 @@ size = Vector2(480, 8)
 
 [sub_resource type="RectangleShape2D" id="Wall_v"]
 size = Vector2(8, 270)
+
+[sub_resource type="RectangleShape2D" id="Pillar"]
+size = Vector2(16, 16)
 
 [node name="Room" type="Node2D"]
 
@@ -54,28 +57,68 @@ color = Color(0.35, 0.32, 0.28, 1)
 [node name="CollisionShape2D" type="CollisionShape2D" parent="WallRight"]
 shape = SubResource("Wall_v")
 
+[node name="Pillar1" type="StaticBody2D" parent="."]
+position = Vector2(120, 90)
+
+[node name="Visual" type="Polygon2D" parent="Pillar1"]
+polygon = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+color = Color(0.45, 0.38, 0.32, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Pillar1"]
+shape = SubResource("Pillar")
+
+[node name="Pillar2" type="StaticBody2D" parent="."]
+position = Vector2(360, 90)
+
+[node name="Visual" type="Polygon2D" parent="Pillar2"]
+polygon = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+color = Color(0.45, 0.38, 0.32, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Pillar2"]
+shape = SubResource("Pillar")
+
+[node name="Pillar3" type="StaticBody2D" parent="."]
+position = Vector2(120, 180)
+
+[node name="Visual" type="Polygon2D" parent="Pillar3"]
+polygon = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+color = Color(0.45, 0.38, 0.32, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Pillar3"]
+shape = SubResource("Pillar")
+
+[node name="Pillar4" type="StaticBody2D" parent="."]
+position = Vector2(360, 180)
+
+[node name="Visual" type="Polygon2D" parent="Pillar4"]
+polygon = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+color = Color(0.45, 0.38, 0.32, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Pillar4"]
+shape = SubResource("Pillar")
+
 [node name="SpawnPoints" type="Node2D" parent="."]
 
 [node name="Spawn1" type="Marker2D" parent="SpawnPoints"]
-position = Vector2(80, 60)
+position = Vector2(60, 40)
 
 [node name="Spawn2" type="Marker2D" parent="SpawnPoints"]
 position = Vector2(240, 40)
 
 [node name="Spawn3" type="Marker2D" parent="SpawnPoints"]
-position = Vector2(400, 60)
+position = Vector2(420, 40)
 
 [node name="Spawn4" type="Marker2D" parent="SpawnPoints"]
-position = Vector2(80, 210)
+position = Vector2(60, 135)
 
 [node name="Spawn5" type="Marker2D" parent="SpawnPoints"]
-position = Vector2(240, 90)
+position = Vector2(420, 135)
 
 [node name="Spawn6" type="Marker2D" parent="SpawnPoints"]
-position = Vector2(400, 210)
+position = Vector2(240, 135)
 
 [node name="PlayerStart" type="Marker2D" parent="."]
-position = Vector2(240, 200)
+position = Vector2(240, 220)
 
 [node name="Door" parent="." instance=ExtResource("1_door")]
 position = Vector2(240, 262)

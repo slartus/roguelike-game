@@ -1,5 +1,10 @@
 extends Node2D
 
+const ROOM_SCENES: Array[PackedScene] = [
+	preload("res://scenes/rooms/room.tscn"),
+	preload("res://scenes/rooms/room_pillars.tscn"),
+	preload("res://scenes/rooms/room_cross.tscn"),
+]
 const ENEMY_SCENES: Array[PackedScene] = [
 	preload("res://scenes/enemies/enemy.tscn"),
 	preload("res://scenes/enemies/ranged_enemy.tscn"),
@@ -9,21 +14,34 @@ const PICKUP_SCENE: PackedScene = preload("res://scenes/pickups/health_pickup.ts
 const MIN_ENEMIES: int = 3
 const MAX_ENEMIES: int = 6
 
-@onready var _room: Node2D = $Room
 @onready var _enemies_root: Node2D = $Enemies
 @onready var _player: CharacterBody2D = $Player
 @onready var _hud: CanvasLayer = $HUD
-@onready var _door: Area2D = $Room/Door
 
+var _room: Node2D
+var _door: Area2D
 var _alive_enemies: int = 0
 
 func _ready() -> void:
 	randomize()
+	_spawn_room()
+	_place_player()
 	_player.health_changed.connect(_hud.set_health)
 	_hud.set_health(_player.health, _player.max_health)
 	_hud.set_room(GameState.current_room_number)
 	_door.player_entered.connect(_on_door_entered)
 	_spawn_enemies()
+
+func _spawn_room() -> void:
+	var scene: PackedScene = ROOM_SCENES.pick_random()
+	_room = scene.instantiate()
+	add_child(_room)
+	move_child(_room, 0)
+	_door = _room.get_node("Door")
+
+func _place_player() -> void:
+	var start: Marker2D = _room.get_node("PlayerStart")
+	_player.global_position = start.global_position
 
 func _spawn_enemies() -> void:
 	var spawn_points: Array = _room.get_node("SpawnPoints").get_children()
