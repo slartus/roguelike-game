@@ -5,7 +5,7 @@ const LOG_ENTRY_LIFETIME: float = 5.0
 const LOG_FADE_DURATION: float = 0.4
 
 @onready var _health_label: Label = $HealthLabel
-@onready var _room_label: Label = $RoomLabel
+@onready var _floor_label: Label = $FloorLabel
 @onready var _level_label: Label = $LevelLabel
 @onready var _xp_label: Label = $XpLabel
 @onready var _gold_label: Label = $GoldLabel
@@ -17,8 +17,8 @@ func _ready() -> void:
 func set_health(current: int, maximum: int) -> void:
 	_health_label.text = tr("UI_HEALTH") % [current, maximum]
 
-func set_room(number: int) -> void:
-	_room_label.text = tr("UI_ROOM") % number
+func set_floor(number: int) -> void:
+	_floor_label.text = tr("UI_FLOOR") % number
 
 func set_level(level: int) -> void:
 	_level_label.text = tr("UI_LEVEL") % level

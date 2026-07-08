@@ -51,14 +51,14 @@ func test_log_chest_open_format() -> void:
 	assert_eq(_texts[0], "Открыт сундук")
 	assert_eq(_tints[0], EventLog.CHEST_TINT)
 
-func test_log_room_format() -> void:
-	EventLog.log_room(3)
-	assert_eq(_texts[0], "Комната 3")
-	assert_eq(_tints[0], EventLog.ROOM_TINT)
+func test_log_floor_format() -> void:
+	EventLog.log_floor(3)
+	assert_eq(_texts[0], "Этаж 3")
+	assert_eq(_tints[0], EventLog.FLOOR_TINT)
 
-func test_log_boss_room_format() -> void:
-	EventLog.log_boss_room(5)
-	assert_eq(_texts[0], "Босс — комната 5!")
+func test_log_boss_floor_format() -> void:
+	EventLog.log_boss_floor(5)
+	assert_eq(_texts[0], "Босс — этаж 5!")
 	assert_eq(_tints[0], EventLog.BOSS_TINT)
 
 func test_log_level_up_format() -> void:
@@ -72,14 +72,14 @@ func test_english_locale_translates_correctly() -> void:
 	assert_eq(_texts[0], "Killed Slime (+5 XP, +1 gold)")
 	EventLog.log_heal(2)
 	assert_eq(_texts[1], "+2 HP")
-	EventLog.log_room(3)
-	assert_eq(_texts[2], "Room 3")
+	EventLog.log_floor(3)
+	assert_eq(_texts[2], "Floor 3")
 
 func test_multiple_entries_are_reported_in_order() -> void:
-	EventLog.log_room(1)
+	EventLog.log_floor(1)
 	EventLog.log_kill("ENEMY_GOBLIN", 6, 2)
 	EventLog.log_heal(1)
 	assert_eq(_texts.size(), 3)
-	assert_eq(_texts[0], "Комната 1")
+	assert_eq(_texts[0], "Этаж 1")
 	assert_eq(_texts[1], "Убит Гоблин (+6 XP, +2 золото)")
 	assert_eq(_texts[2], "+1 HP")

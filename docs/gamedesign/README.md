@@ -10,7 +10,7 @@
 
 | Файл | Что описывает |
 |------|--------------|
-| [rooms.md](rooms.md) | Планировки комнат, интерфейс room-сцен, boss-режим |
+| [dungeon.md](dungeon.md) | Этажи, генератор, комнаты, коридоры, boss-этаж |
 | [enemies.md](enemies.md) | Обычные враги, чарджеры, боссы: HP, поведение, награды |
 | [weapons.md](weapons.md) | Оружие, `WeaponResource`, конкретные `.tres` |
 | [pickups.md](pickups.md) | HealthPickup, WeaponPickup, Chest |

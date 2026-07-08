@@ -10,7 +10,7 @@ const KILL_TINT: Color = Color(1.0, 0.85, 0.45)
 const HEAL_TINT: Color = Color(0.55, 1.0, 0.65)
 const WEAPON_TINT: Color = Color(0.75, 0.85, 1.0)
 const CHEST_TINT: Color = Color(0.95, 0.75, 0.30)
-const ROOM_TINT: Color = Color(0.95, 0.95, 0.70)
+const FLOOR_TINT: Color = Color(0.95, 0.95, 0.70)
 const BOSS_TINT: Color = Color(1.0, 0.50, 0.50)
 const LEVEL_TINT: Color = Color(1.0, 0.65, 0.85)
 
@@ -40,11 +40,11 @@ func log_weapon_pickup(weapon_key: String) -> void:
 func log_chest_open() -> void:
 	entry_added.emit(tr("LOG_CHEST_OPEN"), CHEST_TINT)
 
-func log_room(number: int) -> void:
-	entry_added.emit(tr("LOG_ROOM") % number, ROOM_TINT)
+func log_floor(number: int) -> void:
+	entry_added.emit(tr("LOG_FLOOR") % number, FLOOR_TINT)
 
-func log_boss_room(number: int) -> void:
-	entry_added.emit(tr("LOG_BOSS_ROOM") % number, BOSS_TINT)
+func log_boss_floor(number: int) -> void:
+	entry_added.emit(tr("LOG_BOSS_FLOOR") % number, BOSS_TINT)
 
 func log_level_up(new_level: int) -> void:
 	entry_added.emit(tr("LOG_LEVEL_UP") % new_level, LEVEL_TINT)

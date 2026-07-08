@@ -11,7 +11,7 @@ signal xp_changed(current: int, max_for_level: int)
 signal leveled_up(new_level: int, new_max_health: int)
 signal gold_changed(total: int)
 
-var current_room_number: int = 1
+var current_floor_number: int = 1
 var player_max_health: int = DEFAULT_MAX_HEALTH
 var player_health: int = DEFAULT_MAX_HEALTH
 var equipped_weapon: WeaponResource = DEFAULT_WEAPON
@@ -23,12 +23,12 @@ var total_gold: int = 0
 func _ready() -> void:
 	_load()
 
-func next_room() -> void:
-	current_room_number += 1
+func next_floor() -> void:
+	current_floor_number += 1
 	get_tree().reload_current_scene()
 
 func reset_run() -> void:
-	current_room_number = 1
+	current_floor_number = 1
 	player_max_health = DEFAULT_MAX_HEALTH
 	player_health = DEFAULT_MAX_HEALTH
 	equipped_weapon = DEFAULT_WEAPON

@@ -7,7 +7,7 @@ var _snapshot: Dictionary
 
 func before_each() -> void:
 	_snapshot = {
-		"room": GameState.current_room_number,
+		"floor": GameState.current_floor_number,
 		"max_hp": GameState.player_max_health,
 		"hp": GameState.player_health,
 		"weapon": GameState.equipped_weapon,
@@ -17,7 +17,7 @@ func before_each() -> void:
 	}
 
 func after_each() -> void:
-	GameState.current_room_number = _snapshot["room"]
+	GameState.current_floor_number = _snapshot["floor"]
 	GameState.player_max_health = _snapshot["max_hp"]
 	GameState.player_health = _snapshot["hp"]
 	GameState.equipped_weapon = _snapshot["weapon"]
@@ -61,7 +61,7 @@ func test_multiple_level_ups_from_big_xp_gain() -> void:
 	assert_eq(GameState.player_max_health, 7, "+2 max hp")
 
 func test_reset_run_clears_run_state_but_keeps_gold() -> void:
-	GameState.current_room_number = 5
+	GameState.current_floor_number = 5
 	GameState.player_level = 3
 	GameState.player_xp = 12
 	GameState.player_max_health = 8
@@ -69,7 +69,7 @@ func test_reset_run_clears_run_state_but_keeps_gold() -> void:
 	GameState.equipped_weapon = PISTOL
 	GameState.total_gold = 100
 	GameState.reset_run()
-	assert_eq(GameState.current_room_number, 1)
+	assert_eq(GameState.current_floor_number, 1)
 	assert_eq(GameState.player_level, 1)
 	assert_eq(GameState.player_xp, 0)
 	assert_eq(GameState.player_max_health, GameState.DEFAULT_MAX_HEALTH)

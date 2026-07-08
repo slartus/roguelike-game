@@ -12,12 +12,12 @@ offset_right = 200.0
 offset_bottom = 24.0
 text = "HP: 5 / 5"
 
-[node name="RoomLabel" type="Label" parent="."]
+[node name="FloorLabel" type="Label" parent="."]
 offset_left = 8.0
 offset_top = 26.0
 offset_right = 200.0
 offset_bottom = 44.0
-text = "Room 1"
+text = "Floor 1"
 
 [node name="LevelLabel" type="Label" parent="."]
 offset_left = 8.0
