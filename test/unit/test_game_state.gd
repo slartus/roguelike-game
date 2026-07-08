@@ -40,24 +40,26 @@ func test_award_xp_ignores_zero_and_negative() -> void:
 	assert_eq(GameState.player_xp, 3)
 
 func test_award_xp_triggers_level_up_when_threshold_crossed() -> void:
-	GameState.player_xp = 15
+	# Pokemon Medium Fast: L1 -> L2 = 7 XP.
+	GameState.player_xp = 5
 	GameState.player_level = 1
 	GameState.player_max_health = 5
 	GameState.player_health = 2
-	GameState.award_xp(10)
-	assert_eq(GameState.player_level, 2, "one level up")
-	assert_eq(GameState.player_xp, 5, "leftover xp = 25 - 20 = 5")
+	GameState.award_xp(3)
+	assert_eq(GameState.player_level, 2, "one level up at 7 XP")
+	assert_eq(GameState.player_xp, 1, "leftover xp = 8 - 7 = 1")
 	assert_eq(GameState.player_max_health, 6, "+1 max hp per level")
 	assert_eq(GameState.player_health, 6, "full heal on level up")
 
 func test_multiple_level_ups_from_big_xp_gain() -> void:
+	# L1 -> L2 нужно 7, L2 -> L3 нужно 19. Итого 26 покрывает 2 уровня.
 	GameState.player_xp = 0
 	GameState.player_level = 1
 	GameState.player_max_health = 5
 	GameState.player_health = 5
-	GameState.award_xp(45)
-	assert_eq(GameState.player_level, 3, "45 xp = 2 level ups (40 xp used)")
-	assert_eq(GameState.player_xp, 5, "5 xp left over")
+	GameState.award_xp(30)
+	assert_eq(GameState.player_level, 3, "30 xp = 2 level ups (26 xp used)")
+	assert_eq(GameState.player_xp, 4, "4 xp left over")
 	assert_eq(GameState.player_max_health, 7, "+2 max hp")
 
 func test_reset_run_clears_run_state_but_keeps_gold() -> void:

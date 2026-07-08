@@ -4,7 +4,6 @@ const SAVE_PATH: String = "user://save.cfg"
 
 const DEFAULT_MAX_HEALTH: int = 5
 const DEFAULT_WEAPON: WeaponResource = preload("res://resources/weapons/dagger.tres")
-const XP_PER_LEVEL: int = 20
 const HEALTH_PER_LEVEL: int = 1
 
 signal xp_changed(current: int, max_for_level: int)
@@ -39,10 +38,10 @@ func award_xp(amount: int) -> void:
 	if amount <= 0:
 		return
 	player_xp += amount
-	while player_xp >= XP_PER_LEVEL:
-		player_xp -= XP_PER_LEVEL
+	while player_xp >= Balance.xp_to_next_level(player_level):
+		player_xp -= Balance.xp_to_next_level(player_level)
 		_level_up()
-	xp_changed.emit(player_xp, XP_PER_LEVEL)
+	xp_changed.emit(player_xp, Balance.xp_to_next_level(player_level))
 
 func _level_up() -> void:
 	player_level += 1

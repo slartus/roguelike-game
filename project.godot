@@ -22,6 +22,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 GameState="*res://autoloads/game_state.gd"
 EventLog="*res://autoloads/event_log.gd"
+Balance="*res://autoloads/balance.gd"
 
 [display]
 

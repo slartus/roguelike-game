@@ -19,6 +19,11 @@ var _volley_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
+	var floor_num := GameState.current_floor_number
+	max_health = Balance.scaled_hp(max_health, floor_num)
+	contact_damage = Balance.scaled_damage(contact_damage, floor_num)
+	xp_reward = Balance.scaled_xp_reward(xp_reward, floor_num)
+	gold_reward = Balance.scaled_gold_reward(gold_reward, floor_num)
 	health = max_health
 	_volley_timer = volley_interval
 

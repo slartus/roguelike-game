@@ -2,6 +2,12 @@
 
 Все враги добавляются в группу `enemy` в `_ready`. При смерти начисляют XP и gold через `GameState.award_xp()` / `award_gold()`. Общий бэкстори — классический fantasy RPG-бестиарий: слизни, гоблиноиды, орки, нежить, пауки.
 
+## Balance-таблицы (D&D 5e-inspired)
+
+**Базовые** значения `max_health` / `contact_damage` / `xp_reward` / `gold_reward` в таблицах ниже — это floor-1 stats. Каждый монстр при спавне в `_ready` применяет линейный scaling по `GameState.current_floor_number` через `Balance.scaled_*` (см. `progression.md`).
+
+Источник цифр — D&D 5e Monster Manual (SRD), нормализованные к roguelike-масштабу (~1/5 оригинальных HP). Например Goblin D&D CR 1/4 имеет 7 HP → у нас 4 (base). Orc CR 1/2 имеет 15 HP → у нас 8.
+
 ## Общая механика восприятия (AI)
 
 У каждого врага есть `perception_radius` — дистанция, на которой он «видит» игрока. Пока игрок вне радиуса, поведение — дефолтное (см. ниже per-type). Как только игрок ближе `perception_radius` — враг переходит в активную фазу. У melee-семейства и boss есть **гистерезис**: возвращение в WANDER происходит на дистанции `perception_radius * 1.6`, чтобы не флапало у границы.

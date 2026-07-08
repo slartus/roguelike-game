@@ -38,7 +38,7 @@ func _ready() -> void:
 	_hud.set_health(_player.health, _player.max_health)
 	_hud.set_floor(GameState.current_floor_number)
 	_hud.set_level(GameState.player_level)
-	_hud.set_xp(GameState.player_xp, GameState.XP_PER_LEVEL)
+	_hud.set_xp(GameState.player_xp, Balance.xp_to_next_level(GameState.player_level))
 	_hud.set_gold(GameState.total_gold)
 	_door.player_entered.connect(_on_door_entered)
 	if _is_boss_floor():

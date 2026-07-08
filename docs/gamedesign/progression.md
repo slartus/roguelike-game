@@ -15,20 +15,41 @@
 | `player_level` | 1 |
 | `player_xp` | 0 |
 
-## XP и уровень
+## XP-кривая (Pokémon Medium Fast)
 
-- 1 уровень = **20 XP** (`XP_PER_LEVEL`).
-- При level-up: **+1 max_health** (`HEALTH_PER_LEVEL`) и **full heal**.
-- Emit `leveled_up(new_level, new_max_health)`, слушают `Player` (обновить `max_health/health`) и `HUD` (обновить label).
+Формула: `total_xp(L) = L^3` (canonical Medium Fast growth group из Pokémon Gen III+, ссылка: bulbapedia.bulbagarden.net/wiki/Experience).
 
-Награда за врагов:
+XP до следующего уровня: `xp_to_next(L) = (L+1)³ − L³ = 3L² + 3L + 1`.
 
-| Враг | XP | Gold |
-|------|----|----- |
-| Melee | 5 | 1 |
-| Ranged | 7 | 2 |
-| Charger | 8 | 1 |
-| Boss | 40 | 20 |
+| Уровень | XP до след. | Cumulative |
+|---------|-------------|------------|
+| 1 → 2 | 7 | 7 |
+| 2 → 3 | 19 | 26 |
+| 3 → 4 | 37 | 63 |
+| 4 → 5 | 61 | 124 |
+| 5 → 6 | 91 | 215 |
+| 10 → 11 | 331 | 1000 |
+
+Формулы живут в `autoloads/balance.gd`: `Balance.total_xp_for_level(L)`, `Balance.xp_to_next_level(L)`. `GameState.award_xp` использует `Balance.xp_to_next_level(player_level)` вместо старой константы.
+
+При level-up: **+1 max_health** и **full heal** (`HEALTH_PER_LEVEL = 1`).
+
+## Награды и scaling монстров
+
+Базовые награды и характеристики монстров зафиксированы в их `.tscn` файлах (см. `enemies.md`). Каждый монстр при спавне `_ready` применяет линейное scaling по номеру этажа:
+
+| Стат | Формула | Прирост / этаж |
+|------|---------|----------------|
+| max_health | `base * (1 + 0.12 * (floor - 1))` | +12% |
+| contact_damage | `base * (1 + 0.10 * (floor - 1))` | +10% |
+| xp_reward | `base * (1 + 0.15 * (floor - 1))` | +15% |
+| gold_reward | `base * (1 + 0.20 * (floor - 1))` | +20% |
+
+Формулы — `Balance.scaled_hp / scaled_damage / scaled_xp_reward / scaled_gold_reward`. Каждый результат `maxi(1, roundi(...))` — минимум 1, никаких 0.
+
+Источник кривой — WoW Classic mob-level table (~10-15% рост stats на уровень). Линейный вариант предсказуемее экспоненты и легче тюнится.
+
+Base statы монстров — D&D 5e Monster Manual (SRD), нормализованные примерно к 1/5 от исходных HP (в roguelike игрок хрупок). См. `enemies.md`.
 
 ## Мета-прогресс (persistent)
 
