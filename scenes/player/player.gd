@@ -3,16 +3,17 @@ extends CharacterBody2D
 signal health_changed(current: int, maximum: int)
 
 @export var speed: float = 90.0
-@export var max_health: int = 5
 @export var bullet_scene: PackedScene
 @export var fire_interval: float = 0.25
 
+var max_health: int
 var health: int
 var _fire_cooldown: float = 0.0
 
 func _ready() -> void:
 	add_to_group("player")
-	health = max_health
+	max_health = GameState.player_max_health
+	health = clampi(GameState.player_health, 1, max_health)
 	health_changed.emit(health, max_health)
 
 func _physics_process(delta: float) -> void:
@@ -38,6 +39,7 @@ func _shoot_towards_mouse() -> void:
 
 func take_damage(amount: int) -> void:
 	health = max(0, health - amount)
+	GameState.player_health = health
 	health_changed.emit(health, max_health)
 	modulate = Color(1, 0.5, 0.5)
 	await get_tree().create_timer(0.1).timeout
@@ -46,5 +48,11 @@ func take_damage(amount: int) -> void:
 	if health == 0:
 		_die()
 
+func heal(amount: int) -> void:
+	health = min(max_health, health + amount)
+	GameState.player_health = health
+	health_changed.emit(health, max_health)
+
 func _die() -> void:
+	GameState.reset_run()
 	get_tree().reload_current_scene()

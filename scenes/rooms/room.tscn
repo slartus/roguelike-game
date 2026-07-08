@@ -1,4 +1,6 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/rooms/door.tscn" id="1_door"]
 
 [sub_resource type="RectangleShape2D" id="Wall_h"]
 size = Vector2(480, 8)
@@ -51,3 +53,26 @@ color = Color(0.35, 0.32, 0.28, 1)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="WallRight"]
 shape = SubResource("Wall_v")
+
+[node name="SpawnPoints" type="Node2D" parent="."]
+
+[node name="Spawn1" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(80, 60)
+
+[node name="Spawn2" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(240, 40)
+
+[node name="Spawn3" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(400, 60)
+
+[node name="Spawn4" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(80, 210)
+
+[node name="Spawn5" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(240, 90)
+
+[node name="Spawn6" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(400, 210)
+
+[node name="Door" parent="." instance=ExtResource("1_door")]
+position = Vector2(240, 262)
