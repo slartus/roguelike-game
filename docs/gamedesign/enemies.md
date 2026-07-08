@@ -42,7 +42,7 @@
 Дефолтное поведение по типам:
 - **Melee** — WANDER: случайное направление, смена каждые `wander_change_interval`; при столкновении со стеной — разворот с малым случайным отклонением. Урон только в CHASE-фазе через `move_and_collide`.
 - **Charger** — WATCH: неподвижно, ждёт игрока. Как только видит — переходит в WAITING → CHARGING.
-- **Ranged** (Skeleton Archer, Lich) — **kiting**: держатся на `preferred_range` дистанции. Идут к игроку если он далеко (dist > preferred_range), отходят если слишком близко (dist < min_range), стоят и стреляют в промежутке. Не стреляют вне perception. move_and_slide гарантирует, что не залипают у стен.
+- **Ranged** (Skeleton Archer, Lich) — **kiting**: держатся на `preferred_range` дистанции. Идут к игроку если он далеко (dist > preferred_range), отходят если слишком близко (dist < min_range), стоят и стреляют в промежутке. Не стреляют вне perception. Если stuck-детектор ловит упор в стену — уходят в escape (см. секцию ниже).
 - **Boss** — `perception_radius = 3000` (эффективно всегда видит), CHASE постоянно + volleys.
 
 Получение урона всегда сразу переводит melee в CHASE (враг «просыпается» даже если игрок был вне радиуса).
@@ -62,6 +62,21 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 5. Charger / Ranged / Boss используют прежнюю прямую логику — им pathfinding не нужен (Charger движется по фикс-direction за короткий charge; Ranged стоит; Boss в открытой boss-арене без препятствий).
 
 **Стоимость**: ~50 pathfind/sec (25 melee-enemies × 4 recalc/sec). AStarGrid2D — C++ core, на grid'е ≤ 40×28 клеток запрос < 1 ms.
+
+## Stuck detection (melee + ranged)
+
+`move_and_slide` не всегда вытаскивает врага из угла: если A* вернул пустой путь (например, `start_cell` попал на solid-клетку из-за того, что позиция врага скруглилась в стену) или ranged-враг пошёл по прямой в стену — velocity после `move_and_slide` обнуляется, и без вмешательства враг «прилипает» к стене намертво.
+
+Обе группы делают одинаковую защиту:
+1. Каждый кадр после `move_and_slide` считаем `velocity.length()`. Если она < `speed * STUCK_VELOCITY_RATIO` (0.15) при попытке двигаться — копим `_stuck_timer`.
+2. Как только `_stuck_timer >= STUCK_TIMEOUT` (0.25 s melee / 0.3 s ranged), включаем **escape**: `_escape_direction` = перпендикуляр к направлению на цель, `_escape_timer = ESCAPE_DURATION` (0.4 s). Сторона выбирается случайно при первой попытке.
+3. Пока `_escape_timer > 0`, velocity задаётся escape-направлением независимо от pathfinding / kiting-логики — враг обходит угол вбок.
+4. Если движение восстановилось, `_stuck_timer` и запомненная `_last_escape_side` сбрасываются.
+5. Если враг застрял снова **сразу после** предыдущего escape — берём **противоположную** сторону, чтобы не циклиться в тот же угол.
+6. У melee при активации escape дополнительно сбрасывается `_path`: старые A*-waypoint'ы могли указывать на ту же самую стену.
+7. При переходе melee-врага в `WANDER` (потеря памяти / достижение last_seen) весь stuck-state сбрасывается — WANDER сам вертит направление при столкновениях, stale `_escape_direction` через 10 s не должно «выстрелить».
+
+Для ranged-врагов stuck-детектор триггерится **только** когда враг сам хотел двигаться (`intended_dir != 0` — kiting-фаза close-in / retreat). На ideal-range ranged штатно стоит на месте, ложных срабатываний быть не должно.
 
 ## Melee (`enemy.gd`)
 

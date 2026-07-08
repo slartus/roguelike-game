@@ -23,6 +23,14 @@ const PATH_RECALC_INTERVAL: float = 0.25
 const PATH_TARGET_STALE_DISTANCE: float = 24.0
 const WAYPOINT_REACHED_DISTANCE: float = 6.0
 const FLOOR_TILE_SIZE: int = 20
+# Stuck detection: если после slide реальная скорость < speed * ratio,
+# значит враг упёрся в стену. Через STUCK_TIMEOUT включаем escape —
+# идём перпендикулярно к цели ESCAPE_DURATION секунд, чтобы обогнуть
+# угол. Без этого враг мог намертво прижаться к стене (A* start_cell
+# solid → fallback на direct chase → упор в стену → повтор каждый tick).
+const STUCK_VELOCITY_RATIO: float = 0.15
+const STUCK_TIMEOUT: float = 0.25
+const ESCAPE_DURATION: float = 0.4
 
 @export var display_name: String = "ENEMY_UNKNOWN"
 @export var speed: float = 40.0
@@ -51,6 +59,10 @@ var _floor: Node                       # Ссылка на Floor (для astar_g
 var _path: PackedVector2Array          # Waypoints в пиксельных координатах
 var _path_recalc_timer: float = 0.0
 var _path_target: Vector2 = Vector2.INF
+var _stuck_timer: float = 0.0
+var _escape_timer: float = 0.0
+var _escape_direction: Vector2 = Vector2.ZERO
+var _last_escape_side: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -164,7 +176,13 @@ func _pixel_to_cell(pos: Vector2) -> Vector2i:
 	return Vector2i(int(pos.x / FLOOR_TILE_SIZE), int(pos.y / FLOOR_TILE_SIZE))
 
 func _chase_direct(_target_pos: Vector2, _delta: float) -> void:
-	var direction := (_target_pos - global_position).normalized()
+	var to_target := (_target_pos - global_position).normalized()
+	var direction: Vector2
+	if _escape_timer > 0.0:
+		_escape_timer -= _delta
+		direction = _escape_direction
+	else:
+		direction = to_target
 	if direction == Vector2.ZERO:
 		velocity = Vector2.ZERO
 		return
@@ -173,6 +191,38 @@ func _chase_direct(_target_pos: Vector2, _delta: float) -> void:
 	# при перекошенном waypoint, а не застревает у неё намертво.
 	move_and_slide()
 	_handle_player_contact()
+	_update_stuck_state(to_target, _delta)
+
+func _update_stuck_state(to_target: Vector2, delta: float) -> void:
+	# Если после slide velocity почти обнулилась — прижались к стене.
+	# Копим таймер; по истечении STUCK_TIMEOUT включаем escape в
+	# перпендикулярном направлении, чтобы попытаться обогнуть угол.
+	if velocity.length() < speed * STUCK_VELOCITY_RATIO:
+		_stuck_timer += delta
+		if _stuck_timer >= STUCK_TIMEOUT and _escape_timer <= 0.0:
+			_escape_direction = _pick_escape_direction(to_target)
+			_escape_timer = ESCAPE_DURATION
+			_stuck_timer = 0.0
+			# Стёрли устаревший A*-путь: он мог указывать на waypoint у
+			# той самой стены, к которой только что прижались.
+			_path = PackedVector2Array()
+	else:
+		_stuck_timer = 0.0
+		# Успешно двигаемся — предыдущий выбранный side «сработал»,
+		# на будущее снова разрешаем случайный выбор.
+		_last_escape_side = 0.0
+
+func _pick_escape_direction(toward_target: Vector2) -> Vector2:
+	var base := toward_target if toward_target != Vector2.ZERO else Vector2.RIGHT
+	# Если только что уже пробовали одну сторону и снова застряли —
+	# берём противоположную, чтобы не циклиться в тот же угол.
+	var side: float
+	if _last_escape_side != 0.0:
+		side = -_last_escape_side
+	else:
+		side = 1.0 if randf() > 0.5 else -1.0
+	_last_escape_side = side
+	return base.rotated(side * PI / 2.0)
 
 func _handle_player_contact() -> void:
 	if _contact_timer > 0.0:
@@ -201,6 +251,13 @@ func _pick_wander_direction() -> void:
 	var angle := randf() * TAU
 	_wander_direction = Vector2.RIGHT.rotated(angle)
 	_wander_timer = wander_change_interval
+	# Переход в WANDER = свежий старт AI. Сбрасываем stuck-state, иначе
+	# сохранённый _escape_direction/_escape_timer с прошлого CHASE может
+	# «выстрелить» устаревшим рывком при возврате в CHASE через N секунд.
+	_stuck_timer = 0.0
+	_escape_timer = 0.0
+	_last_escape_side = 0.0
+	_path = PackedVector2Array()
 
 func _find_player() -> Node2D:
 	var players := get_tree().get_nodes_in_group("player")

@@ -25,9 +25,20 @@ signal died_at(position: Vector2)
 @export var preferred_range: float = 160.0
 @export var min_range: float = 100.0
 
+# Stuck detection: у ranged-врагов нет A* и они ходят по прямой. Если
+# упёрлись в стену при попытке подойти/отойти — через STUCK_TIMEOUT
+# уходим в escape (перпендикуляр к player-line) на ESCAPE_DURATION.
+const STUCK_VELOCITY_RATIO: float = 0.15
+const STUCK_TIMEOUT: float = 0.3
+const ESCAPE_DURATION: float = 0.4
+
 var health: int
 var _target: Node2D
 var _fire_timer: float = 0.0
+var _stuck_timer: float = 0.0
+var _escape_timer: float = 0.0
+var _escape_direction: Vector2 = Vector2.ZERO
+var _last_escape_side: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -55,19 +66,55 @@ func _physics_process(delta: float) -> void:
 
 	# Kiting: приближаемся если далеко, отходим если близко.
 	var to_player := (_target.global_position - global_position).normalized()
+	var intended_dir: Vector2 = Vector2.ZERO
 	if dist > preferred_range:
-		velocity = to_player * speed
+		intended_dir = to_player
 	elif dist < min_range:
-		velocity = -to_player * speed
+		intended_dir = -to_player
+
+	if _escape_timer > 0.0:
+		_escape_timer -= delta
+		velocity = _escape_direction * speed
+	elif intended_dir != Vector2.ZERO:
+		velocity = intended_dir * speed
 	else:
 		velocity = Vector2.ZERO
 	move_and_slide()
+	_update_stuck_state(intended_dir, delta)
 
 	# Стрельба — всегда пока игрок в perception.
 	_fire_timer -= delta
 	if _fire_timer <= 0.0:
 		_fire_timer = fire_interval
 		_shoot()
+
+func _update_stuck_state(intended_dir: Vector2, delta: float) -> void:
+	# Проверяем «застряли ли» только если реально пытались двигаться —
+	# на ideal-range ranged-враг штатно стоит на месте, ложных срабатываний
+	# быть не должно.
+	var wanted_to_move := intended_dir != Vector2.ZERO or _escape_timer > 0.0
+	if wanted_to_move and velocity.length() < speed * STUCK_VELOCITY_RATIO:
+		_stuck_timer += delta
+		if _stuck_timer >= STUCK_TIMEOUT and _escape_timer <= 0.0:
+			_escape_direction = _pick_escape_direction(intended_dir)
+			_escape_timer = ESCAPE_DURATION
+			_stuck_timer = 0.0
+	else:
+		_stuck_timer = 0.0
+		# Успешно двигаемся — сброс side, чтобы разрешить случайный
+		# выбор при следующем застревании.
+		_last_escape_side = 0.0
+
+func _pick_escape_direction(intended_dir: Vector2) -> Vector2:
+	var base := intended_dir if intended_dir != Vector2.ZERO else Vector2.RIGHT
+	# При повторном застревании сразу пробуем противоположную сторону.
+	var side: float
+	if _last_escape_side != 0.0:
+		side = -_last_escape_side
+	else:
+		side = 1.0 if randf() > 0.5 else -1.0
+	_last_escape_side = side
+	return base.rotated(side * PI / 2.0)
 
 func _shoot() -> void:
 	if bullet_scene == null or _target == null:
