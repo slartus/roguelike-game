@@ -38,6 +38,7 @@ const DOORWAY_WIDTH: int = 40
 const DOORWAY_MARGIN: int = 20
 const MIN_SHARED_WALL: int = DOORWAY_WIDTH + 2 * DOORWAY_MARGIN  # 80
 const EXTRA_EDGE_RATIO: float = 0.25
+const SKIP_DOORWAY_RATIO: float = 0.35  # доля doorway'ев, которые пробуем убрать
 
 const FLOOR_PADDING: int = 60
 const ENEMY_SPAWN_MARGIN: int = 22
@@ -132,8 +133,13 @@ func _generate_tower_floor(layout: DungeonLayout, rng: RandomNumberGenerator, fl
 	for i in mini(extra_count, extra_candidates.size()):
 		picked_edges.append(extra_candidates[i])
 
-	# Carve doorways для каждого выбранного edge
-	for e in picked_edges:
+	# Прунинг «лишних» дверей: убираем часть doorway'ев, если после
+	# удаления граф всё ещё связный. Даёт residential feel — не каждая
+	# общая стена имеет проход, но реачить любую комнату всё равно можно.
+	var final_edges := _prune_non_bridge_edges(picked_edges, layout.rooms.size(), rng)
+
+	# Carve doorways только для оставшихся edges
+	for e in final_edges:
 		var corridor := _carve_doorway(e.wall, rng)
 		layout.corridors.append(corridor)
 
@@ -383,6 +389,57 @@ func _edge_key(e: Dictionary) -> String:
 	var i0: int = mini(e.a, e.b)
 	var i1: int = maxi(e.a, e.b)
 	return "%d_%d" % [i0, i1]
+
+func _prune_non_bridge_edges(edges: Array, node_count: int, rng: RandomNumberGenerator) -> Array:
+	# Пробуем удалить SKIP_DOORWAY_RATIO * len(edges) рёбер. Удаляем только
+	# если после этого граф остался связным (BFS от 0 покрывает все
+	# node_count вершин). Кандидаты перемешиваются rng — детерминизм.
+	var candidates := edges.duplicate()
+	_shuffle_with_rng(candidates, rng)
+	var skip_target: int = int(candidates.size() * SKIP_DOORWAY_RATIO)
+	var kept: Array = []
+	var skipped: int = 0
+	for i in candidates.size():
+		if skipped >= skip_target:
+			kept.append(candidates[i])
+			continue
+		# Кандидат на удаление — проверяем, останется ли связность
+		# при keeping ONLY (kept + rest_after_i).
+		var trial: Array = kept.duplicate()
+		for j in range(i + 1, candidates.size()):
+			trial.append(candidates[j])
+		if _is_graph_connected(trial, node_count):
+			skipped += 1  # не добавляем этот edge в kept
+		else:
+			kept.append(candidates[i])
+	return kept
+
+func _is_graph_connected(edges: Array, node_count: int) -> bool:
+	if node_count <= 1:
+		return true
+	# Adjacency list
+	var adj: Array = []
+	for i in node_count:
+		adj.append([])
+	for e in edges:
+		adj[e.a].append(e.b)
+		adj[e.b].append(e.a)
+	# BFS от 0
+	var visited: Array[bool] = []
+	visited.resize(node_count)
+	for i in node_count:
+		visited[i] = false
+	visited[0] = true
+	var queue: Array[int] = [0]
+	var visited_count := 1
+	while queue.size() > 0:
+		var v: int = queue.pop_front()
+		for n in adj[v]:
+			if not visited[n]:
+				visited[n] = true
+				queue.append(n)
+				visited_count += 1
+	return visited_count == node_count
 
 func _uf_find(parent: Array[int], x: int) -> int:
 	while parent[x] != x:

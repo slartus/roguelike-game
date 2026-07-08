@@ -39,7 +39,9 @@
 
 6. **Extra edges.** `ceili(remaining_edges * 0.25)` дополнительных ребер из non-MST adjacencies выбираются случайно (Fisher-Yates prefix с `rng`). Создают циклы → игрок может обойти комнату двумя маршрутами.
 
-7. **Doorway carving.** Для каждого connected ребра пробивается 40-px проход в общей стене со случайной позицией `[wall_lo + DOORWAY_MARGIN, wall_hi - DOORWAY_MARGIN - DOORWAY_WIDTH]`.
+7. **Прунинг лишних дверей.** До `SKIP_DOORWAY_RATIO = 0.35` доли уже выбранных дверей пытаются удалиться. Каждый кандидат — если после удаления BFS-от-нуля покрывает все комнаты (граф остался связным) → удаляем. Так остаётся часть смежных пар с общей стеной, но **без прохода** — residential feel.
+
+8. **Doorway carving.** Для каждого оставшегося ребра пробивается 40-px проход в общей стене со случайной позицией `[wall_lo + DOORWAY_MARGIN, wall_hi - DOORWAY_MARGIN - DOORWAY_WIDTH]`.
 
 8. **Player start / exit.** `player_start` = центр комнаты, минимизирующей `position.x + position.y` (верхний-левый угол). `exit_position` = центр комнаты, максимизирующей `end.x + end.y` (нижний-правый).
 
@@ -69,6 +71,7 @@
 | `DOORWAY_MARGIN` | 20 | Отступ прохода от углов комнаты |
 | `MIN_SHARED_WALL` | 80 | Мин. overlap двух комнат чтобы считать их «adjacent для двери» |
 | `EXTRA_EDGE_RATIO` | 0.25 | +25% случайных дверей сверх MST |
+| `SKIP_DOORWAY_RATIO` | 0.35 | Доля дверей, которые пробуем удалить (только если reachability сохраняется) |
 | `FLOOR_PADDING` | 60 | Отступ от края bounds |
 | `ENEMY_SPAWN_MARGIN` | 22 | Отступ спавна от стены комнаты |
 | `CHEST_FLOOR_INTERVAL` | 3 | Каждый N-й этаж — сундук |
