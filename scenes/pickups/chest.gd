@@ -23,6 +23,7 @@ func _on_body_entered(body: Node) -> void:
 	if _visual != null:
 		_visual.color = Color(0.35, 0.28, 0.18, 1)
 	monitoring = false
+	EventLog.log_chest_open()
 	_spawn_pickup()
 
 func _spawn_pickup() -> void:

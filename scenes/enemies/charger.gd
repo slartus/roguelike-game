@@ -2,6 +2,7 @@ extends CharacterBody2D
 
 enum State { WAITING, CHARGING }
 
+@export var display_name: String = "ENEMY_UNKNOWN"
 @export var max_health: int = 1
 @export var charge_speed: float = 220.0
 @export var wait_duration: float = 1.2
@@ -71,6 +72,7 @@ func take_damage(amount: int) -> void:
 	if is_inside_tree():
 		modulate = current_state_color
 	if health <= 0 and is_inside_tree():
+		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
 		GameState.award_gold(gold_reward)
 		_drop_pickup()

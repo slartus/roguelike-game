@@ -21,6 +21,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 [autoload]
 
 GameState="*res://autoloads/game_state.gd"
+EventLog="*res://autoloads/event_log.gd"
 
 [display]
 
@@ -74,4 +75,9 @@ renderer/rendering_method.mobile="gl_compatibility"
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gut/plugin.cfg")
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://resources/translations/strings.en.translation", "res://resources/translations/strings.ru.translation")
+locale/fallback="en"
 

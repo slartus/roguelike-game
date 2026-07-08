@@ -1,5 +1,6 @@
 extends CharacterBody2D
 
+@export var display_name: String = "ENEMY_UNKNOWN"
 @export var max_health: int = 2
 @export var fire_interval: float = 1.5
 @export var bullet_scene: PackedScene
@@ -49,6 +50,7 @@ func take_damage(amount: int) -> void:
 	if is_inside_tree():
 		modulate = Color.WHITE
 	if health <= 0 and is_inside_tree():
+		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
 		GameState.award_gold(gold_reward)
 		_drop_pickup()

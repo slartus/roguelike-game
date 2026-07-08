@@ -1,5 +1,6 @@
 extends CharacterBody2D
 
+@export var display_name: String = "ENEMY_UNKNOWN"
 @export var speed: float = 40.0
 @export var max_health: int = 3
 @export var contact_damage: int = 1
@@ -47,6 +48,7 @@ func take_damage(amount: int) -> void:
 	if is_inside_tree():
 		modulate = Color.WHITE
 	if health <= 0 and is_inside_tree():
+		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
 		GameState.award_gold(gold_reward)
 		_drop_pickup()

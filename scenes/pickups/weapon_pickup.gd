@@ -12,4 +12,6 @@ func _ready() -> void:
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("player") and body.has_method("equip"):
 		body.equip(weapon)
+		if weapon != null:
+			EventLog.log_weapon_pickup(weapon.display_name)
 		queue_free()

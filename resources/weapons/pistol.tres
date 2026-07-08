@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_wr")
-display_name = "Pistol"
+display_name = "WEAPON_PISTOL"
 damage = 2
 fire_interval = 0.32
 bullet_speed = 240.0

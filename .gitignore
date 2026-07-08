@@ -6,8 +6,8 @@
 export.cfg
 export_presets.cfg
 
-# Imported translations (auto-generated from CSV)
-*.translation
+# NOTE: .translation files (auto-generated from CSV) MUST be committed
+# so tr() works on fresh clones without a prior editor import.
 
 # Mono-specific ignores
 .mono/

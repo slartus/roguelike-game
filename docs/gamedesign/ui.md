@@ -1,0 +1,67 @@
+# UI (HUD + Combat Log)
+
+Всё UI живёт в одной сцене `scenes/ui/hud.tscn` (`CanvasLayer`), инстансится один раз в `Main`.
+
+## Топ-левый угол — статы игрока
+
+`Label`-ы в позициях слева-сверху, шрифт по-умолчанию:
+
+| Label | Ключ tr() | Что показывает |
+|-------|-----------|----------------|
+| `HealthLabel` | `UI_HEALTH` | `HP: %d / %d` |
+| `RoomLabel` | `UI_ROOM` | Номер комнаты |
+| `LevelLabel` | `UI_LEVEL` | Текущий уровень |
+| `XpLabel` | `UI_XP` | XP к следующему уровню |
+| `GoldLabel` | `UI_GOLD` | Общее золото (mета) |
+
+Обновляются через `hud.set_*` методы; `Main._ready` подключает сигналы `Player.health_changed`, `GameState.xp_changed`, `GameState.leveled_up`, `GameState.gold_changed`.
+
+## Правый нижний угол — Combat Log
+
+Панель `CombatLog` (`VBoxContainer`) справа-снизу с anchor preset `bottom-right`, `alignment = END` (новые записи прижаты к низу).
+
+Размер: 210×140 px в viewport, с margin 4 px от краёв.
+
+Каждая запись — динамически создаваемый `Label` с:
+- `font_size = 10` (мелкий, не мешает игре),
+- цветовым `font_color` из `EventLog.*_TINT` (жёлтый убийства, зелёный heal, голубой оружие, оранжевый сундук, светло-жёлтый комната, красный босс, розовый level up),
+- `horizontal_alignment = RIGHT` — прижаты к правому краю,
+- `autowrap_mode = WORD_SMART`.
+
+Жизненный цикл записи:
+1. `EventLog.entry_added(text, tint)` → HUD создаёт `Label`, добавляет в `CombatLog`.
+2. Если записей > `LOG_MAX_ENTRIES` (6) → удаляется самая старая (верхняя).
+3. Через `LOG_ENTRY_LIFETIME` (5 с) запускается `tween` fade `modulate:a → 0` за `LOG_FADE_DURATION` (0.4 с) → `queue_free`.
+
+Порядок: `alignment = END` в VBox прижимает всех детей к низу. Новые записи `add_child` → появляются в самом низу, старые уплывают вверх пока не будут удалены.
+
+## EventLog (autoload)
+
+`autoloads/event_log.gd` — event-bus для combat log. Сущности вызывают типизированные методы:
+
+| Метод | Ключ шаблона | Кто вызывает |
+|-------|--------------|--------------|
+| `log_kill(key, xp, gold)` | `LOG_KILL_WITH_GOLD` / `LOG_KILL_XP_ONLY` / `LOG_KILL_PLAIN` | Enemy / Charger / Ranged / Boss в `take_damage` при смерти |
+| `log_heal(amount)` | `LOG_HEAL` | HealthPickup при контакте |
+| `log_weapon_pickup(key)` | `LOG_WEAPON_PICKUP` | WeaponPickup при контакте |
+| `log_chest_open()` | `LOG_CHEST_OPEN` | Chest при первом контакте |
+| `log_room(n)` | `LOG_ROOM` | Main._ready для обычных комнат |
+| `log_boss_room(n)` | `LOG_BOSS_ROOM` | Main._ready для boss-комнат |
+| `log_level_up(lvl)` | `LOG_LEVEL_UP` | GameState._level_up |
+
+Все методы:
+1. Резолвят имя через `tr(key)` (для kill/weapon — переводят display_key врага/оружия).
+2. Форматируют шаблон через `tr("TEMPLATE") % args`.
+3. Эмитят `entry_added(final_text, tint)`.
+
+## Локаль по умолчанию
+
+`EventLog._ready` вызывает `TranslationServer.set_locale("ru")` — сейчас проект стартует в русском. Fallback locale в `project.godot` — `en`.
+
+## Что НЕ показывается в HUD
+
+- Позиция игрока (визуально видно на экране).
+- Ссылка на текущее оружие (можно добавить в HUD как отдельный лейбл — пока нет).
+- Прогресс до boss-комнаты (пока не показываем).
+
+Планы: показать текущее оружие рядом с `LVL`, добавить mini-progress "X комнат до босса".

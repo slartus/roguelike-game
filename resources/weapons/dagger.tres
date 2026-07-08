@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_wr")
-display_name = "Dagger"
+display_name = "WEAPON_DAGGER"
 damage = 1
 fire_interval = 0.16
 bullet_speed = 280.0

@@ -15,6 +15,8 @@
 | [weapons.md](weapons.md) | Оружие, `WeaponResource`, конкретные `.tres` |
 | [pickups.md](pickups.md) | HealthPickup, WeaponPickup, Chest |
 | [progression.md](progression.md) | XP/уровни, gold, save/load, run vs meta state |
+| [ui.md](ui.md) | HUD, Combat Log, EventLog autoload |
+| [i18n.md](i18n.md) | Локализация, CSV/tr(), ключи |
 | [armor.md](armor.md) | Броня (пока не реализована — placeholder + план) |
 
 ## Что НЕ описывать здесь

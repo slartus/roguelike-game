@@ -48,6 +48,7 @@ func _level_up() -> void:
 	player_level += 1
 	player_max_health += HEALTH_PER_LEVEL
 	player_health = player_max_health
+	EventLog.log_level_up(player_level)
 	leveled_up.emit(player_level, player_max_health)
 
 func award_gold(amount: int) -> void:

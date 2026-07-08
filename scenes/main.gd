@@ -48,6 +48,10 @@ func _ready() -> void:
 	_hud.set_xp(GameState.player_xp, GameState.XP_PER_LEVEL)
 	_hud.set_gold(GameState.total_gold)
 	_door.player_entered.connect(_on_door_entered)
+	if _is_boss_room():
+		EventLog.log_boss_room(GameState.current_room_number)
+	else:
+		EventLog.log_room(GameState.current_room_number)
 	_spawn_enemies()
 	_maybe_spawn_chest()
 
