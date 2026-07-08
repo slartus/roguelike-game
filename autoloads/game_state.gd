@@ -37,7 +37,9 @@ func _pick_random_tower_seed() -> int:
 
 func next_floor() -> void:
 	current_floor_number += 1
-	get_tree().reload_current_scene()
+	# reload_current_scene из physics callback (Door.body_entered)
+	# запрещён Godot и вызывает hard-freeze — оборачиваем в deferred.
+	get_tree().call_deferred("reload_current_scene")
 
 func reset_run() -> void:
 	current_floor_number = 1

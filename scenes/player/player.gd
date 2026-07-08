@@ -81,4 +81,6 @@ func heal(amount: int) -> void:
 
 func _die() -> void:
 	GameState.reset_run()
-	get_tree().reload_current_scene()
+	# reload_current_scene из physics callback (Bullet.body_entered или
+	# Enemy.move_and_collide → take_damage → _die) запрещён — оборачиваем.
+	get_tree().call_deferred("reload_current_scene")

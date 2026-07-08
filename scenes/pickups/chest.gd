@@ -27,7 +27,9 @@ func _on_body_entered(body: Node) -> void:
 	_opened = true
 	if _visual != null and open_texture != null:
 		_visual.texture = open_texture
-	monitoring = false
+	# monitoring = false внутри signal callback запрещён — Godot требует
+	# set_deferred для Area2D свойств во время in/out сигналов.
+	set_deferred("monitoring", false)
 	EventLog.log_chest_open()
 	_spawn_pickup()
 
