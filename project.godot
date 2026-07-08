@@ -24,6 +24,13 @@ GameState="*res://autoloads/game_state.gd"
 EventLog="*res://autoloads/event_log.gd"
 Balance="*res://autoloads/balance.gd"
 
+[debug]
+
+file_logging/enable_file_logging=true
+file_logging/enable_file_logging.pc=true
+file_logging/log_path="user://logs/godot.log"
+file_logging/max_log_files=5
+
 [display]
 
 window/size/viewport_width=480

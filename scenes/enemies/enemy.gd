@@ -115,16 +115,14 @@ func _chase_toward(target_pos: Vector2, delta: float) -> void:
 		_chase_direct(target_pos, delta)
 
 func _chase_via_path(target_pos: Vector2, delta: float) -> void:
+	# Recalc ТОЛЬКО по таймеру — иначе пустой path триггерил бы пересчёт
+	# каждый кадр (60 fps × 50 enemies × A* → burn CPU и зависание).
 	_path_recalc_timer -= delta
-	var target_drift: float = target_pos.distance_to(_path_target) if _path_target != Vector2.INF else INF
-	var needs_recalc: bool = _path_recalc_timer <= 0.0 \
-		or _path.is_empty() \
-		or target_drift > PATH_TARGET_STALE_DISTANCE
-	if needs_recalc:
+	if _path_recalc_timer <= 0.0:
 		_recalc_path(target_pos)
 		_path_recalc_timer = PATH_RECALC_INTERVAL
 
-	# Если path пуст — target недоступен из текущей клетки, fallback.
+	# Если path пуст (target недоступен) — fallback на прямую.
 	if _path.is_empty():
 		_chase_direct(target_pos, delta)
 		return
@@ -163,28 +161,39 @@ func _recalc_path(target_pos: Vector2) -> void:
 func _pixel_to_cell(pos: Vector2) -> Vector2i:
 	return Vector2i(int(pos.x / FLOOR_TILE_SIZE), int(pos.y / FLOOR_TILE_SIZE))
 
-func _chase_direct(target_pos: Vector2, delta: float) -> void:
-	var direction := (target_pos - global_position).normalized()
+func _chase_direct(_target_pos: Vector2, _delta: float) -> void:
+	var direction := (_target_pos - global_position).normalized()
 	if direction == Vector2.ZERO:
 		velocity = Vector2.ZERO
 		return
 	velocity = direction * speed
-	var collision := move_and_collide(velocity * delta)
-	if collision:
-		var collider := collision.get_collider()
-		if collider and collider.is_in_group("player") and _contact_timer <= 0.0:
-			if collider.has_method("take_damage"):
-				collider.take_damage(contact_damage)
+	# move_and_slide вместо move_and_collide: враг скользит вдоль стен
+	# при перекошенном waypoint, а не застревает у неё намертво.
+	move_and_slide()
+	_handle_player_contact()
+
+func _handle_player_contact() -> void:
+	if _contact_timer > 0.0:
+		return
+	for i in get_slide_collision_count():
+		var col := get_slide_collision(i)
+		var collider := col.get_collider()
+		if collider and collider.is_in_group("player") and collider.has_method("take_damage"):
+			collider.take_damage(contact_damage)
 			_contact_timer = contact_cooldown
+			return
 
 func _wander(delta: float) -> void:
 	_wander_timer -= delta
 	if _wander_timer <= 0.0 or _wander_direction == Vector2.ZERO:
 		_pick_wander_direction()
 	velocity = _wander_direction * speed * wander_speed_ratio
-	var collision := move_and_collide(velocity * delta)
-	if collision:
+	move_and_slide()
+	# Если после slide реальное движение = 0 (упёрся в угол), сменить
+	# направление в следующем tick'е.
+	if velocity.length() < 1.0:
 		_wander_direction = -_wander_direction.rotated(randf_range(-PI / 3.0, PI / 3.0))
+		_wander_timer = 0.0
 
 func _pick_wander_direction() -> void:
 	var angle := randf() * TAU
