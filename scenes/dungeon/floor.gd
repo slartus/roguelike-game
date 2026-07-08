@@ -13,11 +13,11 @@ extends Node2D
 
 const DungeonGeneratorClass = preload("res://scenes/dungeon/dungeon_generator.gd")
 const DOOR_SCENE: PackedScene = preload("res://scenes/rooms/door.tscn")
+const FLOOR_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor.png")
+const WALL_TEXTURE: Texture2D = preload("res://assets/sprites/environment/wall.png")
 
 const TILE_SIZE: int = 20
-const WALL_COLOR: Color = Color(0.08, 0.07, 0.11, 1.0)
-const FLOOR_COLOR: Color = Color(0.22, 0.20, 0.26, 1.0)
-const BACKGROUND_COLOR: Color = Color(0.05, 0.04, 0.08, 1.0)
+const BACKGROUND_COLOR: Color = Color(0.03, 0.02, 0.05, 1.0)
 
 var player_start: Vector2 = Vector2.ZERO
 var enemy_spawn_positions: Array[Vector2] = []
@@ -66,21 +66,26 @@ func _draw_background() -> void:
 
 func _draw_floor_tiles() -> void:
 	for room in layout.rooms:
-		_draw_rect(room, FLOOR_COLOR)
+		_draw_tiled_rect(room, FLOOR_TEXTURE)
 	for corridor in layout.corridors:
-		_draw_rect(corridor, FLOOR_COLOR)
+		_draw_tiled_rect(corridor, FLOOR_TEXTURE)
 
-func _draw_rect(rect: Rect2i, color: Color) -> void:
+func _draw_tiled_rect(rect: Rect2i, texture: Texture2D) -> void:
 	var poly := Polygon2D.new()
 	var origin := Vector2(rect.position)
 	var size := Vector2(rect.size)
-	poly.polygon = PackedVector2Array([
+	var points := PackedVector2Array([
 		origin,
 		origin + Vector2(size.x, 0),
 		origin + size,
 		origin + Vector2(0, size.y),
 	])
-	poly.color = color
+	poly.polygon = points
+	# UV = абсолютные координаты этажа → соседние rects дают бесшовный
+	# tiling без «прыжков» текстуры на стыках комнат и коридоров.
+	poly.uv = points
+	poly.texture = texture
+	poly.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	_floors_root.add_child(poly)
 
 func _build_walls() -> void:
@@ -115,7 +120,8 @@ func _create_wall_span(col_start: int, col_end: int, row: int) -> void:
 	var body := StaticBody2D.new()
 	var span_width := TILE_SIZE * (col_end - col_start)
 	var shape_size := Vector2(span_width, TILE_SIZE)
-	body.position = Vector2(col_start * TILE_SIZE + span_width / 2.0, row * TILE_SIZE + TILE_SIZE / 2.0)
+	var body_pos := Vector2(col_start * TILE_SIZE + span_width / 2.0, row * TILE_SIZE + TILE_SIZE / 2.0)
+	body.position = body_pos
 	var collision := CollisionShape2D.new()
 	var rect_shape := RectangleShape2D.new()
 	rect_shape.size = shape_size
@@ -123,13 +129,24 @@ func _create_wall_span(col_start: int, col_end: int, row: int) -> void:
 	body.add_child(collision)
 	var half := shape_size / 2.0
 	var visual := Polygon2D.new()
-	visual.polygon = PackedVector2Array([
+	var points := PackedVector2Array([
 		-half,
 		Vector2(half.x, -half.y),
 		half,
 		Vector2(-half.x, half.y),
 	])
-	visual.color = WALL_COLOR
+	visual.polygon = points
+	# UV на основе абсолютной позиции стены — соседние span-ы бесшовно
+	# продолжают кирпичную кладку.
+	var abs_origin := body_pos - half
+	visual.uv = PackedVector2Array([
+		abs_origin,
+		abs_origin + Vector2(shape_size.x, 0),
+		abs_origin + shape_size,
+		abs_origin + Vector2(0, shape_size.y),
+	])
+	visual.texture = WALL_TEXTURE
+	visual.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	body.add_child(visual)
 	_walls_root.add_child(body)
 
