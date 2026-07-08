@@ -260,7 +260,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 | Тип стрелка | Bullet-сцена | Sprite | Размеры | Speed | Lifetime |
 |-------------|--------------|--------|---------|-------|----------|
-| Skeleton Archer | `arrow_bullet.tscn` | `arrow.png` | 16×5, RectShape 10×3 | 130 | 3.0 s |
+| Skeleton Archer | `arrow_bullet.tscn` | `arrow.png` | 10×5, RectShape 10×3 | 130 | 3.0 s |
 | Lich | `magic_bolt_bullet.tscn` | `magic_bolt.png` | 10×10 зелёный сгусток, r=3.5 | 100 | 3.5 s |
 | Necromancer (boss) | `dark_orb_bullet.tscn` | `dark_orb.png` | 10×10 фиолетовый шар, r=4 | 110 | 3.5 s |
 
