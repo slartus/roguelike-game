@@ -6,7 +6,7 @@ extends Area2D
 
 var direction: Vector2 = Vector2.RIGHT
 
-@onready var _visual: Polygon2D = $Visual
+@onready var _visual: Sprite2D = $Visual
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
@@ -22,7 +22,7 @@ func apply_weapon(weapon: WeaponResource) -> void:
 	speed = weapon.bullet_speed
 	lifetime = weapon.bullet_lifetime
 	if _visual != null:
-		_visual.color = weapon.bullet_color
+		_visual.modulate = weapon.bullet_color
 
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("player"):

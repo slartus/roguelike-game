@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scenes/bullets/enemy_bullet.gd" id="1_ebullet"]
+[ext_resource type="Texture2D" path="res://assets/sprites/bullets/enemy_bullet.png" id="2_tex"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_ebullet"]
 radius = 3.0
@@ -8,9 +9,8 @@ radius = 3.0
 [node name="EnemyBullet" type="Area2D"]
 script = ExtResource("1_ebullet")
 
-[node name="Visual" type="Polygon2D" parent="."]
-polygon = PackedVector2Array(-3, -3, 3, -3, 3, 3, -3, 3)
-color = Color(1.0, 0.55, 0.15, 1)
+[node name="Visual" type="Sprite2D" parent="."]
+texture = ExtResource("2_tex")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_ebullet")
