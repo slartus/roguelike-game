@@ -125,7 +125,14 @@ func _shoot() -> void:
 	var bullet := bullet_scene.instantiate()
 	bullet.global_position = global_position
 	bullet.direction = direction
+	_configure_bullet(bullet)
 	get_tree().current_scene.add_child(bullet)
+
+# Hook для подклассов (например skeleton_archer.gd) — тюнить только
+# что созданный bullet перед добавлением в сцену: damage bonus,
+# статусные эффекты, homing, etc.
+func _configure_bullet(_bullet: Node) -> void:
+	pass
 
 func _find_player() -> Node2D:
 	var players := get_tree().get_nodes_in_group("player")

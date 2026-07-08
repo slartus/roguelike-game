@@ -143,6 +143,18 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 Роль: средний быстрый ближник, немного крепче гоблина.
 
+**Арсенал (skeleton_arsenal.gd → MELEE_VARIANTS).** При спавне скелет случайно берёт один вариант оружия из таблицы (weighted-random) — он определяет display-key для UI/log, добавку к contact_damage и tint спрайта:
+
+| Вариант | Δ contact_damage | Вес | Tint |
+|---------|-------------------|-----|------|
+| `ENEMY_SKELETON_UNARMED` | +0 | 0.30 | белый (нейтральный) |
+| `ENEMY_SKELETON_DAGGER_WOOD` | +1 | 0.22 | тёплый охристый |
+| `ENEMY_SKELETON_DAGGER_IRON` | +2 | 0.18 | холодный стальной |
+| `ENEMY_SKELETON_SWORD_WOOD` | +2 | 0.16 | тёмный охристый |
+| `ENEMY_SKELETON_SWORD_IRON` | +3 | 0.14 | холодный стальной |
+
+Δ применяется **до** `Balance.scaled_damage`, поэтому floor-scaling умножается уже на bumped-up значение. Список расширяется добавлением новых записей в `MELEE_VARIANTS` — рассчитано на будущие «улучшалки» (магические клинки, заражённое оружие и т.п.).
+
 ### Zombie (`zombie.tscn`)
 
 Разлагающийся гуманоид, медленно тащится к игроку. Спрайт `zombie.png` (16×16), коллизия r=7.
@@ -205,6 +217,15 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | gold_reward | 2 |
 
 Роль: базовый стрелок. Часто встречается.
+
+**Арсенал стрел (skeleton_arsenal.gd → ARROW_VARIANTS).** При спавне лучник случайно выбирает tier стрел:
+
+| Вариант | Δ bullet damage | Вес | Tint |
+|---------|------------------|-----|------|
+| `ENEMY_SKELETON_ARCHER_WOOD` | +0 | 0.6 | тёплый охристый |
+| `ENEMY_SKELETON_ARCHER_IRON` | +1 | 0.4 | холодный стальной |
+
+Bonus прибавляется к `damage` каждой заспавненной стрелы. Расширяется добавлением записей в `ARROW_VARIANTS` (elven, poisoned и т.п.).
 
 ### Lich (`lich.tscn`)
 

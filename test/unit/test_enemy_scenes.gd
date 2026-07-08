@@ -17,6 +17,10 @@ const MELEE_SPECS := {
 		"max_health": 8, "speed": 28.0, "contact_damage": 3,
 		"xp_reward": 14, "gold_reward": 4, "pickup_drop_chance": 0.22,
 	},
+	# NB: raw @export values из .tscn. skeleton.gd::_ready увеличивает
+	# contact_damage на weapon-bonus (см. skeleton_arsenal.gd), но тут
+	# instance.free() без add_child — _ready не отработает, значения
+	# остаются базовыми.
 	"res://scenes/enemies/skeleton.tscn": {
 		"max_health": 3, "speed": 50.0, "contact_damage": 2,
 		"xp_reward": 7, "gold_reward": 2, "pickup_drop_chance": 0.15,
