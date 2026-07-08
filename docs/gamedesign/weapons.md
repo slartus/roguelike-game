@@ -14,6 +14,7 @@ Data-driven через кастомный `Resource` — `WeaponResource` (class
 | `bullet_color` | `Color` | Цвет визуала пули + окраска WeaponPickup |
 | `bullets_per_shot` | `int` | Сколько пуль стреляет за один shot |
 | `spread_angle_deg` | `float` | Полный угол разброса в градусах (при `bullets_per_shot > 1` — равномерно; при 1 — случайно ±spread/2) |
+| `icon_texture` | `Texture2D` | Спрайт 16×16 в `assets/sprites/weapons/`. Показывается на `WeaponPickup` на полу |
 
 ## Конкретные оружия
 

@@ -38,6 +38,12 @@ const RANGED_SPECS := {
 	},
 }
 
+const WEAPON_TRES_PATHS: Array[String] = [
+	"res://resources/weapons/dagger.tres",
+	"res://resources/weapons/pistol.tres",
+	"res://resources/weapons/shotgun.tres",
+]
+
 const CHARGER_PATH := "res://scenes/enemies/charger.tscn"
 const BOSS_PATH := "res://scenes/enemies/boss.tscn"
 
@@ -94,6 +100,21 @@ func test_all_ranged_scenes_have_bullet_scene() -> void:
 		var instance: Node = scene.instantiate()
 		assert_not_null(instance.bullet_scene, "%s must have bullet_scene wired" % path.get_file())
 		instance.free()
+
+func test_every_weapon_has_icon_texture() -> void:
+	# Каждый .tres обязан иметь icon_texture — иначе WeaponPickup будет
+	# без спрайта и игрок не поймёт что валяется.
+	for path in WEAPON_TRES_PATHS:
+		var weapon = load(path)
+		assert_not_null(weapon, "weapon loads: %s" % path)
+		assert_not_null(weapon.icon_texture, "%s must have icon_texture" % path.get_file())
+
+func test_chest_scene_has_both_textures_wired() -> void:
+	var scene: PackedScene = load("res://scenes/pickups/chest.tscn")
+	var chest = scene.instantiate()
+	assert_not_null(chest.closed_texture, "chest must have closed_texture")
+	assert_not_null(chest.open_texture, "chest must have open_texture")
+	chest.free()
 
 func test_main_enemy_pool_contains_all_eight_regular_types() -> void:
 	var main_script := load("res://scenes/main.gd")

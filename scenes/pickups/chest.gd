@@ -7,12 +7,17 @@ const WEAPON_POOL: Array[WeaponResource] = [
 ]
 const PICKUP_SCENE: PackedScene = preload("res://scenes/pickups/weapon_pickup.tscn")
 
-@onready var _visual: Polygon2D = $Visual
+@export var closed_texture: Texture2D
+@export var open_texture: Texture2D
+
+@onready var _visual: Sprite2D = $Visual
 
 var _opened: bool = false
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
+	if _visual != null and closed_texture != null:
+		_visual.texture = closed_texture
 
 func _on_body_entered(body: Node) -> void:
 	if _opened:
@@ -20,8 +25,8 @@ func _on_body_entered(body: Node) -> void:
 	if not body.is_in_group("player"):
 		return
 	_opened = true
-	if _visual != null:
-		_visual.color = Color(0.35, 0.28, 0.18, 1)
+	if _visual != null and open_texture != null:
+		_visual.texture = open_texture
 	monitoring = false
 	EventLog.log_chest_open()
 	_spawn_pickup()

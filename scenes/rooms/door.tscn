@@ -1,16 +1,16 @@
 [gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scenes/rooms/door.gd" id="1_door"]
+[ext_resource type="Texture2D" path="res://assets/sprites/pickups/portal.png" id="2_portal"]
 
 [sub_resource type="RectangleShape2D" id="Door_shape"]
-size = Vector2(32, 16)
+size = Vector2(20, 24)
 
 [node name="Door" type="Area2D"]
 script = ExtResource("1_door")
 
-[node name="Visual" type="Polygon2D" parent="."]
-polygon = PackedVector2Array(-16, -8, 16, -8, 16, 8, -16, 8)
-color = Color(0.95, 0.85, 0.2, 1)
+[node name="Visual" type="Sprite2D" parent="."]
+texture = ExtResource("2_portal")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("Door_shape")

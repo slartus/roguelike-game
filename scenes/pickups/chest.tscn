@@ -1,16 +1,19 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scenes/pickups/chest.gd" id="1_chest"]
+[ext_resource type="Texture2D" path="res://assets/sprites/pickups/chest_closed.png" id="2_closed"]
+[ext_resource type="Texture2D" path="res://assets/sprites/pickups/chest_open.png" id="3_open"]
 
 [sub_resource type="RectangleShape2D" id="Chest_shape"]
 size = Vector2(20, 14)
 
 [node name="Chest" type="Area2D"]
 script = ExtResource("1_chest")
+closed_texture = ExtResource("2_closed")
+open_texture = ExtResource("3_open")
 
-[node name="Visual" type="Polygon2D" parent="."]
-polygon = PackedVector2Array(-10, -7, 10, -7, 10, 7, -10, 7)
-color = Color(0.75, 0.55, 0.15, 1)
+[node name="Visual" type="Sprite2D" parent="."]
+texture = ExtResource("2_closed")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("Chest_shape")
