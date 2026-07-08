@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_wr")
 display_name = "WEAPON_PISTOL"
-damage = 2
+damage = 1
 fire_interval = 0.32
 bullet_speed = 240.0
 bullet_lifetime = 1.4

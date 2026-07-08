@@ -106,7 +106,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 |----------|----------|
 | max_health | 4 |
 | speed | 55 |
-| contact_damage | 1 |
+| contact_damage | 2 |
 | pickup_drop_chance | 15% |
 | xp_reward | 6 |
 | gold_reward | 2 |
@@ -121,12 +121,12 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 |----------|----------|
 | max_health | 8 |
 | speed | 28 |
-| contact_damage | 2 |
+| contact_damage | 3 |
 | pickup_drop_chance | 22% |
 | xp_reward | 14 |
 | gold_reward | 4 |
 
-Роль: танк. Долго живёт, наносит двойной урон при контакте.
+Роль: танк. Долго живёт, наносит тройной урон при контакте.
 
 ### Skeleton (`skeleton.tscn`)
 
@@ -136,7 +136,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 |----------|----------|
 | max_health | 3 |
 | speed | 50 |
-| contact_damage | 1 |
+| contact_damage | 2 |
 | pickup_drop_chance | 15% |
 | xp_reward | 7 |
 | gold_reward | 2 |
@@ -151,7 +151,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 |----------|----------|
 | max_health | 6 |
 | speed | 22 |
-| contact_damage | 2 |
+| contact_damage | 3 |
 | pickup_drop_chance | 20% |
 | xp_reward | 11 |
 | gold_reward | 3 |
@@ -170,7 +170,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | charge_speed | 220 |
 | wait_duration | 1.2 s |
 | charge_duration | 0.9 s |
-| contact_damage | 1 |
+| contact_damage | 2 |
 | contact_cooldown | 0.4 s |
 | pickup_drop_chance | 18% |
 | xp_reward | 8 |
@@ -234,7 +234,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 |----------|----------|
 | max_health | 30 |
 | speed | 25 |
-| contact_damage | 2 |
+| contact_damage | 3 |
 | contact_cooldown | 0.8 s |
 | volley_interval | 2.0 s |
 | volley_count | 8 |
@@ -243,7 +243,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 **Поведение:**
 - Медленно идёт к игроку через `move_and_collide`.
-- Контактный урон 2, cooldown 0.8s.
+- Контактный урон 3, cooldown 0.8s.
 - Каждые `volley_interval` выпускает `volley_count` штук `enemy_bullet.tscn` **по кругу** — направления через равные `TAU / volley_count` радиан (45° между пулями). Каждый второй залп сдвигается на `step / 2` (22.5° при `volley_count = 8`), чтобы звёздочка визуально вращалась между кадрами и игрок не мог заучить статичные коридоры безопасности.
 
 Не дропает пикапы — награда идёт через XP/gold. Появляется каждые 5 этажей (boss-этаж).

@@ -10,19 +10,19 @@ const MELEE_SPECS := {
 		"xp_reward": 5, "gold_reward": 1, "pickup_drop_chance": 0.15,
 	},
 	"res://scenes/enemies/goblin.tscn": {
-		"max_health": 4, "speed": 55.0, "contact_damage": 1,
+		"max_health": 4, "speed": 55.0, "contact_damage": 2,
 		"xp_reward": 6, "gold_reward": 2, "pickup_drop_chance": 0.15,
 	},
 	"res://scenes/enemies/orc.tscn": {
-		"max_health": 8, "speed": 28.0, "contact_damage": 2,
+		"max_health": 8, "speed": 28.0, "contact_damage": 3,
 		"xp_reward": 14, "gold_reward": 4, "pickup_drop_chance": 0.22,
 	},
 	"res://scenes/enemies/skeleton.tscn": {
-		"max_health": 3, "speed": 50.0, "contact_damage": 1,
+		"max_health": 3, "speed": 50.0, "contact_damage": 2,
 		"xp_reward": 7, "gold_reward": 2, "pickup_drop_chance": 0.15,
 	},
 	"res://scenes/enemies/zombie.tscn": {
-		"max_health": 6, "speed": 22.0, "contact_damage": 2,
+		"max_health": 6, "speed": 22.0, "contact_damage": 3,
 		"xp_reward": 11, "gold_reward": 3, "pickup_drop_chance": 0.2,
 	},
 }
@@ -86,7 +86,7 @@ func test_boss_scene_uses_default_stats_and_has_bullet_scene() -> void:
 	assert_not_null(instance)
 	assert_eq(instance.max_health, 30)
 	assert_eq(instance.speed, 25.0)
-	assert_eq(instance.contact_damage, 2)
+	assert_eq(instance.contact_damage, 3)
 	assert_eq(instance.volley_interval, 2.0)
 	assert_eq(instance.volley_count, 8)
 	assert_eq(instance.xp_reward, 40)

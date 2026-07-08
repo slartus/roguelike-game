@@ -15,7 +15,7 @@ enum State { WATCH, WAITING, CHARGING }
 @export var charge_speed: float = 220.0
 @export var wait_duration: float = 1.2
 @export var charge_duration: float = 0.9
-@export var contact_damage: int = 1
+@export var contact_damage: int = 2
 @export var contact_cooldown: float = 0.4
 @export var pickup_scene: PackedScene
 @export var pickup_drop_chance: float = 0.18
