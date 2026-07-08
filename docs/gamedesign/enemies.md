@@ -241,19 +241,21 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 ## Пули врагов
 
-`enemy_bullet.tscn` (`Area2D`), placeholder-квадрат 6×6 (визуал ещё Polygon2D, pixel-art follow-up).
+У каждого типа стрелка — своя визуализация:
 
-| Параметр | Значение |
-|----------|----------|
-| speed | 110 |
-| lifetime | 3.0 s |
-| damage | 1 |
+| Тип стрелка | Bullet-сцена | Sprite | Размеры | Speed | Lifetime |
+|-------------|--------------|--------|---------|-------|----------|
+| Skeleton Archer | `arrow_bullet.tscn` | `arrow.png` | 16×5, RectShape 10×3 | 130 | 3.0 s |
+| Lich | `magic_bolt_bullet.tscn` | `magic_bolt.png` | 10×10 зелёный сгусток, r=3.5 | 100 | 3.5 s |
+| Necromancer (boss) | `dark_orb_bullet.tscn` | `dark_orb.png` | 10×10 фиолетовый шар, r=4 | 110 | 3.5 s |
 
-**Поведение:** движется `direction * speed`; при `body_entered` наносит `damage`, если body в группе `player`; уничтожается в любом случае (кроме тел в группе `enemy` — их игнорирует). Self-destroy через `lifetime`.
+Все три Area2D-сцены используют общий `scenes/bullets/enemy_bullet.gd`. Скрипт разворачивает весь root по `direction.angle()` в `_ready()` — стрела визуально смотрит в цель, коллизия узкой rectangle-стрелы тоже поворачивается (важно для попаданий).
 
-Используется Skeleton Archer, Lich и Necromancer.
+**Поведение:** движется `direction * speed`; при `body_entered` наносит `damage` игроку и уничтожается. Self-destroy через `lifetime`.
 
 Скрипт: `scenes/bullets/enemy_bullet.gd`.
+
+Старый `enemy_bullet.tscn` (оранжевый шар) остаётся для обратной совместимости, но никто из активных сцен его больше не использует.
 
 ## Спрайты
 

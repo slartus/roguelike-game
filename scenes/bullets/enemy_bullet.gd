@@ -9,6 +9,9 @@ var direction: Vector2 = Vector2.RIGHT
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	get_tree().create_timer(lifetime).timeout.connect(_on_lifetime_end)
+	# Разворачиваем весь снаряд в направлении полёта: спрайт (стрела /
+	# сгусток) смотрит в цель, коллизия — тоже (важно для узкой arrow).
+	rotation = direction.angle()
 
 func _physics_process(delta: float) -> void:
 	global_position += direction * speed * delta
