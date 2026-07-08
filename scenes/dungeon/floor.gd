@@ -25,12 +25,14 @@ var chest_positions: Array[Vector2] = []
 var door: Area2D
 var floor_size: Vector2 = Vector2.ZERO
 var layout: DungeonLayout
+var astar_grid: AStarGrid2D
 
 @onready var _floors_root: Node2D = $FloorsRoot
 @onready var _walls_root: Node2D = $WallsRoot
 @onready var _markers_root: Node2D = $MarkersRoot
 
 func _ready() -> void:
+	add_to_group("floor")
 	var seed_value := _pick_seed()
 	var generator := DungeonGeneratorClass.new()
 	layout = generator.generate(
@@ -41,6 +43,7 @@ func _ready() -> void:
 	_draw_background()
 	_draw_floor_tiles()
 	_build_walls()
+	_build_astar_grid()
 	_place_door()
 	_populate_marker_positions()
 	floor_size = Vector2(layout.floor_bounds.size)
@@ -149,6 +152,26 @@ func _create_wall_span(col_start: int, col_end: int, row: int) -> void:
 	visual.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	body.add_child(visual)
 	_walls_root.add_child(body)
+
+func _build_astar_grid() -> void:
+	# Один AStarGrid2D на весь этаж — все враги используют его через
+	# группу "floor". Клетки совпадают по размеру с wall-grid'ом,
+	# solid-flag = tile является стеной.
+	var bounds := layout.floor_bounds
+	var cols := int(ceil(float(bounds.size.x) / TILE_SIZE))
+	var rows := int(ceil(float(bounds.size.y) / TILE_SIZE))
+	astar_grid = AStarGrid2D.new()
+	astar_grid.region = Rect2i(Vector2i.ZERO, Vector2i(cols, rows))
+	astar_grid.cell_size = Vector2(TILE_SIZE, TILE_SIZE)
+	astar_grid.default_compute_heuristic = AStarGrid2D.HEURISTIC_MANHATTAN
+	astar_grid.default_estimate_heuristic = AStarGrid2D.HEURISTIC_MANHATTAN
+	astar_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	astar_grid.update()
+	for row in rows:
+		for col in cols:
+			var tile_center := Vector2i(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
+			if _is_wall_at(tile_center):
+				astar_grid.set_point_solid(Vector2i(col, row), true)
 
 func _place_door() -> void:
 	door = DOOR_SCENE.instantiate()

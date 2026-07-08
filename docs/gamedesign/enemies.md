@@ -47,6 +47,22 @@
 
 Получение урона всегда сразу переводит melee в CHASE (враг «просыпается» даже если игрок был вне радиуса).
 
+## Pathfinding (только melee)
+
+Melee-враги используют **Godot AStarGrid2D** для обхода стен: при CHASE идут не по прямой к цели, а по A*-пути через wall-grid этажа.
+
+Как это работает:
+1. `Floor._build_astar_grid()` строит один `AStarGrid2D` на весь этаж — клетки 20×20 совпадают с wall-tiling'ом. Solid-flag выставлен на клетках, где стена (`_is_wall_at(tile_center) == true`). Grid добавляется в группу `"floor"`.
+2. Enemy при `_ready` находит Floor через `get_tree().get_first_node_in_group("floor")` и хранит ссылку.
+3. В `_chase_toward(target_pos, delta)`:
+   - Раз в `PATH_RECALC_INTERVAL = 0.25 s` (или сразу если path пуст, или target сдвинулся > `PATH_TARGET_STALE_DISTANCE = 24 px`) пересчитывается A*-путь через `astar_grid.get_point_path(start_cell, end_cell)`.
+   - Путь — массив `PackedVector2Array` в пиксельных координатах центров клеток.
+   - Враг идёт к первому waypoint; когда до него < `WAYPOINT_REACHED_DISTANCE = 6 px`, waypoint удаляется, идём к следующему.
+4. Fallback: если path пуст (target вне bounds, в solid-клетке или недостижим) — прямая линия через `_chase_direct`.
+5. Charger / Ranged / Boss используют прежнюю прямую логику — им pathfinding не нужен (Charger движется по фикс-direction за короткий charge; Ranged стоит; Boss в открытой boss-арене без препятствий).
+
+**Стоимость**: ~50 pathfind/sec (25 melee-enemies × 4 recalc/sec). AStarGrid2D — C++ core, на grid'е ≤ 40×28 клеток запрос < 1 ms.
+
 ## Melee (`enemy.gd`)
 
 Все ближники используют один скрипт `enemy.gd`. Разные типы — это разные `.tscn` с разными `@export` параметрами и спрайтами. Поведение общее: идти к игроку, наносить контактный урон с cooldown.

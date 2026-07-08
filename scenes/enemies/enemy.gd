@@ -17,6 +17,10 @@ enum State { WANDER, CHASE }
 
 const LOST_RATIO: float = 1.6
 const REACHED_LAST_SEEN_DISTANCE: float = 8.0
+const PATH_RECALC_INTERVAL: float = 0.25
+const PATH_TARGET_STALE_DISTANCE: float = 24.0
+const WAYPOINT_REACHED_DISTANCE: float = 6.0
+const FLOOR_TILE_SIZE: int = 20
 
 @export var display_name: String = "ENEMY_UNKNOWN"
 @export var speed: float = 40.0
@@ -41,6 +45,10 @@ var _wander_direction: Vector2 = Vector2.ZERO
 var _wander_timer: float = 0.0
 var _last_seen_position: Vector2 = Vector2.ZERO
 var _memory_timer: float = 0.0
+var _floor: Node                       # Ссылка на Floor (для astar_grid)
+var _path: PackedVector2Array          # Waypoints в пиксельных координатах
+var _path_recalc_timer: float = 0.0
+var _path_target: Vector2 = Vector2.INF
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -50,6 +58,7 @@ func _ready() -> void:
 	xp_reward = Balance.scaled_xp_reward(xp_reward, floor_num)
 	gold_reward = Balance.scaled_gold_reward(gold_reward, floor_num)
 	health = max_health
+	_floor = get_tree().get_first_node_in_group("floor")
 
 func _physics_process(delta: float) -> void:
 	_contact_timer = maxf(0.0, _contact_timer - delta)
@@ -98,6 +107,63 @@ func _enter_chase() -> void:
 	_memory_timer = memory_check_interval
 
 func _chase_toward(target_pos: Vector2, delta: float) -> void:
+	# Если Floor + AStarGrid2D доступны — идём по A*-пути, иначе fallback
+	# на прямую линию (совместимо со сценами без Floor, напр. тестами).
+	if _floor != null and _floor.astar_grid != null:
+		_chase_via_path(target_pos, delta)
+	else:
+		_chase_direct(target_pos, delta)
+
+func _chase_via_path(target_pos: Vector2, delta: float) -> void:
+	_path_recalc_timer -= delta
+	var target_drift: float = target_pos.distance_to(_path_target) if _path_target != Vector2.INF else INF
+	var needs_recalc: bool = _path_recalc_timer <= 0.0 \
+		or _path.is_empty() \
+		or target_drift > PATH_TARGET_STALE_DISTANCE
+	if needs_recalc:
+		_recalc_path(target_pos)
+		_path_recalc_timer = PATH_RECALC_INTERVAL
+
+	# Если path пуст — target недоступен из текущей клетки, fallback.
+	if _path.is_empty():
+		_chase_direct(target_pos, delta)
+		return
+
+	# Съедаем waypoint'ы, до которых уже дошли.
+	while _path.size() > 0 and global_position.distance_to(_path[0]) < WAYPOINT_REACHED_DISTANCE:
+		_path.remove_at(0)
+	if _path.is_empty():
+		_chase_direct(target_pos, delta)
+		return
+	_chase_direct(_path[0], delta)
+
+func _recalc_path(target_pos: Vector2) -> void:
+	_path = PackedVector2Array()
+	_path_target = target_pos
+	var start_cell := _pixel_to_cell(global_position)
+	var end_cell := _pixel_to_cell(target_pos)
+	if not _floor.astar_grid.is_in_boundsv(start_cell):
+		return
+	if not _floor.astar_grid.is_in_boundsv(end_cell):
+		return
+	# Если start клетка solid (враг стоит на стене — не должно быть, но
+	# safe fallback), путь не найдётся.
+	if _floor.astar_grid.is_point_solid(start_cell):
+		return
+	# Если end клетка solid (target внутри стены — например игрок за
+	# краем этажа), возвращаем прямую линию через fallback.
+	if _floor.astar_grid.is_point_solid(end_cell):
+		return
+	_path = _floor.astar_grid.get_point_path(start_cell, end_cell)
+	# get_point_path возвращает от start_cell до end_cell включительно;
+	# первую точку выкидываем — мы уже в start_cell.
+	if _path.size() > 0:
+		_path.remove_at(0)
+
+func _pixel_to_cell(pos: Vector2) -> Vector2i:
+	return Vector2i(int(pos.x / FLOOR_TILE_SIZE), int(pos.y / FLOOR_TILE_SIZE))
+
+func _chase_direct(target_pos: Vector2, delta: float) -> void:
 	var direction := (target_pos - global_position).normalized()
 	if direction == Vector2.ZERO:
 		velocity = Vector2.ZERO
