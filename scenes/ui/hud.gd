@@ -3,6 +3,7 @@ extends CanvasLayer
 const LOG_MAX_ENTRIES: int = 6
 const LOG_ENTRY_LIFETIME: float = 5.0
 const LOG_FADE_DURATION: float = 0.4
+const LOG_FONT_SIZE: int = 8
 
 @onready var _health_label: Label = $HealthLabel
 @onready var _floor_label: Label = $FloorLabel
@@ -33,7 +34,7 @@ func _on_log_entry(text: String, tint: Color) -> void:
 	var entry := Label.new()
 	entry.text = text
 	entry.add_theme_color_override("font_color", tint)
-	entry.add_theme_font_size_override("font_size", 10)
+	entry.add_theme_font_size_override("font_size", LOG_FONT_SIZE)
 	entry.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	entry.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_log_box.add_child(entry)
