@@ -15,6 +15,7 @@ contact_damage = 2
 xp_reward = 11
 gold_reward = 3
 pickup_drop_chance = 0.4
+memory = 0.95
 
 [node name="Visual" type="Sprite2D" parent="."]
 texture = ExtResource("2_tex")

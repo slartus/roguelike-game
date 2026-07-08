@@ -1,14 +1,22 @@
 extends CharacterBody2D
 
 # Общий melee-скрипт (Slime, Goblin, Orc, Skeleton, Zombie).
-# State machine: WANDER (не видит игрока — блуждает) → CHASE (видит,
-# бежит и наносит контактный урон) → WANDER (потерял из виду).
-# Обнаружение — по distance_to_player <= perception_radius. Возврат
-# в WANDER — при distance > perception_radius * LOST_RATIO (гистерезис).
+# State machine: WANDER → CHASE → WANDER.
+#
+# CHASE двухфазный:
+# - если игрок в radius perception_radius → идёт прямо на него,
+#   запоминает last_seen_position;
+# - если игрок вышел из радиуса → идёт к last_seen_position и каждые
+#   memory_check_interval секунд «бросает кубик»: randf() > memory →
+#   забыл, уходит в WANDER. Чем выше memory (0..1), тем упорнее
+#   монстр помнит и преследует.
+#
+# WANDER — случайное блуждание со сниженной скоростью.
 
 enum State { WANDER, CHASE }
 
 const LOST_RATIO: float = 1.6
+const REACHED_LAST_SEEN_DISTANCE: float = 8.0
 
 @export var display_name: String = "ENEMY_UNKNOWN"
 @export var speed: float = 40.0
@@ -22,6 +30,8 @@ const LOST_RATIO: float = 1.6
 @export var perception_radius: float = 130.0
 @export var wander_speed_ratio: float = 0.5
 @export var wander_change_interval: float = 2.5
+@export_range(0.0, 1.0) var memory: float = 0.65
+@export var memory_check_interval: float = 1.0
 
 var health: int
 var _state: int = State.WANDER
@@ -29,6 +39,8 @@ var _target: Node2D
 var _contact_timer: float = 0.0
 var _wander_direction: Vector2 = Vector2.ZERO
 var _wander_timer: float = 0.0
+var _last_seen_position: Vector2 = Vector2.ZERO
+var _memory_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -46,20 +58,45 @@ func _physics_process(delta: float) -> void:
 	match _state:
 		State.WANDER:
 			if dist <= perception_radius:
-				_state = State.CHASE
-				_chase(delta)
+				_enter_chase()
+				_chase_toward(_target.global_position, delta)
 			else:
 				_wander(delta)
 		State.CHASE:
-			if dist > perception_radius * LOST_RATIO:
-				_state = State.WANDER
-				_pick_wander_direction()
-				_wander(delta)
+			if dist <= perception_radius:
+				# Видим цель — обновляем last_seen и таймер памяти.
+				_last_seen_position = _target.global_position
+				_memory_timer = memory_check_interval
+				_chase_toward(_target.global_position, delta)
+			elif dist > perception_radius * LOST_RATIO:
+				# Игрок вне радиуса даже с учётом гистерезиса — тестируем память.
+				_memory_timer -= delta
+				if _memory_timer <= 0.0:
+					_memory_timer = memory_check_interval
+					if randf() > memory:
+						_state = State.WANDER
+						_pick_wander_direction()
+						return
+				# Помним — идём к последней виденной позиции.
+				if global_position.distance_to(_last_seen_position) < REACHED_LAST_SEEN_DISTANCE:
+					_state = State.WANDER
+					_pick_wander_direction()
+				else:
+					_chase_toward(_last_seen_position, delta)
 			else:
-				_chase(delta)
+				# В зоне гистерезиса — держим CHASE к last_seen.
+				_chase_toward(_last_seen_position, delta)
 
-func _chase(delta: float) -> void:
-	var direction := (_target.global_position - global_position).normalized()
+func _enter_chase() -> void:
+	_state = State.CHASE
+	_last_seen_position = _target.global_position
+	_memory_timer = memory_check_interval
+
+func _chase_toward(target_pos: Vector2, delta: float) -> void:
+	var direction := (target_pos - global_position).normalized()
+	if direction == Vector2.ZERO:
+		velocity = Vector2.ZERO
+		return
 	velocity = direction * speed
 	var collision := move_and_collide(velocity * delta)
 	if collision:
@@ -89,8 +126,9 @@ func _find_player() -> Node2D:
 
 func take_damage(amount: int) -> void:
 	health -= amount
-	# Урон = игрок близко, «пробуждаем» AI в CHASE даже если был WANDER
-	_state = State.CHASE
+	# Урон = игрок близко, «пробуждаем» AI в CHASE даже если был WANDER.
+	if _target != null and is_instance_valid(_target):
+		_enter_chase()
 	modulate = Color(1, 0.5, 0.5)
 	await get_tree().create_timer(0.08).timeout
 	if is_inside_tree():

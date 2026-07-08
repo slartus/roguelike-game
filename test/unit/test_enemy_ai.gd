@@ -56,3 +56,31 @@ func test_charger_starts_in_watch_state() -> void:
 	await get_tree().process_frame
 	# State.WATCH = 0 (первый вариант enum)
 	assert_eq(e._state, 0, "charger starts in WATCH")
+
+func test_melee_memory_is_in_range() -> void:
+	# Для всех melee-сцен memory должен быть в [0, 1].
+	for scene in [EnemyScene, GoblinScene, OrcScene]:
+		var e = scene.instantiate()
+		assert_between(e.memory, 0.0, 1.0,
+			"%s memory outside [0, 1]" % scene.resource_path)
+		assert_gt(e.memory_check_interval, 0.0,
+			"%s memory_check_interval must be positive" % scene.resource_path)
+		e.free()
+
+func test_slime_forgets_faster_than_zombie() -> void:
+	# Тематический инвариант — слизь тупее зомби.
+	var slime = load("res://scenes/enemies/enemy.tscn").instantiate()
+	var zombie = load("res://scenes/enemies/zombie.tscn").instantiate()
+	assert_lt(slime.memory, zombie.memory,
+		"slime should forget more easily than zombie")
+	slime.free()
+	zombie.free()
+
+func test_orc_and_zombie_are_persistent_hunters() -> void:
+	# Orc и Zombie — упорные (memory >= 0.8).
+	var orc = load("res://scenes/enemies/orc.tscn").instantiate()
+	var zombie = load("res://scenes/enemies/zombie.tscn").instantiate()
+	assert_gte(orc.memory, 0.8, "orc should be persistent")
+	assert_gte(zombie.memory, 0.8, "zombie should be very persistent")
+	orc.free()
+	zombie.free()
