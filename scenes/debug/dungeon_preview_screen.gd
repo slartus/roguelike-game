@@ -16,6 +16,10 @@ const BOSS_FLOOR_INTERVAL: int = 5
 @onready var _status_label: Label = $VBox/Controls/StatusLabel
 
 func _ready() -> void:
+	# Отключаем project.godot viewport-stretch (480×270 → окно), иначе
+	# debug UI ужимается и кнопки уезжают за экран. Возвращаем режим
+	# при запуске игры через Play.
+	get_tree().root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
 	_seed_input.text = str(GameState.tower_seed)
 	_regenerate()
 
@@ -56,6 +60,9 @@ func _on_copy_pressed() -> void:
 
 func _on_play_pressed() -> void:
 	# Записать seed в GameState, обнулить забег и перейти в main.
+	# Восстанавливаем viewport stretch чтобы main.tscn рисовался в
+	# правильном pixel-perfect 480×270.
+	get_tree().root.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
 	GameState.reset_run()
 	GameState.tower_seed = _current_seed()
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
