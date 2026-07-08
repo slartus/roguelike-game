@@ -13,6 +13,8 @@ extends CharacterBody2D
 #
 # WANDER — случайное блуждание со сниженной скоростью.
 
+signal died_at(position: Vector2)
+
 enum State { WANDER, CHASE }
 
 const LOST_RATIO: float = 1.6
@@ -214,6 +216,8 @@ func take_damage(amount: int) -> void:
 	if is_inside_tree():
 		modulate = Color.WHITE
 	if health <= 0 and is_inside_tree():
+		# Emit до queue_free — иначе слушатели увидят freed node.
+		died_at.emit(global_position)
 		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
 		GameState.award_gold(gold_reward)

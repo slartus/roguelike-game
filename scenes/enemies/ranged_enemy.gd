@@ -4,6 +4,8 @@ extends CharacterBody2D
 # стреляет когда видит игрока в perception_radius. Если игрок вышел
 # из радиуса — прекращает стрелять, ждёт.
 
+signal died_at(position: Vector2)
+
 @export var display_name: String = "ENEMY_UNKNOWN"
 @export var max_health: int = 2
 @export var fire_interval: float = 1.5
@@ -61,6 +63,7 @@ func take_damage(amount: int) -> void:
 	if is_inside_tree():
 		modulate = Color.WHITE
 	if health <= 0 and is_inside_tree():
+		died_at.emit(global_position)
 		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
 		GameState.award_gold(gold_reward)

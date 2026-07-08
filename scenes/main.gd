@@ -25,6 +25,7 @@ const BOSS_FLOOR_INTERVAL: int = 5
 var _floor: Node2D
 var _door: Area2D
 var _alive_enemies: int = 0
+var _last_kill_position: Vector2 = Vector2.INF   # позиция смерти последнего убитого врага
 
 func _ready() -> void:
 	randomize()
@@ -77,6 +78,8 @@ func _spawn_enemies() -> void:
 		if "pickup_scene" in enemy:
 			enemy.pickup_scene = PICKUP_SCENE
 		enemy.tree_exited.connect(_on_enemy_removed)
+		if enemy.has_signal("died_at"):
+			enemy.died_at.connect(_on_enemy_died_at)
 		_enemies_root.add_child(enemy)
 		_alive_enemies += 1
 	if _alive_enemies == 0:
@@ -96,8 +99,14 @@ func _spawn_boss() -> void:
 	# В boss-этаже одна большая комната; берём её центр
 	boss.global_position = _floor.layout.rooms[0].get_center()
 	boss.tree_exited.connect(_on_enemy_removed)
+	if boss.has_signal("died_at"):
+		boss.died_at.connect(_on_enemy_died_at)
 	_enemies_root.add_child(boss)
 	_alive_enemies += 1
+
+func _on_enemy_died_at(death_position: Vector2) -> void:
+	# Rename `position` -> `death_position` чтобы не шейдовить Node2D.position.
+	_last_kill_position = death_position
 
 func _on_enemy_removed() -> void:
 	_alive_enemies -= 1
@@ -105,6 +114,12 @@ func _on_enemy_removed() -> void:
 		_open_door()
 
 func _open_door() -> void:
+	# Портал открывается в точке смерти последнего убитого врага —
+	# игроку явно указывает "куда идти дальше" в момент зачистки.
+	# Если ни один враг не умер (пустой этаж) — оставляем позицию,
+	# заданную генератором (exit_position).
+	if _last_kill_position != Vector2.INF:
+		_door.global_position = _last_kill_position
 	_door.open()
 
 func _on_door_entered() -> void:

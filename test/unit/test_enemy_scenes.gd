@@ -101,6 +101,28 @@ func test_all_ranged_scenes_have_bullet_scene() -> void:
 		assert_not_null(instance.bullet_scene, "%s must have bullet_scene wired" % path.get_file())
 		instance.free()
 
+func test_every_enemy_script_declares_died_at_signal() -> void:
+	# Портал телепортируется на точку смерти последнего врага —
+	# если кто-то удалит died_at из одной сцены, portal fallback'нётся
+	# на генератор-provided exit_position, что тихо ломает feature.
+	var enemy_scenes := [
+		"res://scenes/enemies/enemy.tscn",
+		"res://scenes/enemies/goblin.tscn",
+		"res://scenes/enemies/orc.tscn",
+		"res://scenes/enemies/skeleton.tscn",
+		"res://scenes/enemies/zombie.tscn",
+		"res://scenes/enemies/charger.tscn",
+		"res://scenes/enemies/ranged_enemy.tscn",
+		"res://scenes/enemies/lich.tscn",
+		"res://scenes/enemies/boss.tscn",
+	]
+	for path in enemy_scenes:
+		var scene: PackedScene = load(path)
+		var instance = scene.instantiate()
+		assert_true(instance.has_signal("died_at"),
+			"%s must declare died_at(position) signal" % path.get_file())
+		instance.free()
+
 func test_every_weapon_has_icon_texture() -> void:
 	# Каждый .tres обязан иметь icon_texture — иначе WeaponPickup будет
 	# без спрайта и игрок не поймёт что валяется.

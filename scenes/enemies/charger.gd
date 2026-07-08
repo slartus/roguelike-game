@@ -6,6 +6,8 @@ extends CharacterBody2D
 # CHARGING — рывок в фиксированном направлении к последней виденной
 # позиции игрока со скоростью charge_speed на charge_duration секунд.
 
+signal died_at(position: Vector2)
+
 enum State { WATCH, WAITING, CHARGING }
 
 @export var display_name: String = "ENEMY_UNKNOWN"
@@ -96,6 +98,7 @@ func take_damage(amount: int) -> void:
 	if is_inside_tree():
 		modulate = current_state_color
 	if health <= 0 and is_inside_tree():
+		died_at.emit(global_position)
 		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
 		GameState.award_gold(gold_reward)
