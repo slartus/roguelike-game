@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cxcu1aldocpu6"
-path="res://.godot/imported/boss.png-a96036838448288cdcf7f3043dfe34c7.ctex"
+uid="uid://crpqm6joj705p"
+path="res://.godot/imported/necromancer.png-ca1b38f7b215872f6e092ab3e5606d7a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/boss.png"
-dest_files=["res://.godot/imported/boss.png-a96036838448288cdcf7f3043dfe34c7.ctex"]
+source_file="res://assets/sprites/enemies/necromancer.png"
+dest_files=["res://.godot/imported/necromancer.png-ca1b38f7b215872f6e092ab3e5606d7a.ctex"]
 
 [params]
 

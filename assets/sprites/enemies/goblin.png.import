@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://nmms7f2pqcks"
-path="res://.godot/imported/ranged.png-0cb85a25f23556418b5dd6dc6999953a.ctex"
+uid="uid://dywirx5ib8wbv"
+path="res://.godot/imported/goblin.png-1763365f4ef0fc48448ac1a932daf396.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/ranged.png"
-dest_files=["res://.godot/imported/ranged.png-0cb85a25f23556418b5dd6dc6999953a.ctex"]
+source_file="res://assets/sprites/enemies/goblin.png"
+dest_files=["res://.godot/imported/goblin.png-1763365f4ef0fc48448ac1a932daf396.ctex"]
 
 [params]
 

@@ -1,0 +1,22 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/enemy.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/zombie.png" id="2_tex"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_zombie"]
+radius = 7.0
+
+[node name="Zombie" type="CharacterBody2D"]
+script = ExtResource("1_enemy")
+max_health = 6
+speed = 22.0
+contact_damage = 2
+xp_reward = 11
+gold_reward = 3
+pickup_drop_chance = 0.4
+
+[node name="Visual" type="Sprite2D" parent="."]
+texture = ExtResource("2_tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_zombie")

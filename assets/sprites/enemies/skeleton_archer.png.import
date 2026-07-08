@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b4qt57e8jaf76"
-path="res://.godot/imported/melee.png-6b6c4e9ad6d4d74fc2cbc0c2df740ab8.ctex"
+uid="uid://c8k5u5ouceejg"
+path="res://.godot/imported/skeleton_archer.png-22a5e93910605aa589370f014e5b95fb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/melee.png"
-dest_files=["res://.godot/imported/melee.png-6b6c4e9ad6d4d74fc2cbc0c2df740ab8.ctex"]
+source_file="res://assets/sprites/enemies/skeleton_archer.png"
+dest_files=["res://.godot/imported/skeleton_archer.png-22a5e93910605aa589370f014e5b95fb.ctex"]
 
 [params]
 

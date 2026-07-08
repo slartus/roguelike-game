@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b8g4yoy2x7pwq"
-path="res://.godot/imported/charger.png-fec12db16a3c656710c22bde266e877c.ctex"
+uid="uid://b7fhnu705gdxm"
+path="res://.godot/imported/spider.png-19bc439f2530c329d2145ac765fad982.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/charger.png"
-dest_files=["res://.godot/imported/charger.png-fec12db16a3c656710c22bde266e877c.ctex"]
+source_file="res://assets/sprites/enemies/spider.png"
+dest_files=["res://.godot/imported/spider.png-19bc439f2530c329d2145ac765fad982.ctex"]
 
 [params]
 

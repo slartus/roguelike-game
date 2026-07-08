@@ -6,9 +6,14 @@ const ROOM_SCENES: Array[PackedScene] = [
 	preload("res://scenes/rooms/room_cross.tscn"),
 ]
 const ENEMY_SCENES: Array[PackedScene] = [
-	preload("res://scenes/enemies/enemy.tscn"),
-	preload("res://scenes/enemies/ranged_enemy.tscn"),
-	preload("res://scenes/enemies/charger.tscn"),
+	preload("res://scenes/enemies/enemy.tscn"),         # Slime
+	preload("res://scenes/enemies/goblin.tscn"),        # Goblin
+	preload("res://scenes/enemies/orc.tscn"),           # Orc
+	preload("res://scenes/enemies/skeleton.tscn"),      # Skeleton
+	preload("res://scenes/enemies/zombie.tscn"),        # Zombie
+	preload("res://scenes/enemies/charger.tscn"),       # Spider
+	preload("res://scenes/enemies/ranged_enemy.tscn"),  # Skeleton Archer
+	preload("res://scenes/enemies/lich.tscn"),          # Lich
 ]
 const BOSS_SCENE: PackedScene = preload("res://scenes/enemies/boss.tscn")
 const PICKUP_SCENE: PackedScene = preload("res://scenes/pickups/health_pickup.tscn")

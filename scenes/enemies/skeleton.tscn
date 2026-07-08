@@ -1,23 +1,22 @@
 [gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scenes/enemies/enemy.gd" id="1_enemy"]
-[ext_resource type="Texture2D" path="res://assets/sprites/enemies/slime.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/skeleton.png" id="2_tex"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_enemy"]
+[sub_resource type="CircleShape2D" id="CircleShape2D_skeleton"]
 radius = 7.0
 
-[node name="Slime" type="CharacterBody2D"]
+[node name="Skeleton" type="CharacterBody2D"]
 script = ExtResource("1_enemy")
 max_health = 3
-speed = 35.0
+speed = 50.0
 contact_damage = 1
-contact_cooldown = 0.6
+xp_reward = 7
+gold_reward = 2
 pickup_drop_chance = 0.3
-xp_reward = 5
-gold_reward = 1
 
 [node name="Visual" type="Sprite2D" parent="."]
 texture = ExtResource("2_tex")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("CircleShape2D_enemy")
+shape = SubResource("CircleShape2D_skeleton")
