@@ -1,8 +1,14 @@
 extends CharacterBody2D
 
-# Ranged (Skeleton Archer, Lich). Стационарный: не двигается, но
-# стреляет когда видит игрока в perception_radius. Если игрок вышел
-# из радиуса — прекращает стрелять, ждёт.
+# Ranged (Skeleton Archer, Lich). Двигается по kite-паттерну: держится
+# на preferred_range дистанции от игрока и стреляет когда игрок в
+# perception_radius.
+#
+# States (implicit):
+# - Idle: игрок вне perception → стоим, не стреляем.
+# - Close-in: dist > preferred_range → идём к игроку.
+# - Retreat: dist < min_range → отходим спиной.
+# - Fire: min_range <= dist <= preferred_range → стоим и стреляем.
 
 signal died_at(position: Vector2)
 
@@ -15,6 +21,9 @@ signal died_at(position: Vector2)
 @export var xp_reward: int = 7
 @export var gold_reward: int = 2
 @export var perception_radius: float = 200.0
+@export var speed: float = 30.0
+@export var preferred_range: float = 160.0
+@export var min_range: float = 100.0
 
 var health: int
 var _target: Node2D
@@ -33,9 +42,28 @@ func _physics_process(delta: float) -> void:
 	if _target == null or not is_instance_valid(_target):
 		_target = _find_player()
 	if _target == null:
+		velocity = Vector2.ZERO
+		move_and_slide()
 		return
-	if global_position.distance_to(_target.global_position) > perception_radius:
+
+	var dist := global_position.distance_to(_target.global_position)
+	if dist > perception_radius:
+		# Игрок вне видимости — не двигаемся, не стреляем.
+		velocity = Vector2.ZERO
+		move_and_slide()
 		return
+
+	# Kiting: приближаемся если далеко, отходим если близко.
+	var to_player := (_target.global_position - global_position).normalized()
+	if dist > preferred_range:
+		velocity = to_player * speed
+	elif dist < min_range:
+		velocity = -to_player * speed
+	else:
+		velocity = Vector2.ZERO
+	move_and_slide()
+
+	# Стрельба — всегда пока игрок в perception.
 	_fire_timer -= delta
 	if _fire_timer <= 0.0:
 		_fire_timer = fire_interval

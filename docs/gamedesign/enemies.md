@@ -42,7 +42,7 @@
 Дефолтное поведение по типам:
 - **Melee** — WANDER: случайное направление, смена каждые `wander_change_interval`; при столкновении со стеной — разворот с малым случайным отклонением. Урон только в CHASE-фазе через `move_and_collide`.
 - **Charger** — WATCH: неподвижно, ждёт игрока. Как только видит — переходит в WAITING → CHARGING.
-- **Ranged** — стационарные, вообще не двигаются. Если не видят игрока — не стреляют. При обнаружении — залпы с `fire_interval`.
+- **Ranged** (Skeleton Archer, Lich) — **kiting**: держатся на `preferred_range` дистанции. Идут к игроку если он далеко (dist > preferred_range), отходят если слишком близко (dist < min_range), стоят и стреляют в промежутке. Не стреляют вне perception. move_and_slide гарантирует, что не залипают у стен.
 - **Boss** — `perception_radius = 3000` (эффективно всегда видит), CHASE постоянно + volleys.
 
 Получение урона всегда сразу переводит melee в CHASE (враг «просыпается» даже если игрок был вне радиуса).
@@ -181,6 +181,10 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 |----------|----------|
 | max_health | 2 |
 | fire_interval | 1.5 s |
+| speed | 30 |
+| perception_radius | 200 |
+| preferred_range | 160 |
+| min_range | 100 |
 | pickup_drop_chance | 30% |
 | xp_reward | 7 |
 | gold_reward | 2 |
@@ -195,11 +199,15 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 |----------|----------|
 | max_health | 3 |
 | fire_interval | 1.0 s |
+| speed | 25 |
+| perception_radius | 200 |
+| preferred_range | 130 |
+| min_range | 80 |
 | pickup_drop_chance | 35% |
 | xp_reward | 12 |
 | gold_reward | 4 |
 
-Роль: продвинутый маг. Крепче лучника и стреляет чаще.
+Роль: продвинутый маг. Крепче лучника и стреляет чаще. Держится ближе (preferred_range 130 vs 160 у лучника).
 
 ## Босс
 

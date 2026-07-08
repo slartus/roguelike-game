@@ -16,6 +16,9 @@ fire_interval = 1.0
 xp_reward = 12
 gold_reward = 4
 pickup_drop_chance = 0.35
+speed = 25.0
+preferred_range = 130.0
+min_range = 80.0
 
 [node name="Visual" type="Sprite2D" parent="."]
 texture = ExtResource("3_tex")
