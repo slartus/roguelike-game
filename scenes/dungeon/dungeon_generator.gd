@@ -1,30 +1,37 @@
 class_name DungeonGenerator
 extends RefCounted
 
-# Детерминированный генератор этажей подземелья.
+# Детерминированный генератор этажей "башни".
 #
-# Алгоритм:
-# 1. Число комнат = clamp(MIN_ROOMS + floor_number/2, MIN_ROOMS, MAX_ROOMS).
-# 2. Комнаты выстраиваются в цепочку: каждая следующая правее (60%)
-#    или ниже (40%) предыдущей с зазором ROOM_GAP.
-# 3. Между соседями по цепочке — L-образный коридор (горизонтальный
-#    сегмент + вертикальный).
-# 4. Player стартует в центре первой комнаты, exit — в центре последней.
-# 5. Enemy spawn'ы — в средних комнатах (2-3) и в последней (1-2).
-# 6. Chest — 1 штука в случайной средней комнате, только если
-#    floor_number % 3 == 0.
-# 7. Boss-этаж — одна большая арена, exit сразу.
-# 8. Все координаты нормализуются: floor_bounds.position = (0, 0).
+# Лор: игрок телепортируется на верхний этаж башни. Каждый следующий
+# этаж (глубже в башню) — расширенная версия предыдущего. На верхних
+# этажах маленькая планировка 2×2 комнаты; чем глубже, тем больше
+# grid растёт.
+#
+# Форма планировки — квадратный grid комнат, соприкасающихся стенами
+# толщиной WALL_THICKNESS. В общей стене между соседями пробит
+# дверной проём шириной DOORWAY_WIDTH. Никаких длинных коридоров —
+# только грид и проходы. (Длинные тоннели-подвалы — задел на будущее.)
+#
+# Размер grid:
+#   floor 1-3   → 2×2  ( 4 rooms)
+#   floor 4-6   → 3×3  ( 9 rooms)
+#   floor 7-9   → 4×4  (16 rooms)
+#   floor 10-12 → 5×5  (25 rooms), кап
+#
+# Boss-этажи (floor_number % 5 == 0) — одна большая арена, старый
+# генератор boss floor. См. `_generate_boss_floor`.
+#
+# Все координаты нормализуются: floor_bounds.position = (0, 0).
 
-const ROOM_MIN_SIZE: Vector2i = Vector2i(140, 100)
-const ROOM_MAX_SIZE: Vector2i = Vector2i(210, 150)
-const ROOM_GAP_MIN: int = 80
-const ROOM_GAP_MAX: int = 140
-const CORRIDOR_WIDTH: int = 24
+const ROOM_SIZE: Vector2i = Vector2i(140, 100)
+const WALL_THICKNESS: int = 20     # 1 tile — совпадает с TILE_SIZE в floor.gd
+const DOORWAY_WIDTH: int = 40      # 2 tile проём
+const DOORWAY_MARGIN: int = 20     # отступ проёма от угла комнаты
 const FLOOR_PADDING: int = 60
 const ENEMY_SPAWN_MARGIN: int = 22
-const MIN_ROOMS: int = 4
-const MAX_ROOMS: int = 9
+const MIN_GRID: int = 2
+const MAX_GRID: int = 5
 const CHEST_FLOOR_INTERVAL: int = 3
 const BOSS_ROOM_SIZE: Vector2i = Vector2i(600, 400)
 
@@ -36,39 +43,73 @@ func generate(seed: int, floor_number: int, is_boss: bool) -> DungeonLayout:
 	if is_boss:
 		_generate_boss_floor(layout)
 	else:
-		_generate_regular_floor(layout, rng, floor_number)
+		_generate_tower_floor(layout, rng, floor_number)
 	_compute_bounds(layout)
 	_normalize(layout)
 	return layout
 
-func _generate_regular_floor(layout: DungeonLayout, rng: RandomNumberGenerator, floor_number: int) -> void:
-	var room_count := clampi(MIN_ROOMS + floor_number / 2, MIN_ROOMS, MAX_ROOMS)
-	var pos := Vector2i.ZERO
-	for i in room_count:
-		var size := Vector2i(
-			rng.randi_range(ROOM_MIN_SIZE.x, ROOM_MAX_SIZE.x),
-			rng.randi_range(ROOM_MIN_SIZE.y, ROOM_MAX_SIZE.y),
-		)
-		layout.rooms.append(Rect2i(pos, size))
-		if i < room_count - 1:
-			var horizontal := rng.randf() < 0.6
-			var gap := rng.randi_range(ROOM_GAP_MIN, ROOM_GAP_MAX)
-			if horizontal:
-				pos = Vector2i(pos.x + size.x + gap, pos.y + rng.randi_range(-40, 40))
-			else:
-				pos = Vector2i(pos.x + rng.randi_range(-40, 40), pos.y + size.y + gap)
-	for i in room_count - 1:
-		_add_corridor(layout, layout.rooms[i], layout.rooms[i + 1])
-	layout.player_start = layout.rooms[0].get_center()
-	layout.exit_position = layout.rooms[-1].get_center()
-	for i in range(1, room_count - 1):
-		_add_enemy_spawns(layout, layout.rooms[i], rng, 2, 3)
-	if room_count >= 2:
-		_add_enemy_spawns(layout, layout.rooms[room_count - 1], rng, 1, 2)
-	if floor_number % CHEST_FLOOR_INTERVAL == 0 and room_count > 2:
-		var chest_room_idx := rng.randi_range(1, room_count - 2)
-		var chest_room := layout.rooms[chest_room_idx]
-		layout.chest_positions.append(chest_room.get_center() + Vector2i(rng.randi_range(-30, 30), rng.randi_range(-30, 30)))
+# Grid dimension по номеру этажа. Растёт по +1 каждые 3 этажа, кап MAX_GRID.
+func grid_dim_for_floor(floor_number: int) -> int:
+	return clampi(MIN_GRID + (floor_number - 1) / 3, MIN_GRID, MAX_GRID)
+
+func _generate_tower_floor(layout: DungeonLayout, rng: RandomNumberGenerator, floor_number: int) -> void:
+	var grid_dim := grid_dim_for_floor(floor_number)
+	var cell_step := Vector2i(ROOM_SIZE.x + WALL_THICKNESS, ROOM_SIZE.y + WALL_THICKNESS)
+
+	# Разместить комнаты по grid (порядок: row-major, row 0 сверху)
+	var rooms_by_cell: Dictionary = {}
+	for row in grid_dim:
+		for col in grid_dim:
+			var pos := Vector2i(col * cell_step.x, row * cell_step.y)
+			var rect := Rect2i(pos, ROOM_SIZE)
+			layout.rooms.append(rect)
+			rooms_by_cell[Vector2i(col, row)] = rect
+
+	# Дверные проёмы в общих стенах между соседями по grid
+	for row in grid_dim:
+		for col in grid_dim:
+			var cell := Vector2i(col, row)
+			var room: Rect2i = rooms_by_cell[cell]
+			var right_cell := Vector2i(col + 1, row)
+			if rooms_by_cell.has(right_cell):
+				var y_slack: int = maxi(1, room.size.y - 2 * DOORWAY_MARGIN - DOORWAY_WIDTH)
+				var y_start: int = room.position.y + DOORWAY_MARGIN + rng.randi_range(0, y_slack)
+				layout.corridors.append(Rect2i(
+					Vector2i(room.end.x, y_start),
+					Vector2i(WALL_THICKNESS, DOORWAY_WIDTH),
+				))
+			var down_cell := Vector2i(col, row + 1)
+			if rooms_by_cell.has(down_cell):
+				var x_slack: int = maxi(1, room.size.x - 2 * DOORWAY_MARGIN - DOORWAY_WIDTH)
+				var x_start: int = room.position.x + DOORWAY_MARGIN + rng.randi_range(0, x_slack)
+				layout.corridors.append(Rect2i(
+					Vector2i(x_start, room.end.y),
+					Vector2i(DOORWAY_WIDTH, WALL_THICKNESS),
+				))
+
+	# Точка телепортации — верхняя левая комната (мы прыгнули с верха башни)
+	var start_room: Rect2i = rooms_by_cell[Vector2i(0, 0)]
+	# Выход — нижняя правая (спуск глубже в башню)
+	var exit_room: Rect2i = rooms_by_cell[Vector2i(grid_dim - 1, grid_dim - 1)]
+	layout.player_start = start_room.get_center()
+	layout.exit_position = exit_room.get_center()
+
+	# Спавн врагов во всех комнатах, кроме стартовой и exit
+	for room in layout.rooms:
+		if room == start_room or room == exit_room:
+			continue
+		_add_enemy_spawns(layout, room, rng, 2, 3)
+
+	# Сундук — в случайной middle комнате каждые CHEST_FLOOR_INTERVAL этажей
+	if floor_number % CHEST_FLOOR_INTERVAL == 0:
+		var middle_rooms: Array[Rect2i] = []
+		for room in layout.rooms:
+			if room == start_room or room == exit_room:
+				continue
+			middle_rooms.append(room)
+		if middle_rooms.size() > 0:
+			var chest_room: Rect2i = middle_rooms[rng.randi_range(0, middle_rooms.size() - 1)]
+			layout.chest_positions.append(chest_room.get_center() + Vector2i(rng.randi_range(-20, 20), rng.randi_range(-20, 20)))
 
 func _generate_boss_floor(layout: DungeonLayout) -> void:
 	var room := Rect2i(Vector2i.ZERO, BOSS_ROOM_SIZE)
@@ -76,34 +117,13 @@ func _generate_boss_floor(layout: DungeonLayout) -> void:
 	layout.player_start = Vector2i(BOSS_ROOM_SIZE.x / 6, BOSS_ROOM_SIZE.y / 2)
 	layout.exit_position = Vector2i(BOSS_ROOM_SIZE.x * 5 / 6, BOSS_ROOM_SIZE.y / 2)
 
-func _add_corridor(layout: DungeonLayout, from_room: Rect2i, to_room: Rect2i) -> void:
-	var from_center := from_room.get_center()
-	var to_center := to_room.get_center()
-	var half_w: int = CORRIDOR_WIDTH / 2
-	var h_min_x: int = mini(from_center.x, to_center.x)
-	var h_max_x: int = maxi(from_center.x, to_center.x)
-	var horizontal := Rect2i(
-		Vector2i(h_min_x, from_center.y - half_w),
-		Vector2i(h_max_x - h_min_x + CORRIDOR_WIDTH, CORRIDOR_WIDTH),
-	)
-	var v_min_y: int = mini(from_center.y, to_center.y)
-	var v_max_y: int = maxi(from_center.y, to_center.y)
-	var vertical := Rect2i(
-		Vector2i(to_center.x - half_w, v_min_y),
-		Vector2i(CORRIDOR_WIDTH, v_max_y - v_min_y + CORRIDOR_WIDTH),
-	)
-	if horizontal.size.x > 0 and horizontal.size.y > 0:
-		layout.corridors.append(horizontal)
-	if vertical.size.x > 0 and vertical.size.y > 0:
-		layout.corridors.append(vertical)
-
 func _add_enemy_spawns(layout: DungeonLayout, room: Rect2i, rng: RandomNumberGenerator, min_count: int, max_count: int) -> void:
 	var count := rng.randi_range(min_count, max_count)
-	var x_range := maxi(1, room.size.x - ENEMY_SPAWN_MARGIN * 2)
-	var y_range := maxi(1, room.size.y - ENEMY_SPAWN_MARGIN * 2)
+	var x_range: int = maxi(1, room.size.x - ENEMY_SPAWN_MARGIN * 2)
+	var y_range: int = maxi(1, room.size.y - ENEMY_SPAWN_MARGIN * 2)
 	for i in count:
-		var x := room.position.x + ENEMY_SPAWN_MARGIN + rng.randi_range(0, x_range)
-		var y := room.position.y + ENEMY_SPAWN_MARGIN + rng.randi_range(0, y_range)
+		var x: int = room.position.x + ENEMY_SPAWN_MARGIN + rng.randi_range(0, x_range)
+		var y: int = room.position.y + ENEMY_SPAWN_MARGIN + rng.randi_range(0, y_range)
 		layout.enemy_spawns.append(Vector2i(x, y))
 
 func _compute_bounds(layout: DungeonLayout) -> void:
