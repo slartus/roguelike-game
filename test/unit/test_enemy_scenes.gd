@@ -7,34 +7,34 @@ extends GutTest
 const MELEE_SPECS := {
 	"res://scenes/enemies/enemy.tscn": {
 		"max_health": 3, "speed": 35.0, "contact_damage": 1,
-		"xp_reward": 5, "gold_reward": 1, "pickup_drop_chance": 0.3,
+		"xp_reward": 5, "gold_reward": 1, "pickup_drop_chance": 0.15,
 	},
 	"res://scenes/enemies/goblin.tscn": {
 		"max_health": 4, "speed": 55.0, "contact_damage": 1,
-		"xp_reward": 6, "gold_reward": 2, "pickup_drop_chance": 0.3,
+		"xp_reward": 6, "gold_reward": 2, "pickup_drop_chance": 0.15,
 	},
 	"res://scenes/enemies/orc.tscn": {
 		"max_health": 8, "speed": 28.0, "contact_damage": 2,
-		"xp_reward": 14, "gold_reward": 4, "pickup_drop_chance": 0.45,
+		"xp_reward": 14, "gold_reward": 4, "pickup_drop_chance": 0.22,
 	},
 	"res://scenes/enemies/skeleton.tscn": {
 		"max_health": 3, "speed": 50.0, "contact_damage": 1,
-		"xp_reward": 7, "gold_reward": 2, "pickup_drop_chance": 0.3,
+		"xp_reward": 7, "gold_reward": 2, "pickup_drop_chance": 0.15,
 	},
 	"res://scenes/enemies/zombie.tscn": {
 		"max_health": 6, "speed": 22.0, "contact_damage": 2,
-		"xp_reward": 11, "gold_reward": 3, "pickup_drop_chance": 0.4,
+		"xp_reward": 11, "gold_reward": 3, "pickup_drop_chance": 0.2,
 	},
 }
 
 const RANGED_SPECS := {
 	"res://scenes/enemies/ranged_enemy.tscn": {
 		"max_health": 2, "fire_interval": 1.5,
-		"xp_reward": 7, "gold_reward": 2, "pickup_drop_chance": 0.3,
+		"xp_reward": 7, "gold_reward": 2, "pickup_drop_chance": 0.15,
 	},
 	"res://scenes/enemies/lich.tscn": {
 		"max_health": 3, "fire_interval": 1.0,
-		"xp_reward": 12, "gold_reward": 4, "pickup_drop_chance": 0.35,
+		"xp_reward": 12, "gold_reward": 4, "pickup_drop_chance": 0.18,
 	},
 }
 

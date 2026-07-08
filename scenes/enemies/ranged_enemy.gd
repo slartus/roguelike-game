@@ -17,7 +17,7 @@ signal died_at(position: Vector2)
 @export var fire_interval: float = 1.5
 @export var bullet_scene: PackedScene
 @export var pickup_scene: PackedScene
-@export var pickup_drop_chance: float = 0.3
+@export var pickup_drop_chance: float = 0.15
 @export var xp_reward: int = 7
 @export var gold_reward: int = 2
 @export var perception_radius: float = 200.0

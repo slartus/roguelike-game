@@ -14,7 +14,7 @@ speed = 22.0
 contact_damage = 2
 xp_reward = 11
 gold_reward = 3
-pickup_drop_chance = 0.4
+pickup_drop_chance = 0.2
 memory = 0.95
 
 [node name="Visual" type="Sprite2D" parent="."]

@@ -38,7 +38,7 @@ const ESCAPE_DURATION: float = 0.4
 @export var contact_damage: int = 1
 @export var contact_cooldown: float = 0.6
 @export var pickup_scene: PackedScene
-@export var pickup_drop_chance: float = 0.3
+@export var pickup_drop_chance: float = 0.15
 @export var xp_reward: int = 5
 @export var gold_reward: int = 1
 @export var perception_radius: float = 130.0

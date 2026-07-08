@@ -92,7 +92,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | speed | 35 |
 | contact_damage | 1 |
 | contact_cooldown | 0.6 s |
-| pickup_drop_chance | 30% |
+| pickup_drop_chance | 15% |
 | xp_reward | 5 |
 | gold_reward | 1 |
 
@@ -107,7 +107,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | max_health | 4 |
 | speed | 55 |
 | contact_damage | 1 |
-| pickup_drop_chance | 30% |
+| pickup_drop_chance | 15% |
 | xp_reward | 6 |
 | gold_reward | 2 |
 
@@ -122,7 +122,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | max_health | 8 |
 | speed | 28 |
 | contact_damage | 2 |
-| pickup_drop_chance | 45% |
+| pickup_drop_chance | 22% |
 | xp_reward | 14 |
 | gold_reward | 4 |
 
@@ -137,7 +137,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | max_health | 3 |
 | speed | 50 |
 | contact_damage | 1 |
-| pickup_drop_chance | 30% |
+| pickup_drop_chance | 15% |
 | xp_reward | 7 |
 | gold_reward | 2 |
 
@@ -152,7 +152,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | max_health | 6 |
 | speed | 22 |
 | contact_damage | 2 |
-| pickup_drop_chance | 40% |
+| pickup_drop_chance | 20% |
 | xp_reward | 11 |
 | gold_reward | 3 |
 
@@ -172,7 +172,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | charge_duration | 0.9 s |
 | contact_damage | 1 |
 | contact_cooldown | 0.4 s |
-| pickup_drop_chance | 35% |
+| pickup_drop_chance | 18% |
 | xp_reward | 8 |
 | gold_reward | 1 |
 
@@ -200,7 +200,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | perception_radius | 200 |
 | preferred_range | 160 |
 | min_range | 100 |
-| pickup_drop_chance | 30% |
+| pickup_drop_chance | 15% |
 | xp_reward | 7 |
 | gold_reward | 2 |
 
@@ -218,7 +218,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | perception_radius | 200 |
 | preferred_range | 130 |
 | min_range | 80 |
-| pickup_drop_chance | 35% |
+| pickup_drop_chance | 18% |
 | xp_reward | 12 |
 | gold_reward | 4 |
 

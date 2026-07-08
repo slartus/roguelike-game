@@ -16,9 +16,12 @@
 
 | Враг | Шанс |
 |------|------|
-| Melee | 30% |
-| Ranged | 30% |
-| Charger | 35% |
+| Slime / Goblin / Skeleton | 15% |
+| Zombie | 20% |
+| Orc | 22% |
+| Skeleton Archer | 15% |
+| Lich | 18% |
+| Charger (Spider) | 18% |
 | Boss | 0% |
 
 Скрипт: `scenes/pickups/health_pickup.gd`.
