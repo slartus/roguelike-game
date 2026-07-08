@@ -49,8 +49,10 @@ func _ready() -> void:
 	floor_size = Vector2(layout.floor_bounds.size)
 
 func _pick_seed() -> int:
-	# Смена сида при каждом заходе: одна и та же комната не повторяется.
-	return GameState.current_floor_number * 100003 + int(Time.get_unix_time_from_system() * 1000) % 100003
+	# Детерминированно от GameState.tower_seed + номера этажа.
+	# Один tower_seed определяет весь layout всех этажей забега → можно
+	# воспроизвести или поделиться seed'ом.
+	return GameState.tower_seed * 100003 + GameState.current_floor_number
 
 func _is_boss_floor() -> bool:
 	return GameState.current_floor_number % 5 == 0

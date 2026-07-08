@@ -66,6 +66,11 @@ func test_log_level_up_format() -> void:
 	assert_eq(_texts[0], "Уровень 2!")
 	assert_eq(_tints[0], EventLog.LEVEL_TINT)
 
+func test_log_tower_seed_format() -> void:
+	EventLog.log_tower_seed(1234567)
+	assert_eq(_texts[0], "Seed башни: 1234567")
+	assert_eq(_tints[0], EventLog.SEED_TINT)
+
 func test_english_locale_translates_correctly() -> void:
 	TranslationServer.set_locale("en")
 	EventLog.log_kill("ENEMY_SLIME", 5, 1)

@@ -17,10 +17,23 @@ var equipped_weapon: WeaponResource = DEFAULT_WEAPON
 var player_level: int = 1
 var player_xp: int = 0
 
+# Master seed забега. Один raw int определяет весь layout всех этажей.
+# Floor использует tower_seed для формулы seed(floor) = tower_seed * PRIME + floor.
+# Reset_run генерирует новый случайный tower_seed.
+var tower_seed: int = 0
+
 var total_gold: int = 0
 
 func _ready() -> void:
+	tower_seed = _pick_random_tower_seed()
 	_load()
+
+func _pick_random_tower_seed() -> int:
+	# Uniform в [0, 2^31 - 1]. Достаточно широкий диапазон для практики,
+	# и легко копируется/вводится игроком.
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return rng.randi_range(0, 2147483647)
 
 func next_floor() -> void:
 	current_floor_number += 1
@@ -33,6 +46,7 @@ func reset_run() -> void:
 	equipped_weapon = DEFAULT_WEAPON
 	player_level = 1
 	player_xp = 0
+	tower_seed = _pick_random_tower_seed()
 
 func award_xp(amount: int) -> void:
 	if amount <= 0:

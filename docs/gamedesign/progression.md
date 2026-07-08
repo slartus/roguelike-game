@@ -61,6 +61,20 @@ Base statы монстров — D&D 5e Monster Manual (SRD), нормализо
 
 Пока `total_gold` — просто счётчик; тратить его негде (нет хаба / permanent upgrades). Заготовка под будущий hub.
 
+## Tower seed
+
+Один `GameState.tower_seed: int` в диапазоне `[0, 2^31-1]` определяет весь layout всех этажей забега. `Floor._pick_seed()` = `tower_seed * 100003 + current_floor_number` — детерминированное отображение.
+
+Свойства:
+- Один и тот же `tower_seed` = идентичная башня (все этажи, все комнаты, все спавны в тех же позициях).
+- `reset_run()` при смерти генерирует новый случайный `tower_seed` — следующий забег будет другой башней.
+- При запуске игры `_ready` тоже генерирует случайный seed.
+- Seed логируется в Combat Log при заходе на floor 1 (`EventLog.log_tower_seed(...)` → `LOG_TOWER_SEED` template) — игрок видит его, может скопировать/поделиться/повторить забег.
+
+Формат ключа: `LOG_TOWER_SEED,"Tower seed: %d","Seed башни: %d"` (`resources/translations/strings.csv`).
+
+Пока нет UI для ручного ввода seed — задел под start menu / debug console.
+
 ## Save/Load
 
 - Формат: `ConfigFile` (INI-подобный).

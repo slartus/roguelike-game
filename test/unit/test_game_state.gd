@@ -79,6 +79,24 @@ func test_reset_run_clears_run_state_but_keeps_gold() -> void:
 	assert_eq(GameState.equipped_weapon, DAGGER, "weapon resets to default")
 	assert_eq(GameState.total_gold, 100, "gold survives run reset")
 
+func test_reset_run_generates_new_tower_seed() -> void:
+	# tower_seed должен смениться после reset_run (случайная выборка).
+	# Гоняем несколько раз чтобы отсечь редкий случай коллизии.
+	var initial_seed := GameState.tower_seed
+	var changed := false
+	for i in 5:
+		GameState.reset_run()
+		if GameState.tower_seed != initial_seed:
+			changed = true
+			break
+	assert_true(changed, "reset_run must roll a new tower_seed")
+
+func test_tower_seed_is_in_positive_int_range() -> void:
+	GameState.reset_run()
+	assert_gte(GameState.tower_seed, 0)
+	assert_lte(GameState.tower_seed, 2147483647,
+		"tower_seed fits in a 32-bit signed positive int")
+
 func test_award_gold_increments_total() -> void:
 	GameState.total_gold = 10
 	GameState.award_gold(15)

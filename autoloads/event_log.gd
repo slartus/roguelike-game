@@ -13,6 +13,7 @@ const CHEST_TINT: Color = Color(0.95, 0.75, 0.30)
 const FLOOR_TINT: Color = Color(0.95, 0.95, 0.70)
 const BOSS_TINT: Color = Color(1.0, 0.50, 0.50)
 const LEVEL_TINT: Color = Color(1.0, 0.65, 0.85)
+const SEED_TINT: Color = Color(0.70, 0.85, 0.95)
 
 const DEFAULT_LOCALE: String = "ru"
 
@@ -48,3 +49,6 @@ func log_boss_floor(number: int) -> void:
 
 func log_level_up(new_level: int) -> void:
 	entry_added.emit(tr("LOG_LEVEL_UP") % new_level, LEVEL_TINT)
+
+func log_tower_seed(seed_value: int) -> void:
+	entry_added.emit(tr("LOG_TOWER_SEED") % seed_value, SEED_TINT)

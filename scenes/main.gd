@@ -41,6 +41,8 @@ func _ready() -> void:
 	_hud.set_xp(GameState.player_xp, Balance.xp_to_next_level(GameState.player_level))
 	_hud.set_gold(GameState.total_gold)
 	_door.player_entered.connect(_on_door_entered)
+	if GameState.current_floor_number == 1:
+		EventLog.log_tower_seed(GameState.tower_seed)
 	if _is_boss_floor():
 		EventLog.log_boss_floor(GameState.current_floor_number)
 	else:
