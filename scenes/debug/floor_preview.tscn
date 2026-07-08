@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/debug/floor_preview.gd" id="1_preview"]
+
+[node name="FloorPreview" type="Control"]
+custom_minimum_size = Vector2(320, 180)
+script = ExtResource("1_preview")

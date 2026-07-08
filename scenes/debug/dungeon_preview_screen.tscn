@@ -1,0 +1,63 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/debug/dungeon_preview_screen.gd" id="1_screen"]
+
+[node name="DungeonPreviewScreen" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_screen")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+
+[node name="Title" type="Label" parent="VBox"]
+text = "Dungeon Preview"
+
+[node name="Controls" type="VBoxContainer" parent="VBox"]
+
+[node name="SeedRow" type="HBoxContainer" parent="VBox/Controls"]
+
+[node name="Label" type="Label" parent="VBox/Controls/SeedRow"]
+text = "Seed:"
+
+[node name="SeedInput" type="LineEdit" parent="VBox/Controls/SeedRow"]
+custom_minimum_size = Vector2(200, 0)
+placeholder_text = "int seed"
+
+[node name="RandomButton" type="Button" parent="VBox/Controls/SeedRow"]
+text = "Random"
+
+[node name="GenerateButton" type="Button" parent="VBox/Controls/SeedRow"]
+text = "Generate"
+
+[node name="CopyButton" type="Button" parent="VBox/Controls/SeedRow"]
+text = "Copy"
+
+[node name="PlayButton" type="Button" parent="VBox/Controls/SeedRow"]
+text = "Play"
+
+[node name="StatusLabel" type="Label" parent="VBox/Controls"]
+text = "Seed: -"
+
+[node name="Scroll" type="ScrollContainer" parent="VBox"]
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 400)
+
+[node name="PreviewList" type="VBoxContainer" parent="VBox/Scroll"]
+size_flags_horizontal = 3
+
+[connection signal="pressed" from="VBox/Controls/SeedRow/RandomButton" to="." method="_on_random_pressed"]
+[connection signal="pressed" from="VBox/Controls/SeedRow/GenerateButton" to="." method="_on_generate_pressed"]
+[connection signal="pressed" from="VBox/Controls/SeedRow/CopyButton" to="." method="_on_copy_pressed"]
+[connection signal="pressed" from="VBox/Controls/SeedRow/PlayButton" to="." method="_on_play_pressed"]
