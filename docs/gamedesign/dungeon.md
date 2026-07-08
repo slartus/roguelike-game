@@ -1,87 +1,101 @@
 # Башня и этажи
 
-Игра — забег по **башне**. Игрок телепортируется на верхний этаж и пробивается вниз, глубже. Каждый этаж — процедурно сгенерированный «слой» из нескольких комнат, расположенных в grid и соприкасающихся стенами через дверные проёмы.
-
-**Лор:** «Мы телепортировались на самый верх башни с N уровнями. Каждый уровень — этаж башни сверху вниз. Башня расширяется к низу — чем глубже, тем шире планировка. Пока мы не добрались до подвалов, уровни не должны быть сильно растянуты — компактные grid'ы комнат, соединённых простыми проходами в общих стенах.»
+Игра — забег по **башне**. Игрок телепортируется на верхний этаж и пробивается вниз. Каждый этаж — процедурно сгенерированное **жилое пространство**: комнаты разных размеров (кладовочки, гостиные, залы), соединённые дверьми в общих стенах. Не каждая пара соседних комнат имеет проход — часть смежных комнат просто соприкасается стенами, что даёт residential feel.
 
 Терминология:
 - **Этаж** (`floor`) = один сегмент забега (`GameState.current_floor_number`).
-- **Комната** (`room`) = один прямоугольник 140×100 в grid.
-- **Дверной проём** (`doorway`, тип `corridor` в структуре) = проход шириной 40 px в общей стене между соседними комнатами.
+- **Комната** (`room`) = один прямоугольник в footprint'е, размер 80–200 px по стороне.
+- **Дверной проём** (`doorway`, тип `corridor` в структуре) = проход шириной 40 px в общей стене между соседями.
 - **Выход** (`Door`) = `Area2D`, ведущий на следующий этаж.
 
-## Генератор — `DungeonGenerator`
+## Генератор — `DungeonGenerator` (BSP + MST + extra edges)
 
 `scenes/dungeon/dungeon_generator.gd` (`class_name DungeonGenerator`). Метод `generate(seed, floor_number, is_boss) → DungeonLayout`.
 
+Классический BSP dungeon algorithm (Rogue / NetHack / RogueSharp) с MST-связностью и небольшой долей случайных дополнительных дверей для циклов.
+
 ### Алгоритм tower-этажа
 
-1. **Grid dimension.** `grid_dim_for_floor(floor_number) = clampi(2 + (floor - 1) / 3, 2, 5)`.
+1. **Footprint.** `footprint_tiles_for_floor(floor_number) → Vector2i` (в tile-координатах, тайл = 20 px).
 
-   | Этажи | Grid | Комнат |
-   |-------|------|--------|
-   | 1–3 | 2×2 | 4 |
-   | 4–6 | 3×3 | 9 |
-   | 7–9 | 4×4 | 16 |
-   | 10+ | 5×5 | 25 (cap) |
+   | Этажи | Footprint (tiles) | Footprint (px) |
+   |-------|-------------------|----------------|
+   | 1–3 | 20×14 | 400×280 |
+   | 4–6 | 23×16 | 460×320 |
+   | 7–9 | 26×18 | 520×360 |
+   | 10+ | 29×20 → cap 40×28 | 580×400 → 800×560 |
 
-2. **Размещение комнат.** Каждая комната — `ROOM_SIZE = 140×100`. Между соседними комнатами — общая стена `WALL_THICKNESS = 20`. Cell step = `(ROOM_SIZE + WALL_THICKNESS) = (160, 120)`.
+2. **BSP split.** Recursive splitting региона:
+   - Направление split'а — по длинной стороне (с 20% шансом flip'а для variety).
+   - Split point выбирается в диапазоне 30–70% длины через `rng.randf_range(SPLIT_MIN_RATIO, SPLIT_MAX_RATIO)`.
+   - На линии разреза резервируется **1 tile для стены** (даёт точное `a.end.x + WALL_THICKNESS == b.position.x` соседство).
+   - Стоп: `depth >= MAX_BSP_DEPTH`, обе половины `< MIN_REGION_TILES`, или (после depth 3) `rng.randf() < 0.15` — сохраняет большие залы.
 
-3. **Дверные проёмы.** Для каждой пары соседей по grid (справа/снизу) в общей стене пробит `DOORWAY_WIDTH = 40` px проход. Позиция проёма — случайная, с отступом `DOORWAY_MARGIN = 20` от углов комнаты. Проёмы в структуре layout лежат в поле `corridors: Array[Rect2i]` (историческое имя; для tower это именно короткие doorway-прямоугольники в стене).
+3. **Комнаты в leaves.** В каждом leaf-регионе комната сжимается на `0..2` тайла с каждой стороны, дополнительно клампится до `MAX_ROOM_TILES = 10` (200 px). Минимум — `MIN_ROOM_TILES = 4` (80 px, кладовочка).
 
-4. **Player start** — центр верхней левой комнаты `(0, 0)` (мы прыгнули с верха башни).
+4. **Adjacency graph.** Для каждой пары комнат вычисляется `_shared_wall`. Стена засчитывается как «пригодная для двери» только если overlap ≥ `MIN_SHARED_WALL = 80` (иначе комнаты просто соприкасаются углами / малой частью стены — прохода нет).
 
-5. **Exit** — центр нижней правой комнаты `(grid_dim-1, grid_dim-1)` (глубже в башню).
+5. **MST (Kruskal + Union-Find).** Edge weight = отрицательная длина shared-wall (широкие стены приоритетнее для основных проходов). Tiebreak — `(min(a, b), max(a, b))` для детерминизма при одинаковом seed. Гарантирует связность всех комнат.
 
-6. **Enemy spawns** — 2–3 точки в каждой комнате, **кроме** стартовой и exit.
+6. **Extra edges.** `ceili(remaining_edges * 0.25)` дополнительных ребер из non-MST adjacencies выбираются случайно (Fisher-Yates prefix с `rng`). Создают циклы → игрок может обойти комнату двумя маршрутами.
 
-7. **Chest** — на этажах, кратных 3 (`CHEST_FLOOR_INTERVAL = 3`), одна точка в случайной средней комнате.
+7. **Doorway carving.** Для каждого connected ребра пробивается 40-px проход в общей стене со случайной позицией `[wall_lo + DOORWAY_MARGIN, wall_hi - DOORWAY_MARGIN - DOORWAY_WIDTH]`.
 
-8. **Нормализация** — `floor_bounds.position = (0, 0)`, все координаты неотрицательны.
+8. **Player start / exit.** `player_start` = центр комнаты, минимизирующей `position.x + position.y` (верхний-левый угол). `exit_position` = центр комнаты, максимизирующей `end.x + end.y` (нижний-правый).
+
+9. **Enemy spawns.** 2–3 точки в каждой комнате, кроме start и exit. Число слотов ограничивается площадью комнаты (маленькие комнаты — 1–2 врага).
+
+10. **Chest.** Логика без изменений: `floor % 3 == 0` → одна точка в случайной middle-комнате.
+
+11. **Нормализация.** `floor_bounds.position = (0, 0)`, все координаты неотрицательны.
 
 ### Boss-этаж
 
-`floor_number % 5 == 0` → один большой 600×400 зал. Никаких обычных врагов и сундуков. `Player.start` слева, `exit_position` справа.
+`floor_number % 5 == 0` → одна большая арена `BOSS_ROOM_SIZE = 600×400`. Без изменений.
 
 ### Константы
 
 | Константа | Значение | Смысл |
 |-----------|----------|-------|
-| `ROOM_SIZE` | 140×100 | Фиксированный размер комнаты (7×5 tiles) |
-| `WALL_THICKNESS` | 20 | Толщина общей стены между соседями (1 tile) |
-| `DOORWAY_WIDTH` | 40 | Ширина проёма (2 tiles) |
-| `DOORWAY_MARGIN` | 20 | Отступ проёма от угла комнаты |
-| `FLOOR_PADDING` | 60 | Отступ bounds от края комнат |
-| `ENEMY_SPAWN_MARGIN` | 22 | Отступ спавна от стены |
-| `MIN_GRID` / `MAX_GRID` | 2 / 5 | Границы размера grid |
+| `TILE` | 20 | Размер тайла (совпадает с `TILE_SIZE` в `floor.gd`) |
+| `MIN_ROOM_TILES` / `MAX_ROOM_TILES` | 4 / 10 | Размер комнаты 80–200 px по стороне |
+| `MIN_REGION_TILES` | 6 | Минимальный регион для дальнейшего сплита |
+| `MAX_BSP_DEPTH` | 6 | Ограничение глубины дерева |
+| `SPLIT_MIN_RATIO` / `SPLIT_MAX_RATIO` | 0.30 / 0.70 | Диапазон точки сплита |
+| `ROOM_INSET_MAX_TILES` | 2 | Random shrink комнаты внутри leaf |
+| `EARLY_STOP_CHANCE` | 0.15 | Шанс не сплитить после depth 3 (большие залы) |
+| `WALL_THICKNESS` | 20 | Толщина общей стены (1 tile) |
+| `DOORWAY_WIDTH` | 40 | Ширина прохода (2 tiles) |
+| `DOORWAY_MARGIN` | 20 | Отступ прохода от углов комнаты |
+| `MIN_SHARED_WALL` | 80 | Мин. overlap двух комнат чтобы считать их «adjacent для двери» |
+| `EXTRA_EDGE_RATIO` | 0.25 | +25% случайных дверей сверх MST |
+| `FLOOR_PADDING` | 60 | Отступ от края bounds |
+| `ENEMY_SPAWN_MARGIN` | 22 | Отступ спавна от стены комнаты |
 | `CHEST_FLOOR_INTERVAL` | 3 | Каждый N-й этаж — сундук |
 | `BOSS_ROOM_SIZE` | 600×400 | Арена босса |
 
 ## Данные — `DungeonLayout`
 
-`scenes/dungeon/dungeon_layout.gd` (`class_name DungeonLayout`). Чистая структура данных:
+`scenes/dungeon/dungeon_layout.gd` (`class_name DungeonLayout`). Чистая структура данных, контракт не меняется:
 
 | Поле | Тип | Смысл |
 |------|-----|-------|
-| `rooms` | `Array[Rect2i]` | Прямоугольники комнат (row-major, top-left первая) |
-| `corridors` | `Array[Rect2i]` | Дверные проёмы в общих стенах между соседями |
-| `player_start` | `Vector2i` | Точка телепортации (центр верхней левой комнаты) |
-| `exit_position` | `Vector2i` | Точка выхода (центр нижней правой) |
-| `enemy_spawns` | `Array[Vector2i]` | Позиции для врагов |
-| `chest_positions` | `Array[Vector2i]` | Позиции для сундуков |
+| `rooms` | `Array[Rect2i]` | Комнаты (BSP DFS-порядок) |
+| `corridors` | `Array[Rect2i]` | Дверные проёмы в общих стенах |
+| `player_start` | `Vector2i` | Центр верхней левой комнаты |
+| `exit_position` | `Vector2i` | Центр нижней правой |
+| `enemy_spawns` | `Array[Vector2i]` | Позиции врагов |
+| `chest_positions` | `Array[Vector2i]` | Позиции сундуков |
 | `floor_bounds` | `Rect2i` | Границы этажа, `position = (0, 0)` |
 | `is_boss_floor` | `bool` | Флаг boss-этажа |
 
 ## Рендер — `scenes/dungeon/floor.tscn` + `floor.gd`
 
-`Floor` — Node2D, при `_ready()`:
-
-1. Вызывает `DungeonGenerator.generate(seed, floor_number, is_boss)`.
-2. Рисует **фон** — Polygon2D с `BACKGROUND_COLOR`.
-3. Рисует **пол** — Polygon2D с `FLOOR_TEXTURE` (`assets/sprites/environment/floor.png`), UV в абсолютных координатах → бесшовный тайлинг между комнатами и проёмами.
-4. Строит **стены** — grid 20×20 tile'ов. Для каждой tile-cell, не входящей ни в комнату, ни в проём, создаётся StaticBody2D + RectangleShape2D. Смежные wall-tiles в одной строке объединяются (per-row merge). Визуал — Polygon2D с `WALL_TEXTURE`, UV в абсолютных координатах → кирпичный узор непрерывен.
-5. Инстансирует `door.tscn` на `exit_position`.
-6. Публикует `player_start`, `enemy_spawn_positions`, `chest_positions`, `door`, `floor_size`, `layout` для потребителей.
+Без изменений — генератор поменял алгоритм, но контракт с `Floor` тот же. `Floor`:
+1. Вызывает `DungeonGenerator.generate(...)`.
+2. Рисует фон, пол и стены с textures + `texture_repeat` (см. «Тайлы окружения» ниже).
+3. Инстансирует `door.tscn` на `exit_position`.
+4. Публикует `player_start`, `enemy_spawn_positions`, `chest_positions`, `door`, `floor_size`, `layout`.
 
 ## Тайлы окружения
 
@@ -90,35 +104,42 @@
 
 UV — абсолютные координаты этажа. Стыки между комнатами / проёмами / стенами бесшовные.
 
-Тайлы генерируются детерминированно из `tools/gen_environment_sprites.py`.
-
 ## Использование в Main
 
-`scenes/main.gd::_ready`:
-
-1. `_spawn_floor()` — инстансирует `Floor`, добавляет как первого child.
+Без изменений. `main.gd::_ready`:
+1. `_spawn_floor()` — инстансирует `Floor`.
 2. `_place_player()` — телепортирует в `_floor.player_start`.
-3. `_configure_camera_limits()` — камера Player'а клампится к `floor_size`.
+3. `_configure_camera_limits()` — камера клампится к `floor_size`.
 4. `_door.player_entered → GameState.next_floor()`.
-5. `_spawn_enemies()` — по `_floor.enemy_spawn_positions`. Для boss-этажа — один босс в центре.
+5. `_spawn_enemies()` — по `_floor.enemy_spawn_positions`.
 6. `_spawn_chests()` — по `_floor.chest_positions`.
 
 ## Тесты
 
-`test/unit/test_dungeon_generator.gd` (13 тестов):
-- Grid dimension scales every 3 floors, capped at MAX_GRID.
-- Number of doorway connectors = `2 * N * (N-1)` для NxN grid.
-- Boss floor: один room, никаких проходов/enemies/chests.
-- Player start внутри top-left комнаты, exit внутри bottom-right.
-- Enemy spawns внутри какой-то комнаты, ни один не в стартовой/exit.
+`test/unit/test_dungeon_generator.gd`:
+
+**Общие инварианты** (сохранены при переходе с grid → BSP):
+- Boss floor: 1 room, 0 corridors, 0 enemies, 0 chests.
+- Player start в top-left комнате, exit в bottom-right.
+- Все enemy spawns внутри какой-то комнаты, ни один в start/exit.
 - Chest только на этажах кратных 3.
-- Детерминизм по seed, разные seed → разные позиции проёмов.
-- Нормализация до `(0, 0)`, все координаты неотрицательны.
-- `floor_bounds` enclose'ит все комнаты и проёмы.
+- Same seed → identical layout.
+- Different seeds → different layouts.
+- Нормализация: `floor_bounds.position = (0, 0)`, координаты неотрицательны.
+- `floor_bounds` enclose'ит все rooms и corridors.
 - Более глубокие этажи имеют больше комнат.
+
+**BSP-specific**:
+- `test_footprint_scales_with_floor` — footprint растёт с этажом, кап 40×28.
+- `test_rooms_vary_in_size` — `max_area >= 2 * min_area` (разные размеры).
+- `test_all_rooms_reachable_via_doorways` — BFS через doorways посещает все комнаты (MST guarantees).
+- `test_start_reaches_exit_via_doorways` — start достигает exit.
+- `test_has_cycles_on_floor_4_plus` — `corridors.size() > rooms.size() - 1` (25% extra edges создают циклы).
+- `test_some_adjacent_rooms_have_no_doorway_on_floor_7` — часть смежных пар без doorway.
 
 ## Планы
 
-- **Подвалы** — глубокие этажи (например 15+) должны стать более «пещерными»: длинные коридоры между не-adjacent комнатами, ветвления, тупики. Заготовка на будущее — переключение по `floor_number > BASEMENT_THRESHOLD` на другую генерацию.
-- **Специальные комнаты** — trap rooms, altar rooms, treasure rooms с уникальной планировкой внутри grid.
-- **Секретные проходы** — скрытые проёмы, которые видны только после активации какого-то триггера.
+- **Подвалы** — глубокие этажи (например 15+) должны стать «пещерными»: длинные извилистые коридоры, cellular automata caves, ветвления и тупики. Заготовка на будущее — переключение по `floor_number > BASEMENT_THRESHOLD` на другой алгоритм.
+- **Специальные комнаты** — trap rooms, altar rooms, treasure rooms с уникальной планировкой внутри leaf'а.
+- **Секретные проходы** — скрытые doorways, видимые только после активации триггера.
+- **Комнаты необычной формы** (L, T) — пока все прямоугольные; можно комбинировать несколько соседних leaf'ов через shape merge.
