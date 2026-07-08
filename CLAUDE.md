@@ -24,13 +24,39 @@
 
 ### Что покрывать тестами
 
-Обязательно:
-- Логика `GameState` (XP, level, gold, `reset_run`, `save/load`).
-- Формулы урона / прогрессии / модификаторов (когда появятся: броня, статусы, критикалы).
-- Utility функции с ветвлением.
+**Основной принцип: покрывай тестами всё что технически можно покрыть.**
 
-Не обязательно:
-- Визуальные сцены, `Polygon2D`-верстка, чистые Node2D-перемещения без формул — тестируются вручную через F5.
+Если у сущности есть детерминированное поведение с проверяемым результатом (числа, состояния, факт вызова метода, изменение поля, сигнал) — она **обязана** иметь тест. Не выбирай «а стоит ли покрывать» — покрывай.
+
+Конкретные слои:
+
+- **GameState / прогрессия / экономика** — XP, level, gold, `reset_run`, save/load, любые формулы.
+- **Player** — `take_damage`, `heal`, `equip`, обновление max_health от level up, cooldown стрельбы, spread/multishot.
+- **Enemies** — `take_damage`, drop pickup (детерминизировать `randf` через seed), award xp/gold при смерти, state machine Charger (`WAITING`→`CHARGING` по таймеру), volley Boss (spawn ровно N пуль на нужных углах).
+- **Bullets** — `apply_weapon` копирует статы, попадание в `player`/`enemy` вызывает `take_damage`, self-destroy по `lifetime`.
+- **Pickups / Chest** — HealthPickup вызывает `heal`, WeaponPickup вызывает `equip`, Chest на первый контакт спавнит WeaponPickup и уходит в `_opened=true`.
+- **Weapons (WeaponResource)** — `.tres` файлы загружаются с ожидаемыми полями (защита от опечаток).
+- **Main / level controller** — расчёт `target_count` в зависимости от room_number, `_is_boss_room()`, шанс сундука.
+- **Utility функции / хелперы / rooms** — интерфейс комнаты (наличие `SpawnPoints`, `PlayerStart`, `Door` в каждой `.tscn`).
+
+Тестируется через GUT:
+- **Unit** — чистые функции, скрипты без scene tree (`GameState`, `WeaponResource`-load).
+- **Integration** — сцены через `add_child_autofree(scene.instantiate())` в тесте; проверка полей, сигналов, реакции на вызовы.
+
+Исключения (тестировать не обязательно):
+- Чисто визуальные детали: конкретные координаты `Polygon2D`, цвета, `modulate`-flash (визуал проверяется вручную через F5).
+- Random-эффекты, которые нельзя детерминизировать (в этих случаях подменяй seed или мокай `randf`).
+
+### Прогон перед commit'ом
+
+**Обязательно** прогнать все тесты через CLI перед каждым `git commit` затрагивающим `.gd` или `.tres`:
+
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path . \
+  -s addons/gut/gut_cmdln.gd -gdir=res://test/unit -gexit
+```
+
+Любой red test = не коммитить. Fix → повторный прогон до `All tests passed`.
 
 ### Как запустить
 
