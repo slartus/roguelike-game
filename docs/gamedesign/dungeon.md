@@ -100,6 +100,8 @@
 3. Инстансирует `door.tscn` на `exit_position`.
 4. Публикует `player_start`, `enemy_spawn_positions`, `chest_positions`, `door`, `floor_size`, `layout`.
 
+Портал (открытая дверь) визуально живой: `door.gd` в `open()` включает эмиссию `CPUParticles2D` с фиолетовой пылью и запускает `_process`, который через синус-пульсацию `sin(_shimmer_time)` мерцает `modulate` sprite'а между тёплым фиолетовым (`brightness ≈ 0.75`) и белым пиком (`brightness ≈ 1.15`) с частотой ~2 пульсации/сек. При `_set_closed()` эмиссия и `_process` выключаются, чтобы закрытые двери не тратили ресурсы.
+
 ## Тайлы окружения
 
 - `assets/sprites/environment/floor.png` (20×20) — каменные плитки со швами.
