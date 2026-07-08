@@ -30,11 +30,20 @@ func _ready() -> void:
 	_spawn_room()
 	_place_player()
 	_player.health_changed.connect(_hud.set_health)
+	GameState.xp_changed.connect(_hud.set_xp)
+	GameState.leveled_up.connect(_on_leveled_up)
+	GameState.gold_changed.connect(_hud.set_gold)
 	_hud.set_health(_player.health, _player.max_health)
 	_hud.set_room(GameState.current_room_number)
+	_hud.set_level(GameState.player_level)
+	_hud.set_xp(GameState.player_xp, GameState.XP_PER_LEVEL)
+	_hud.set_gold(GameState.total_gold)
 	_door.player_entered.connect(_on_door_entered)
 	_spawn_enemies()
 	_maybe_spawn_chest()
+
+func _on_leveled_up(new_level: int, _new_max_health: int) -> void:
+	_hud.set_level(new_level)
 
 func _spawn_room() -> void:
 	var scene: PackedScene = ROOM_SCENES.pick_random()

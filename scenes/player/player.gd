@@ -16,8 +16,15 @@ func _ready() -> void:
 	max_health = GameState.player_max_health
 	health = clampi(GameState.player_health, 1, max_health)
 	equipped_weapon = GameState.equipped_weapon
+	GameState.leveled_up.connect(_on_leveled_up)
 	health_changed.emit(health, max_health)
 	weapon_changed.emit(equipped_weapon)
+
+func _on_leveled_up(_new_level: int, new_max_health: int) -> void:
+	max_health = new_max_health
+	health = new_max_health
+	GameState.player_health = health
+	health_changed.emit(health, max_health)
 
 func _physics_process(delta: float) -> void:
 	var input_vector := Input.get_vector("move_left", "move_right", "move_up", "move_down")

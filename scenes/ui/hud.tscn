@@ -18,3 +18,24 @@ offset_top = 26.0
 offset_right = 200.0
 offset_bottom = 44.0
 text = "Room 1"
+
+[node name="LevelLabel" type="Label" parent="."]
+offset_left = 8.0
+offset_top = 46.0
+offset_right = 200.0
+offset_bottom = 64.0
+text = "LVL 1"
+
+[node name="XpLabel" type="Label" parent="."]
+offset_left = 8.0
+offset_top = 66.0
+offset_right = 200.0
+offset_bottom = 84.0
+text = "XP: 0 / 20"
+
+[node name="GoldLabel" type="Label" parent="."]
+offset_left = 8.0
+offset_top = 86.0
+offset_right = 200.0
+offset_bottom = 104.0
+text = "Gold: 0"

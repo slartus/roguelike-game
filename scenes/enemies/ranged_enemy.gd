@@ -5,6 +5,8 @@ extends CharacterBody2D
 @export var bullet_scene: PackedScene
 @export var pickup_scene: PackedScene
 @export var pickup_drop_chance: float = 0.3
+@export var xp_reward: int = 7
+@export var gold_reward: int = 2
 
 var health: int
 var _target: Node2D
@@ -47,6 +49,8 @@ func take_damage(amount: int) -> void:
 	if is_inside_tree():
 		modulate = Color.WHITE
 	if health <= 0 and is_inside_tree():
+		GameState.award_xp(xp_reward)
+		GameState.award_gold(gold_reward)
 		_drop_pickup()
 		queue_free()
 
