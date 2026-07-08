@@ -1,5 +1,9 @@
 extends CharacterBody2D
 
+# Ranged (Skeleton Archer, Lich). Стационарный: не двигается, но
+# стреляет когда видит игрока в perception_radius. Если игрок вышел
+# из радиуса — прекращает стрелять, ждёт.
+
 @export var display_name: String = "ENEMY_UNKNOWN"
 @export var max_health: int = 2
 @export var fire_interval: float = 1.5
@@ -8,6 +12,7 @@ extends CharacterBody2D
 @export var pickup_drop_chance: float = 0.3
 @export var xp_reward: int = 7
 @export var gold_reward: int = 2
+@export var perception_radius: float = 200.0
 
 var health: int
 var _target: Node2D
@@ -22,6 +27,8 @@ func _physics_process(delta: float) -> void:
 	if _target == null or not is_instance_valid(_target):
 		_target = _find_player()
 	if _target == null:
+		return
+	if global_position.distance_to(_target.global_position) > perception_radius:
 		return
 	_fire_timer -= delta
 	if _fire_timer <= 0.0:

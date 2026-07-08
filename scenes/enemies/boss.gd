@@ -3,6 +3,7 @@ extends CharacterBody2D
 @export var display_name: String = "ENEMY_UNKNOWN"
 @export var max_health: int = 30
 @export var speed: float = 25.0
+@export var perception_radius: float = 3000.0
 @export var contact_damage: int = 2
 @export var contact_cooldown: float = 0.8
 @export var bullet_scene: PackedScene

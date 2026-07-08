@@ -1,6 +1,12 @@
 extends CharacterBody2D
 
-enum State { WAITING, CHARGING }
+# Charger (Spider): триггерится только когда видит игрока.
+# WATCH — стоит, ждёт пока игрок войдёт в perception_radius.
+# WAITING — короткая пауза перед рывком (модальный оранжевый).
+# CHARGING — рывок в фиксированном направлении к последней виденной
+# позиции игрока со скоростью charge_speed на charge_duration секунд.
+
+enum State { WATCH, WAITING, CHARGING }
 
 @export var display_name: String = "ENEMY_UNKNOWN"
 @export var max_health: int = 1
@@ -13,9 +19,10 @@ enum State { WAITING, CHARGING }
 @export var pickup_drop_chance: float = 0.35
 @export var xp_reward: int = 8
 @export var gold_reward: int = 1
+@export var perception_radius: float = 130.0
 
 var health: int
-var _state: int = State.WAITING
+var _state: int = State.WATCH
 var _state_timer: float = 0.0
 var _charge_direction: Vector2 = Vector2.ZERO
 var _target: Node2D
@@ -24,15 +31,19 @@ var _contact_timer: float = 0.0
 func _ready() -> void:
 	add_to_group("enemy")
 	health = max_health
-	_enter_waiting()
+	modulate = Color(1, 0.85, 0.55)
 
 func _physics_process(delta: float) -> void:
-	_contact_timer = max(0.0, _contact_timer - delta)
+	_contact_timer = maxf(0.0, _contact_timer - delta)
 	_state_timer -= delta
 	if _target == null or not is_instance_valid(_target):
 		_target = _find_player()
 
 	match _state:
+		State.WATCH:
+			velocity = Vector2.ZERO
+			if _target != null and _can_see_target():
+				_enter_waiting()
 		State.WAITING:
 			velocity = Vector2.ZERO
 			if _state_timer <= 0.0 and _target != null:
@@ -47,12 +58,20 @@ func _physics_process(delta: float) -> void:
 						collider.take_damage(contact_damage)
 					_contact_timer = contact_cooldown
 			if _state_timer <= 0.0:
-				_enter_waiting()
+				_enter_watch()
+
+func _can_see_target() -> bool:
+	return _target != null and global_position.distance_to(_target.global_position) <= perception_radius
+
+func _enter_watch() -> void:
+	_state = State.WATCH
+	_state_timer = 0.0
+	modulate = Color(1, 0.85, 0.55)
 
 func _enter_waiting() -> void:
 	_state = State.WAITING
 	_state_timer = wait_duration
-	modulate = Color(1, 0.85, 0.55)
+	modulate = Color(1, 0.75, 0.35)
 
 func _enter_charging() -> void:
 	_state = State.CHARGING
