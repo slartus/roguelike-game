@@ -6,7 +6,7 @@
 
 ### Melee (`enemy.tscn`)
 
-Красный квадрат 14×14, `CharacterBody2D`.
+Красный демон-слизь. Спрайт `assets/sprites/enemies/melee.png` (16×16), `CharacterBody2D`, коллизия — круг r=7.
 
 | Параметр | Значение |
 |----------|----------|
@@ -26,7 +26,7 @@
 
 ### Ranged (`ranged_enemy.tscn`)
 
-Синий квадрат 14×14, `CharacterBody2D`.
+Синий волшебник в островерхой шляпе. Спрайт `assets/sprites/enemies/ranged.png` (16×16), `CharacterBody2D`, коллизия — круг r=7.
 
 | Параметр | Значение |
 |----------|----------|
@@ -43,7 +43,7 @@
 
 ### Charger (`charger.tscn`)
 
-Оранжевый треугольник вершиной вверх, `CharacterBody2D`.
+Оранжевый шар с шипами по 4 сторонам. Спрайт `assets/sprites/enemies/charger.png` (16×16), `CharacterBody2D`, коллизия — круг r=6.
 
 | Параметр | Значение |
 |----------|----------|
@@ -71,7 +71,7 @@
 
 ### Boss (`boss.tscn`)
 
-Фиолетовый ромб 36×36, `CharacterBody2D`.
+Крупный фиолетовый демон с рогами и клыкастой пастью. Спрайт `assets/sprites/enemies/boss.png` (32×32), `CharacterBody2D`, коллизия — круг r=14.
 
 | Параметр | Значение |
 |----------|----------|
@@ -108,3 +108,7 @@
 Используется Ranged-врагом и Boss'ом.
 
 Скрипт: `scenes/bullets/enemy_bullet.gd`.
+
+## Спрайты
+
+Все PNG в `assets/sprites/enemies/` генерируются детерминированно скриптом `tools/gen_enemy_sprites.py` (Pillow, палитра + матрица символов). Правки: меняй палитру / матрицу в скрипте, запускай `python3 tools/gen_enemy_sprites.py`, коммить и PNG, и изменения скрипта. Не редактируй PNG вручную — потеряется при следующей регенерации.
