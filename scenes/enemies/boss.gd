@@ -18,6 +18,10 @@ var health: int
 var _target: Node2D
 var _contact_timer: float = 0.0
 var _volley_timer: float = 0.0
+# Между залпами разворачиваем звёздочку на половину угла между лучами,
+# чтобы визуально паттерн вращался и игрок не мог заучить статичные
+# коридоры между пулями.
+var _volley_index: int = 0
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -55,12 +59,22 @@ func _physics_process(delta: float) -> void:
 func _fire_volley() -> void:
 	if bullet_scene == null:
 		return
-	for i in volley_count:
-		var angle := TAU * float(i) / float(volley_count)
+	for angle in _compute_volley_angles(_volley_index):
 		var bullet := bullet_scene.instantiate()
 		bullet.global_position = global_position
 		bullet.direction = Vector2.RIGHT.rotated(angle)
 		get_tree().current_scene.add_child(bullet)
+	_volley_index += 1
+
+# Углы залпа: каждый второй раз сдвиг на step/2, чтобы звёздочка
+# вращалась между кадрами. Выделено в pure-функцию ради тестов.
+func _compute_volley_angles(index: int) -> Array:
+	var step := TAU / float(volley_count)
+	var offset := step * 0.5 if index % 2 == 1 else 0.0
+	var angles: Array = []
+	for i in volley_count:
+		angles.append(step * float(i) + offset)
+	return angles
 
 func _find_player() -> Node2D:
 	var players := get_tree().get_nodes_in_group("player")
