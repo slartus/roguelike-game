@@ -40,27 +40,42 @@ func test_no_immediate_summon_at_spawn() -> void:
 	assert_almost_eq(lich._summon_cooldown_timer, lich.SUMMON_COOLDOWN, 0.001,
 		"кулдаун стартует полным")
 
-func test_summon_after_cooldown_expires() -> void:
+func test_summon_after_cooldown_starts_cast_not_immediate_spawn() -> void:
+	# С добавлением каст-фазы _maybe_start_summon только СТАРТУЕТ каст,
+	# сам скелет появляется только после _finish_cast (после
+	# SUMMON_CAST_DURATION секунд tick_cast).
 	var lich = _spawn_lich()
 	lich._summon_cooldown_timer = 0.01
-	lich._update_summon(0.05)
+	lich._maybe_start_summon(0.05)
+	assert_null(lich._summoned_minion,
+		"после истечения кулдауна каст только СТАРТОВАЛ, скелета пока нет")
+	assert_almost_eq(lich._summon_cast_timer, lich.SUMMON_CAST_DURATION, 0.001,
+		"каст-таймер должен встать в полное значение")
+
+func test_finish_cast_actually_spawns_skeleton() -> void:
+	var lich = _spawn_lich()
+	lich._summon_cooldown_timer = 0.01
+	lich._maybe_start_summon(0.05)
+	# Прокручиваем каст до конца через один _tick_cast с большим delta.
+	lich._tick_cast(lich.SUMMON_CAST_DURATION + 0.1)
 	assert_not_null(lich._summoned_minion,
-		"по истечении кулдауна лич призывает скелета")
+		"после завершения каста скелет должен появиться")
 	assert_almost_eq(lich._summon_cooldown_timer, lich.SUMMON_COOLDOWN, 0.001,
-		"кулдаун сбрасывается на новую константу после призыва")
+		"кулдаун сбрасывается на новую константу после успешного призыва")
 
 func test_does_not_summon_while_minion_alive() -> void:
 	var lich = _spawn_lich()
 	# Форсируем «есть живой миньон» и обнуляем кулдаун — второй призыв
-	# не должен случиться.
+	# не должен случиться, каст не должен стартовать.
 	var minion = Node2D.new()
 	add_child_autofree(minion)
 	lich._summoned_minion = minion
 	lich._summon_cooldown_timer = 0.0
-	lich._update_summon(0.05)
-	# Ссылка не поменялась — второй скелет не заспавнен.
+	lich._maybe_start_summon(0.05)
 	assert_eq(lich._summoned_minion, minion,
 		"при живом миньоне лич не призывает ещё одного")
+	assert_eq(lich._summon_cast_timer, 0.0,
+		"и не стартует каст")
 
 func test_new_summon_after_minion_dies_plus_cooldown() -> void:
 	var lich = _spawn_lich()
@@ -71,8 +86,8 @@ func test_new_summon_after_minion_dies_plus_cooldown() -> void:
 	await get_tree().process_frame  # даём queue_free сработать
 	# Теперь _summoned_minion — freed reference; is_instance_valid = false.
 	lich._summon_cooldown_timer = 0.0
-	lich._update_summon(0.05)
-	# Ссылка обновилась на новую живую ноду.
+	lich._maybe_start_summon(0.05)
+	lich._tick_cast(lich.SUMMON_CAST_DURATION + 0.1)
 	assert_not_null(lich._summoned_minion)
 	assert_ne(lich._summoned_minion, minion,
 		"после смерти миньона призывается НОВЫЙ, не тот же самый")
@@ -86,7 +101,8 @@ func test_summon_skips_when_all_surrounding_cells_are_solid() -> void:
 	add_child_autofree(fake_floor)
 	var lich = _spawn_lich()
 	lich._summon_cooldown_timer = 0.0
-	lich._update_summon(0.05)
+	lich._maybe_start_summon(0.05)
+	lich._tick_cast(lich.SUMMON_CAST_DURATION + 0.1)
 	assert_null(lich._summoned_minion,
 		"на этаже без свободных клеток скелет НЕ должен спавниться в стену")
 	assert_lt(lich._summon_cooldown_timer, 0.0,
@@ -99,14 +115,16 @@ func test_summon_succeeds_when_at_least_one_cell_is_free() -> void:
 	add_child_autofree(fake_floor)
 	var lich = _spawn_lich()
 	lich._summon_cooldown_timer = 0.0
-	lich._update_summon(0.05)
+	lich._maybe_start_summon(0.05)
+	lich._tick_cast(lich.SUMMON_CAST_DURATION + 0.1)
 	assert_not_null(lich._summoned_minion,
 		"на пустом этаже лич должен призвать скелета")
 
 func test_summoned_skeleton_has_no_rewards() -> void:
 	var lich = _spawn_lich()
 	lich._summon_cooldown_timer = 0.0
-	lich._update_summon(0.05)
+	lich._maybe_start_summon(0.05)
+	lich._tick_cast(lich.SUMMON_CAST_DURATION + 0.1)
 	var minion = lich._summoned_minion
 	assert_eq(minion.xp_reward, 0,
 		"призванные скелеты не должны давать XP")
@@ -116,3 +134,24 @@ func test_summoned_skeleton_has_no_rewards() -> void:
 		"призванные скелеты не должны ронять пикапы")
 	# Убираем миньон вручную, чтобы не оставить в дереве.
 	minion.queue_free()
+
+func test_cast_visual_tints_lich_greenish() -> void:
+	# Пока идёт каст, Visual.modulate должен уходить в зелёный.
+	var lich = _spawn_lich()
+	lich._summon_cast_timer = lich.SUMMON_CAST_DURATION * 0.5
+	lich._apply_cast_visual()
+	var visual: Sprite2D = lich.get_node("Visual")
+	# Мы миксовали в CAST_TINT_COLOR = Color(0.7, 1.6, 0.85). Проверяем
+	# что зелёный канал доминирует над красным (важно для читаемости).
+	assert_gt(visual.modulate.g, visual.modulate.r,
+		"во время каста зелёный доминирует: modulate = %s" % visual.modulate)
+
+func test_cast_visual_resets_after_finish() -> void:
+	var lich = _spawn_lich()
+	lich._summon_cast_timer = 0.5
+	lich._apply_cast_visual()
+	# forced reset — как в _finish_cast.
+	lich._reset_cast_visual()
+	var visual: Sprite2D = lich.get_node("Visual")
+	assert_eq(visual.modulate, lich._visual_base_modulate,
+		"после каста modulate возвращается к базовому")
