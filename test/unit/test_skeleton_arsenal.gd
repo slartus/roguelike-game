@@ -41,6 +41,26 @@ func test_arrow_variants_wood_and_iron_only() -> void:
 	assert_eq(by_key["ENEMY_SKELETON_ARCHER_WOOD"]["damage_bonus"], 0)
 	assert_gt(by_key["ENEMY_SKELETON_ARCHER_IRON"]["damage_bonus"], 0)
 
+func test_arrow_variants_have_distinct_loadable_sprites() -> void:
+	# Разные материалы стрел должны использовать разные спрайты, иначе
+	# фича «wooden vs iron» читается только по tint лучника, а сама
+	# стрела в полёте выглядит одинаково.
+	var by_key: Dictionary = {}
+	for v in Arsenal.ARROW_VARIANTS:
+		by_key[v["display_key"]] = v
+	var wood_path: String = by_key["ENEMY_SKELETON_ARCHER_WOOD"]["sprite_path"]
+	var iron_path: String = by_key["ENEMY_SKELETON_ARCHER_IRON"]["sprite_path"]
+	assert_ne(wood_path, iron_path,
+		"wood и iron стрелы должны использовать разные sprite_path")
+	assert_true(ResourceLoader.exists(wood_path),
+		"sprite_path wooden arrow должен резолвиться: %s" % wood_path)
+	assert_true(ResourceLoader.exists(iron_path),
+		"sprite_path iron arrow должен резолвиться: %s" % iron_path)
+	var wood_tex: Texture2D = load(wood_path) as Texture2D
+	var iron_tex: Texture2D = load(iron_path) as Texture2D
+	assert_not_null(wood_tex, "wood arrow sprite грузится как Texture2D")
+	assert_not_null(iron_tex, "iron arrow sprite грузится как Texture2D")
+
 func test_pick_always_returns_a_variant() -> void:
 	for i in 30:
 		var v: Dictionary = Arsenal.pick(Arsenal.MELEE_VARIANTS)

@@ -222,12 +222,12 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 **Арсенал стрел (skeleton_arsenal.gd → ARROW_VARIANTS).** При спавне лучник случайно выбирает tier стрел:
 
-| Вариант | Δ bullet damage | Вес | Tint |
-|---------|------------------|-----|------|
-| `ENEMY_SKELETON_ARCHER_WOOD` | +0 | 0.6 | тёплый охристый |
-| `ENEMY_SKELETON_ARCHER_IRON` | +1 | 0.4 | холодный стальной |
+| Вариант | Δ bullet damage | Вес | Tint лучника | Спрайт стрелы |
+|---------|------------------|-----|--------------|---------------|
+| `ENEMY_SKELETON_ARCHER_WOOD` | +0 | 0.6 | тёплый охристый | `arrow_wood.png` (коричневое древко, красное оперение, стальной head) |
+| `ENEMY_SKELETON_ARCHER_IRON` | +1 | 0.4 | холодный стальной | `arrow_iron.png` (стальное древко, серо-голубое оперение, закалённый head) |
 
-Bonus прибавляется к `damage` каждой заспавненной стрелы. Расширяется добавлением записей в `ARROW_VARIANTS` (elven, poisoned и т.п.).
+Bonus прибавляется к `damage` каждой заспавненной стрелы. `skeleton_archer.gd::_configure_bullet` в момент выстрела подменяет `Visual.texture` снаряда на `sprite_path` из variant'а — тем самым сама стрела в полёте визуально отличается по материалу, не только tint стрелка. Расширяется добавлением записей в `ARROW_VARIANTS` с новым `sprite_path` (elven, poisoned и т.п.); генератор спрайтов — `tools/gen_enemy_bullet_sprites.py`.
 
 ### Lich (`lich.tscn`)
 
@@ -283,7 +283,7 @@ Bonus прибавляется к `damage` каждой заспавненной
 
 | Тип стрелка | Bullet-сцена | Sprite | Размеры | Speed | Lifetime |
 |-------------|--------------|--------|---------|-------|----------|
-| Skeleton Archer | `arrow_bullet.tscn` | `arrow.png` | 10×5, RectShape 10×3 | 130 | 3.0 s |
+| Skeleton Archer | `arrow_bullet.tscn` | `arrow_wood.png` / `arrow_iron.png` (по варианту) | 10×5, RectShape 10×3 | 130 | 3.0 s |
 | Lich | `magic_bolt_bullet.tscn` | `magic_bolt.png` | 10×10 зелёный сгусток, r=3.5 | 100 | 3.5 s |
 | Necromancer (boss) | `dark_orb_bullet.tscn` | `dark_orb.png` | 10×10 фиолетовый шар, r=4 | 110 | 3.5 s |
 

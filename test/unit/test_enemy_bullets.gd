@@ -8,7 +8,9 @@ extends GutTest
 
 const BulletExpectations := {
 	"res://scenes/bullets/arrow_bullet.tscn": {
-		"texture_path": "res://assets/sprites/bullets/arrow.png",
+		# Default-текстура сцены — деревянная стрела. Iron-вариант
+		# подставляется в runtime через skeleton_archer._configure_bullet.
+		"texture_path": "res://assets/sprites/bullets/arrow_wood.png",
 		"speed": 130.0,
 		"lifetime": 3.0,
 	},

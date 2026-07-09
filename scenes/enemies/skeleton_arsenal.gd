@@ -9,6 +9,8 @@ extends RefCounted
 #   damage_bonus: int    — прибавка к contact_damage / bullet damage
 #   weight      : float  — вес в weighted-random выборе
 #   tint        : Color  — modulate спрайта, чтобы визуально различать
+#   sprite_path : String — путь к спрайту снаряда (только для ARROW_VARIANTS;
+#                          у MELEE_VARIANTS не используется, снаряда нет)
 
 const MELEE_VARIANTS: Array = [
 	{
@@ -49,12 +51,14 @@ const ARROW_VARIANTS: Array = [
 		"damage_bonus": 0,
 		"weight": 0.6,
 		"tint": Color(0.85, 0.65, 0.4),
+		"sprite_path": "res://assets/sprites/bullets/arrow_wood.png",
 	},
 	{
 		"display_key": "ENEMY_SKELETON_ARCHER_IRON",
 		"damage_bonus": 1,
 		"weight": 0.4,
 		"tint": Color(0.78, 0.85, 0.95),
+		"sprite_path": "res://assets/sprites/bullets/arrow_iron.png",
 	},
 ]
 
