@@ -49,7 +49,7 @@ Windows / macOS / Linux / Android / iOS. Web не поддерживается.
 ./tools/build_windows.sh
 ```
 
-Результат — `dist/Roguelike.exe` (~109 MB, включает Godot runtime) и `dist/Roguelike.pck` (data). Распространяются вместе — при запуске exe ищет .pck рядом.
+Результат — единственный файл `dist/Roguelike.exe` (~106 MB, x86_64 PE32+ GUI). В preset включён `binary_format/embed_pck=true`, поэтому pack встроен в exe, отдельный `.pck` не нужен. Отдаёшь один файл — и он запускается.
 
 Требования:
 - Godot 4.7 в `/Applications/Godot.app` (переопределяется через `GODOT_BIN=...`).

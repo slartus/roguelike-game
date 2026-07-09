@@ -11,11 +11,11 @@
 #   его через Project → Export → Add → Windows Desktop либо руками
 #   продублируйте блок из существующего репо.
 #
-# Артефакты:
-# - dist/Roguelike.exe (~109 MB, содержит Godot runtime).
-# - dist/Roguelike.pck (data package, кладётся рядом с exe).
+# Артефакт:
+# - dist/Roguelike.exe (~106 MB, PE32+ x86_64 GUI).
 #
-# Оба файла нужны для запуска — распространяются вместе.
+# В preset выставлено `binary_format/embed_pck=true`, поэтому pack встроен
+# в сам exe. Отдельный .pck файл не создаётся, распространяется один exe.
 
 set -euo pipefail
 
