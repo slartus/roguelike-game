@@ -38,8 +38,14 @@ func _on_log_entry(text: String, tint: Color) -> void:
 	entry.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	entry.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_log_box.add_child(entry)
+	# queue_free() не уменьшает get_child_count() до конца кадра,
+	# поэтому обрезаем через синхронный remove_child — иначе цикл
+	# крутится бесконечно на первом же ребёнке (был hard freeze
+	# при открытии сундука на 3-м этаже, когда лог накопил >6 строк).
 	while _log_box.get_child_count() > LOG_MAX_ENTRIES:
-		_log_box.get_child(0).queue_free()
+		var oldest := _log_box.get_child(0)
+		_log_box.remove_child(oldest)
+		oldest.queue_free()
 	get_tree().create_timer(LOG_ENTRY_LIFETIME).timeout.connect(_fade_and_remove.bind(entry))
 
 func _fade_and_remove(entry: Label) -> void:
