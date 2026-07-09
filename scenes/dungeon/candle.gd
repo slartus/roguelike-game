@@ -14,9 +14,9 @@ extends Sprite2D
 const CANDLE_BASE_COLOR: Color = Color(1.0, 0.95, 0.85)
 const CANDLE_BRIGHTNESS_AMPLITUDE: float = 0.15
 const HALO_BASE_SCALE: Vector2 = Vector2(1.0, 1.0)
-const HALO_BASE_ALPHA: float = 0.55
+const HALO_BASE_ALPHA: float = 0.30
 const HALO_SCALE_AMPLITUDE: float = 0.18
-const HALO_ALPHA_AMPLITUDE: float = 0.25
+const HALO_ALPHA_AMPLITUDE: float = 0.13
 const FLICKER_SLOW_SPEED: float = 3.0
 const FLICKER_JITTER_SPEED: float = 13.0
 const FLICKER_JITTER_WEIGHT: float = 0.35
