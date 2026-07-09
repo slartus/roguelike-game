@@ -16,7 +16,7 @@ const DOOR_SCENE: PackedScene = preload("res://scenes/rooms/door.tscn")
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/sprites/environment/wall.png")
 const MOLD_TEXTURE: Texture2D = preload("res://assets/sprites/environment/mold.png")
-const CANDLE_TEXTURE: Texture2D = preload("res://assets/sprites/environment/candle.png")
+const CANDLE_SCENE: PackedScene = preload("res://scenes/dungeon/candle.tscn")
 const FLOOR_CRACK_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor_crack.png")
 const FLOOR_BLOOD_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor_blood.png")
 
@@ -192,7 +192,7 @@ func _place_decor(seed_value: int) -> void:
 					continue
 				var roll := rng.randf()
 				if roll < CANDLE_CHANCE:
-					_spawn_decor(CANDLE_TEXTURE, Vector2(tile_center) + Vector2(0, -1))
+					_spawn_candle(Vector2(tile_center) + Vector2(0, -1))
 				elif roll < CANDLE_CHANCE + MOLD_CHANCE:
 					_spawn_decor(MOLD_TEXTURE, Vector2(tile_center) + Vector2(0, 2))
 			else:
@@ -207,6 +207,14 @@ func _spawn_decor(texture: Texture2D, at: Vector2) -> void:
 	sprite.texture = texture
 	sprite.position = at
 	_decor_root.add_child(sprite)
+
+func _spawn_candle(at: Vector2) -> void:
+	# Канделябр — не просто спрайт: сцена с дочерним ореолом и _process,
+	# мерцающим огонёк и свет. Инстансируем целиком, чтобы вся анимация
+	# и halo material'ы остались синхронизированы (см. candle.tscn).
+	var candle: Sprite2D = CANDLE_SCENE.instantiate()
+	candle.position = at
+	_decor_root.add_child(candle)
 
 func _build_astar_grid() -> void:
 	# Один AStarGrid2D на весь этаж — все враги используют его через
