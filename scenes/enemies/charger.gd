@@ -8,6 +8,11 @@ extends CharacterBody2D
 
 signal died_at(position: Vector2)
 
+# Паутина стреляется в момент входа в WAITING — до рывка. Летит в
+# позицию игрока, зафиксированную на момент выстрела (не хоминг), и
+# лежит на месте LANDED_LIFETIME секунд, замедляя игрока в области.
+const WEB_SCENE: PackedScene = preload("res://scenes/enemies/spider_web.tscn")
+
 enum State { WATCH, WAITING, CHARGING }
 
 @export var display_name: String = "ENEMY_UNKNOWN"
@@ -79,6 +84,18 @@ func _enter_waiting() -> void:
 	_state = State.WAITING
 	_state_timer = wait_duration
 	modulate = Color(1, 0.75, 0.35)
+	_spit_web()
+
+func _spit_web() -> void:
+	if _target == null or not is_instance_valid(_target):
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	var web = WEB_SCENE.instantiate()
+	web.global_position = global_position
+	web.target_position = _target.global_position
+	parent.add_child(web)
 
 func _enter_charging() -> void:
 	_state = State.CHARGING

@@ -14,12 +14,19 @@ signal weapon_changed(weapon: WeaponResource)
 const POISON_TICK_INTERVAL: float = 1.0
 const POISON_DAMAGE_PER_TICK: int = 1
 
+# Slow-статус (например от паутины паука): скорость игрока умножается
+# на SLOW_FACTOR, пока `_slow_source_count > 0`. Считаем именно источники,
+# а не bool: несколько накладывающихся паутин не «удваивают» slow, но
+# выход из одной не снимает эффект если игрок стоит во второй.
+const SLOW_FACTOR: float = 0.5
+
 var max_health: int
 var health: int
 var equipped_weapon: WeaponResource
 var _fire_cooldown: float = 0.0
 var _poison_timer: float = 0.0
 var _poison_tick_timer: float = 0.0
+var _slow_source_count: int = 0
 
 func _ready() -> void:
 	add_to_group("player")
@@ -38,7 +45,7 @@ func _on_leveled_up(_new_level: int, new_max_health: int) -> void:
 
 func _physics_process(delta: float) -> void:
 	var input_vector := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	velocity = input_vector * speed
+	velocity = input_vector * current_speed()
 	move_and_slide()
 
 	_fire_cooldown = max(0.0, _fire_cooldown - delta)
@@ -85,6 +92,18 @@ func take_damage(amount: int) -> void:
 		modulate = Color.WHITE
 	if health == 0:
 		_die()
+
+func current_speed() -> float:
+	return speed * (SLOW_FACTOR if _slow_source_count > 0 else 1.0)
+
+func enter_slow_source() -> void:
+	_slow_source_count += 1
+
+func exit_slow_source() -> void:
+	# maxi guard: если облако успело queue_free до того как игрок в него
+	# вошёл (edge-case initial-overlap race), _release_slow может прийти
+	# без парного enter'а — не хотим ронять счётчик в отрицательное.
+	_slow_source_count = maxi(0, _slow_source_count - 1)
 
 func apply_poison(duration: float) -> void:
 	# Свежая инфекция — заводим tick-таймер на полный интервал, чтобы

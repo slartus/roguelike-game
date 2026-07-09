@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/spider_web.gd" id="1_web"]
+
+[node name="SpiderWeb" type="Area2D"]
+script = ExtResource("1_web")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
