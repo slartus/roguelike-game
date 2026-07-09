@@ -220,6 +220,57 @@ func test_web_stays_alive_before_lifetime() -> void:
 	web._tick_landed(web.LANDED_LIFETIME * 0.5)
 	assert_false(web.is_queued_for_deletion())
 
+# ---- Spider web: ragged geometry --------------------------------------------
+
+func test_web_landed_lifetime_doubled_to_12_seconds() -> void:
+	# Регресс-guard: базовое время жизни увеличено вдвое, чтобы паутина
+	# лежала подольше и лучше меняла игру.
+	var web = _spawn_web()
+	assert_almost_eq(web.LANDED_LIFETIME, 12.0, 0.001,
+		"LANDED_LIFETIME увеличен в два раза с прежних 6 s")
+
+func test_web_geometry_builds_spoke_endpoints_on_landing() -> void:
+	var web = _spawn_web()
+	web._enter_landed()
+	assert_eq(web._spoke_endpoints.size(), web.WEB_SPOKE_COUNT,
+		"после приземления нитей ровно WEB_SPOKE_COUNT")
+
+func test_web_spokes_have_variable_lengths() -> void:
+	# «Более рваная»: разные нити разной длины, а не одна и та же.
+	var web = _spawn_web()
+	web._enter_landed()
+	var seen_lengths := {}
+	for tip in web._spoke_endpoints:
+		var length_bucket := int(tip.length() * 10.0)
+		seen_lengths[length_bucket] = true
+	assert_gt(seen_lengths.size(), 1,
+		"как минимум 2 нити должны отличаться по длине (порванная паутина)")
+
+func test_web_spoke_lengths_within_expected_ratio_range() -> void:
+	var web = _spawn_web()
+	web._enter_landed()
+	var min_expected: float = web.LANDED_RADIUS * web.WEB_SPOKE_LENGTH_MIN_RATIO - 0.01
+	var max_expected: float = web.LANDED_RADIUS * web.WEB_SPOKE_LENGTH_MAX_RATIO + 0.01
+	for tip in web._spoke_endpoints:
+		var length: float = tip.length()
+		assert_gte(length, min_expected,
+			"нить не короче min-ratio: %.2f" % length)
+		assert_lte(length, max_expected,
+			"нить не длиннее max-ratio: %.2f" % length)
+
+func test_web_rings_are_broken_into_multiple_arcs() -> void:
+	# Каждое кольцо должно состоять из >= 2 арок (иначе никаких разрывов).
+	var web = _spawn_web()
+	web._enter_landed()
+	assert_eq(web._ring_arcs.size(), web.WEB_RING_COUNT,
+		"построено ровно WEB_RING_COUNT колец")
+	var broken_rings := 0
+	for ring_arcs in web._ring_arcs:
+		if ring_arcs.size() >= 2:
+			broken_rings += 1
+	assert_gte(broken_rings, 1,
+		"хотя бы одно кольцо реально разорвано на арки (paint hole in web)")
+
 # ---- Player: slow-source counter -------------------------------------------
 
 func test_player_default_speed_unaffected() -> void:
