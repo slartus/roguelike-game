@@ -31,7 +31,7 @@ const JUMP_SPEED_MULTIPLIER: float = 2.4
 const BOUNCE_STRETCH_Y: float = 0.35
 const BOUNCE_SQUASH_X: float = 0.15
 
-const BUD_DELAY: float = 2.0
+const BUD_DELAY: float = 4.0
 # Радиус спавна почки — «рядом»: min ~ 0.6 тайла, max ~ 1.1 тайла.
 # Слишком близко — коллизии рвутся, слишком далеко — визуально
 # теряется связь «мать → дочка».
