@@ -32,6 +32,12 @@ const STUCK_VELOCITY_RATIO: float = 0.15
 const STUCK_TIMEOUT: float = 0.3
 const ESCAPE_DURATION: float = 0.4
 
+# Wander: пока цель вне perception, ranged не стоит столбом, а
+# бродит случайно. Скорость понижена, чтобы визуально отличалось
+# от активного kiting.
+@export var wander_speed_ratio: float = 0.4
+@export var wander_change_interval: float = 2.5
+
 var health: int
 var _target: Node2D
 var _fire_timer: float = 0.0
@@ -39,6 +45,8 @@ var _stuck_timer: float = 0.0
 var _escape_timer: float = 0.0
 var _escape_direction: Vector2 = Vector2.ZERO
 var _last_escape_side: float = 0.0
+var _wander_direction: Vector2 = Vector2.ZERO
+var _wander_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -53,15 +61,15 @@ func _physics_process(delta: float) -> void:
 	if _target == null or not is_instance_valid(_target):
 		_target = _find_player()
 	if _target == null:
-		velocity = Vector2.ZERO
-		move_and_slide()
+		_wander(delta)
 		return
 
 	var dist := global_position.distance_to(_target.global_position)
 	if dist > perception_radius:
-		# Игрок вне видимости — не двигаемся, не стреляем.
-		velocity = Vector2.ZERO
-		move_and_slide()
+		# Игрок вне видимости — бродим, не стреляем. Раньше стояли
+		# столбом на месте спавна, что выглядело как «выключенный NPC»,
+		# особенно на больших этажах, где игрок долго добирается.
+		_wander(delta)
 		return
 
 	# Kiting: приближаемся если далеко, отходим если близко.
@@ -104,6 +112,25 @@ func _update_stuck_state(intended_dir: Vector2, delta: float) -> void:
 		# Успешно двигаемся — сброс side, чтобы разрешить случайный
 		# выбор при следующем застревании.
 		_last_escape_side = 0.0
+
+func _wander(delta: float) -> void:
+	# Аналогично melee `enemy.gd::_wander`: случайное направление,
+	# смена по таймеру или при упоре в стену. Скорость ×
+	# wander_speed_ratio (0.4) — визуально «прогуливается», не бегает.
+	# Fire timer НЕ убывает — стрелять надо только при активной цели.
+	_wander_timer -= delta
+	if _wander_timer <= 0.0 or _wander_direction == Vector2.ZERO:
+		_pick_wander_direction()
+	velocity = _wander_direction * speed * wander_speed_ratio
+	move_and_slide()
+	if velocity.length() < 1.0:
+		_wander_direction = -_wander_direction.rotated(randf_range(-PI / 3.0, PI / 3.0))
+		_wander_timer = 0.0
+
+func _pick_wander_direction() -> void:
+	var angle := randf() * TAU
+	_wander_direction = Vector2.RIGHT.rotated(angle)
+	_wander_timer = wander_change_interval
 
 func _pick_escape_direction(intended_dir: Vector2) -> Vector2:
 	var base := intended_dir if intended_dir != Vector2.ZERO else Vector2.RIGHT
