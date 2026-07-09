@@ -15,9 +15,21 @@ const DungeonGeneratorClass = preload("res://scenes/dungeon/dungeon_generator.gd
 const DOOR_SCENE: PackedScene = preload("res://scenes/rooms/door.tscn")
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/sprites/environment/wall.png")
+const MOLD_TEXTURE: Texture2D = preload("res://assets/sprites/environment/mold.png")
+const CANDLE_TEXTURE: Texture2D = preload("res://assets/sprites/environment/candle.png")
+const FLOOR_CRACK_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor_crack.png")
+const FLOOR_BLOOD_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor_blood.png")
 
 const TILE_SIZE: int = 20
 const BACKGROUND_COLOR: Color = Color(0.03, 0.02, 0.05, 1.0)
+
+# Шансы декора на подходящий тайл. Проверяются в порядке приоритета:
+# candle реже плесени, чтобы обжитой канделябр был «редкой находкой»,
+# а плесень была массовым фоновым эффектом.
+const CANDLE_CHANCE: float = 0.05
+const MOLD_CHANCE: float = 0.14
+const CRACK_CHANCE: float = 0.03
+const BLOOD_CHANCE: float = 0.015
 
 var player_start: Vector2 = Vector2.ZERO
 var enemy_spawn_positions: Array[Vector2] = []
@@ -29,6 +41,7 @@ var astar_grid: AStarGrid2D
 
 @onready var _floors_root: Node2D = $FloorsRoot
 @onready var _walls_root: Node2D = $WallsRoot
+@onready var _decor_root: Node2D = $DecorRoot
 @onready var _markers_root: Node2D = $MarkersRoot
 
 func _ready() -> void:
@@ -43,6 +56,7 @@ func _ready() -> void:
 	_draw_background()
 	_draw_floor_tiles()
 	_build_walls()
+	_place_decor(seed_value)
 	_build_astar_grid()
 	_place_door()
 	_populate_marker_positions()
@@ -154,6 +168,45 @@ func _create_wall_span(col_start: int, col_end: int, row: int) -> void:
 	visual.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	body.add_child(visual)
 	_walls_root.add_child(body)
+
+func _place_decor(seed_value: int) -> void:
+	# Декор — чисто визуальные Sprite2D без коллизии. Раскладывается
+	# детерминированно по seed этажа: тот же tower_seed → та же плесень
+	# и те же канделябры при повторном забеге.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 31 + 7
+	var bounds := layout.floor_bounds
+	var cols := int(ceil(float(bounds.size.x) / TILE_SIZE))
+	var rows := int(ceil(float(bounds.size.y) / TILE_SIZE))
+	for row in rows:
+		for col in cols:
+			var tile_center := Vector2i(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
+			if _is_wall_at(tile_center):
+				# Настенный декор ставим только на стены, обращённые
+				# «лицом» в комнату — тайл сверху с полом ниже.
+				# Это гарантирует, что игрок реально видит декаль, а не
+				# внутреннюю толщину стены между двумя wall-тайлами.
+				var below_center := tile_center + Vector2i(0, TILE_SIZE)
+				var below_is_floor := below_center.y < bounds.size.y and not _is_wall_at(below_center)
+				if not below_is_floor:
+					continue
+				var roll := rng.randf()
+				if roll < CANDLE_CHANCE:
+					_spawn_decor(CANDLE_TEXTURE, Vector2(tile_center) + Vector2(0, -1))
+				elif roll < CANDLE_CHANCE + MOLD_CHANCE:
+					_spawn_decor(MOLD_TEXTURE, Vector2(tile_center) + Vector2(0, 2))
+			else:
+				var roll := rng.randf()
+				if roll < CRACK_CHANCE:
+					_spawn_decor(FLOOR_CRACK_TEXTURE, Vector2(tile_center))
+				elif roll < CRACK_CHANCE + BLOOD_CHANCE:
+					_spawn_decor(FLOOR_BLOOD_TEXTURE, Vector2(tile_center))
+
+func _spawn_decor(texture: Texture2D, at: Vector2) -> void:
+	var sprite := Sprite2D.new()
+	sprite.texture = texture
+	sprite.position = at
+	_decor_root.add_child(sprite)
 
 func _build_astar_grid() -> void:
 	# Один AStarGrid2D на весь этаж — все враги используют его через
