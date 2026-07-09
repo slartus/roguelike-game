@@ -9,7 +9,7 @@ extends "res://scenes/enemies/enemy.gd"
 # бросал бы облако у ног игрока без окна на реакцию.
 
 const POISON_CLOUD_SCENE: PackedScene = preload("res://scenes/enemies/poison_cloud.tscn")
-const POISON_CLOUD_COOLDOWN: float = 3.0
+const POISON_CLOUD_COOLDOWN: float = 6.0
 
 var _cloud_cooldown_timer: float = POISON_CLOUD_COOLDOWN
 

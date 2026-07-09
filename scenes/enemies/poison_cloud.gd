@@ -13,7 +13,7 @@ extends Area2D
 # опрашиваем `get_overlapping_bodies()` и вручную вызываем handler
 # для каждого пересекающегося тела.
 
-const LIFETIME: float = 2.0
+const LIFETIME: float = 4.0
 const RADIUS: float = 16.0
 const POISON_DURATION: float = 3.0
 const CLOUD_COLOR: Color = Color(0.4, 0.75, 0.2, 0.55)
