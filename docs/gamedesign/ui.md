@@ -16,6 +16,12 @@
 
 Обновляются через `hud.set_*` методы; `Main._ready` подключает сигналы `Player.health_changed`, `GameState.xp_changed`, `GameState.leveled_up`, `GameState.gold_changed`.
 
+## Пауза (ESC)
+
+Клавиша `ESC` (input action `pause`) в `hud.gd::_unhandled_input` вызывает `_toggle_pause`: переключает `get_tree().paused` и `visible` панели `PausePanel` (полноэкранный `ColorRect` с alpha 0.6 и центрированной `Label` «ПАУЗА», `font_size = 24`).
+
+HUD помечен `process_mode = ALWAYS` в `.tscn` — иначе после первого ESC весь дерево на паузе, HUD тоже, второй ESC не может её снять. Все остальные ноды (Main, Player, враги, пикапы) остаются на дефолте `INHERIT` → замирают при `get_tree().paused = true`.
+
 ## Нижний левый угол — Инвентарь
 
 Панель `InventoryPanel` (`PanelContainer`) с одной ячейкой `PotionSlot` (`Label`, `font_size = 12`). Ключ `UI_POTION_SLOT` → «[1] Зелье ×N» / «[1] Potion x%d». Обновляется через сигнал `GameState.health_potions_changed(count)` в `hud.gd::set_potion_count`.

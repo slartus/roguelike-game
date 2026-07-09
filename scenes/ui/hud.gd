@@ -11,12 +11,25 @@ const LOG_FONT_SIZE: int = 8
 @onready var _xp_label: Label = $XpLabel
 @onready var _gold_label: Label = $GoldLabel
 @onready var _potion_slot_label: Label = $InventoryPanel/PotionSlot
+@onready var _pause_panel: ColorRect = $PausePanel
 @onready var _log_box: VBoxContainer = $CombatLog
 
 func _ready() -> void:
 	EventLog.entry_added.connect(_on_log_entry)
 	GameState.health_potions_changed.connect(set_potion_count)
 	set_potion_count(GameState.health_potions)
+	# HUD.process_mode = ALWAYS (см. tscn), поэтому _unhandled_input
+	# работает даже когда весь остальной tree на паузе — иначе повторный
+	# ESC не мог бы снять паузу.
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("pause"):
+		_toggle_pause()
+
+func _toggle_pause() -> void:
+	var paused := not get_tree().paused
+	get_tree().paused = paused
+	_pause_panel.visible = paused
 
 func set_potion_count(count: int) -> void:
 	_potion_slot_label.text = tr("UI_POTION_SLOT") % count
