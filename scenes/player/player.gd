@@ -6,10 +6,20 @@ signal weapon_changed(weapon: WeaponResource)
 @export var speed: float = 90.0
 @export var bullet_scene: PackedScene
 
+# Статус «отравлен ядом»: пока `_poison_timer > 0`, каждую секунду
+# срабатывает `take_damage(POISON_DAMAGE_PER_TICK)`. Повторное
+# попадание в облако (apply_poison) обновляет длительность до полного
+# значения, но не сбрасывает tick-таймер — иначе игрок мог бы
+# избегать урона, ре-заражаясь непосредственно перед каждым тиком.
+const POISON_TICK_INTERVAL: float = 1.0
+const POISON_DAMAGE_PER_TICK: int = 1
+
 var max_health: int
 var health: int
 var equipped_weapon: WeaponResource
 var _fire_cooldown: float = 0.0
+var _poison_timer: float = 0.0
+var _poison_tick_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("player")
@@ -35,6 +45,8 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_pressed("attack") and _fire_cooldown <= 0.0 and equipped_weapon != null:
 		_shoot_towards_mouse()
 		_fire_cooldown = equipped_weapon.fire_interval
+
+	_tick_poison(delta)
 
 func _shoot_towards_mouse() -> void:
 	if bullet_scene == null or equipped_weapon == null:
@@ -73,6 +85,27 @@ func take_damage(amount: int) -> void:
 		modulate = Color.WHITE
 	if health == 0:
 		_die()
+
+func apply_poison(duration: float) -> void:
+	# Свежая инфекция — заводим tick-таймер на полный интервал, чтобы
+	# первый урон случился через POISON_TICK_INTERVAL, а не мгновенно.
+	# Refresh (уже отравлен) — не трогаем tick-таймер: игрок должен
+	# продолжать получать урон по расписанию, даже если ре-заходит в
+	# облако.
+	if _poison_timer <= 0.0:
+		_poison_tick_timer = POISON_TICK_INTERVAL
+	_poison_timer = duration
+
+func _tick_poison(delta: float) -> void:
+	if _poison_timer <= 0.0:
+		return
+	_poison_timer = maxf(0.0, _poison_timer - delta)
+	_poison_tick_timer -= delta
+	if _poison_tick_timer > 0.0:
+		return
+	_poison_tick_timer = POISON_TICK_INTERVAL
+	if health > 0:
+		take_damage(POISON_DAMAGE_PER_TICK)
 
 func heal(amount: int) -> void:
 	health = min(max_health, health + amount)

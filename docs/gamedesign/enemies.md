@@ -226,6 +226,27 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 Роль: медленный, но живучий и больно бьёт. Требует движения при контакте.
 
+**Ядовитое облако (`zombie.gd` + `poison_cloud.gd/tscn`).** Раз в `POISON_CLOUD_COOLDOWN = 3.0 s` зомби роняет у своей позиции облако зловония. Первый спавн — через полный кулдаун после появления зомби (не сразу, иначе зомби у ног игрока бросал бы облако без окна на реакцию).
+
+| Параметр | Значение |
+|----------|----------|
+| `POISON_CLOUD_COOLDOWN` (zombie) | 3.0 s |
+| `LIFETIME` (cloud) | 2.0 s |
+| `RADIUS` (cloud) | 16 px (~0.8 тайла) |
+| `POISON_DURATION` (cloud → player) | 3.0 s |
+| `POISON_TICK_INTERVAL` (player) | 1.0 s |
+| `POISON_DAMAGE_PER_TICK` (player) | 1 hp |
+
+Облако — Area2D с процедурным рендером (`_draw` рисует зелёный полупрозрачный круг с fade-in первых 10% и fade-out оставшихся 90%). Спрайта нет — визуал полностью в коде, без ассет-пайплайна. По истечении `LIFETIME` облако `queue_free`. Начальный overlap (игрок стоит в точке спавна) обрабатывается через `call_deferred("_check_initial_overlap") → get_overlapping_bodies()`, потому что `body_entered` не срабатывает ретроактивно.
+
+**Статус «отравлен» на игроке** (в `player.gd`):
+- `apply_poison(duration)` ставит `_poison_timer = duration`. Если игрок не был отравлен, дополнительно взводит `_poison_tick_timer = POISON_TICK_INTERVAL` — первый урон случится через 1 s, а не мгновенно.
+- Refresh (повторный `apply_poison` до истечения) обновляет длительность, **но НЕ трогает** `_poison_tick_timer`. Иначе игрок мог бы избегать урона, ре-заражаясь непосредственно перед каждым тиком.
+- `_tick_poison(delta)` в `_physics_process` декрементит оба таймера. По истечении tick-таймера снимается `POISON_DAMAGE_PER_TICK` через `take_damage(1)` и tick-таймер снова 1.0 s.
+- По истечении `_poison_timer` статус пропадает, tick'и прекращаются.
+
+_Follow-up:_ `POISON_DAMAGE_PER_TICK` фиксированный (1 hp) и не масштабируется по floor через `Balance.scaled_damage`. На глубоких этажах контактный урон зомби растёт, а яд остаётся 1/сек — со временем яд перестанет быть значимой угрозой. Когда балансу это станет мешать, добавить `Balance.scaled_damage(POISON_DAMAGE_PER_TICK, floor_num)` при применении статуса, либо scaling на самом облаке.
+
 ## Charger (`charger.gd`)
 
 ### Spider (`charger.tscn`)
