@@ -14,6 +14,10 @@ extends CharacterBody2D
 # WANDER — случайное блуждание со сниженной скоростью.
 
 signal died_at(position: Vector2)
+# Эмиттится при каждом нанесённом ударе (по touch- или reach-контакту).
+# Скелеты подписываются, чтобы проиграть анимацию удара; другие враги
+# могут игнорировать сигнал — он опциональный визуальный хук.
+signal attack_played(target_position: Vector2)
 
 enum State { WANDER, CHASE }
 
@@ -37,6 +41,11 @@ const ESCAPE_DURATION: float = 0.4
 @export var max_health: int = 3
 @export var contact_damage: int = 1
 @export var contact_cooldown: float = 0.6
+# Максимальное расстояние (px), с которого враг наносит melee-урон
+# «на замах». 0 = только физический контакт коллизий (default для
+# unarmed/dagger). Меч у скелета делает этот радиус больше, чтобы
+# у оружия был reach — игрок ощутимо страдает даже без прижимания.
+@export var attack_radius: float = 0.0
 @export var pickup_scene: PackedScene
 @export var pickup_drop_chance: float = 0.15
 @export var xp_reward: int = 5
@@ -233,7 +242,18 @@ func _handle_player_contact() -> void:
 		if collider and collider.is_in_group("player") and collider.has_method("take_damage"):
 			collider.take_damage(contact_damage)
 			_contact_timer = contact_cooldown
+			attack_played.emit(collider.global_position)
 			return
+	# Reach-урон: враг с положительным attack_radius (меч у скелета) бьёт
+	# на расстоянии, не дожидаясь прижимания. touch-ветка выше уже
+	# срабатывает при впритык — эта отдельно ловит extended-reach.
+	if attack_radius <= 0.0 or _target == null or not is_instance_valid(_target):
+		return
+	var target_dist := global_position.distance_to(_target.global_position)
+	if target_dist <= attack_radius and _target.has_method("take_damage"):
+		_target.take_damage(contact_damage)
+		_contact_timer = contact_cooldown
+		attack_played.emit(_target.global_position)
 
 func _wander(delta: float) -> void:
 	_wander_timer -= delta

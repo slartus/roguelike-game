@@ -18,6 +18,22 @@ func test_melee_variants_include_all_five_kinds() -> void:
 	assert_true(keys.has("ENEMY_SKELETON_SWORD_WOOD"))
 	assert_true(keys.has("ENEMY_SKELETON_SWORD_IRON"))
 
+func test_melee_variants_have_attack_radius_zero_for_touch_weapons() -> void:
+	# Кулаки и кинжалы бьют только впритык — attack_radius = 0.
+	# Меч должен иметь ощутимый reach, иначе фича «у меча дальше»
+	# не читается на практике.
+	var by_key: Dictionary = {}
+	for v in Arsenal.MELEE_VARIANTS:
+		by_key[v["display_key"]] = v
+	assert_eq(by_key["ENEMY_SKELETON_UNARMED"]["attack_radius"], 0.0)
+	assert_eq(by_key["ENEMY_SKELETON_DAGGER_WOOD"]["attack_radius"], 0.0)
+	assert_eq(by_key["ENEMY_SKELETON_DAGGER_IRON"]["attack_radius"], 0.0)
+	assert_gt(by_key["ENEMY_SKELETON_SWORD_WOOD"]["attack_radius"], 0.0,
+		"меч wood должен иметь положительный attack_radius")
+	assert_gt(by_key["ENEMY_SKELETON_SWORD_IRON"]["attack_radius"],
+		by_key["ENEMY_SKELETON_SWORD_WOOD"]["attack_radius"],
+		"iron меч длиннее, чем wood меч")
+
 func test_melee_variants_have_ascending_damage_by_tier() -> void:
 	var by_key: Dictionary = {}
 	for v in Arsenal.MELEE_VARIANTS:

@@ -147,15 +147,21 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 **Арсенал (skeleton_arsenal.gd → MELEE_VARIANTS).** При спавне скелет случайно берёт один вариант оружия из таблицы (weighted-random) — он определяет display-key для UI/log, добавку к contact_damage и tint спрайта:
 
-| Вариант | Δ contact_damage | Вес | Tint |
-|---------|-------------------|-----|------|
-| `ENEMY_SKELETON_UNARMED` | +0 | 0.30 | белый (нейтральный) |
-| `ENEMY_SKELETON_DAGGER_WOOD` | +1 | 0.22 | тёплый охристый |
-| `ENEMY_SKELETON_DAGGER_IRON` | +2 | 0.18 | холодный стальной |
-| `ENEMY_SKELETON_SWORD_WOOD` | +2 | 0.16 | тёмный охристый |
-| `ENEMY_SKELETON_SWORD_IRON` | +3 | 0.14 | холодный стальной |
+| Вариант | Δ contact_damage | Вес | Tint | attack_radius |
+|---------|-------------------|-----|------|---------------|
+| `ENEMY_SKELETON_UNARMED` | +0 | 0.30 | белый (нейтральный) | 0 (только touch) |
+| `ENEMY_SKELETON_DAGGER_WOOD` | +1 | 0.22 | тёплый охристый | 0 (только touch) |
+| `ENEMY_SKELETON_DAGGER_IRON` | +2 | 0.18 | холодный стальной | 0 (только touch) |
+| `ENEMY_SKELETON_SWORD_WOOD` | +2 | 0.16 | тёмный охристый | 22 px |
+| `ENEMY_SKELETON_SWORD_IRON` | +3 | 0.14 | холодный стальной | 26 px |
 
-Δ применяется **до** `Balance.scaled_damage`, поэтому floor-scaling умножается уже на bumped-up значение. Список расширяется добавлением новых записей в `MELEE_VARIANTS` — рассчитано на будущие «улучшалки» (магические клинки, заражённое оружие и т.п.).
+Δ применяется **до** `Balance.scaled_damage`, поэтому floor-scaling умножается уже на bumped-up значение.
+
+**Радиус урона (`attack_radius`).** Экспортируемое поле в `enemy.gd`. `0` = урон только по физическому касанию `CharacterBody2D` через `get_slide_collision` (кулаки, кинжал). `>0` = extended reach: в `_handle_player_contact` после touch-ветки ещё проверяется `global_position.distance_to(target) <= attack_radius` — так меч бьёт на замахе даже до прижимания. `contact_cooldown` (0.6 s) применяется одинаково к touch- и reach-удару.
+
+**Анимация удара скелета.** На каждый успешный удар `enemy.gd` эмиттит сигнал `attack_played(target_position)`. `skeleton.gd` подписывается и в `_play_lunge_animation` запускает короткий `Tween` — `Visual` рывком смещается на 4 px в сторону цели (60 ms), возвращается обратно (100 ms). При повторном ударе предыдущий tween убивается через `.kill()`, чтобы визуал не «застрял» посередине. У других мили-врагов (Zombie, Slime, Goblin, Orc) сигнал игнорируется — они наносят урон без лунга.
+
+Список расширяется добавлением новых записей в `MELEE_VARIANTS` — рассчитано на будущие «улучшалки» (магические клинки, заражённое оружие и т.п.). Новые варианты с extended reach просто ставят `attack_radius > 0`.
 
 ### Zombie (`zombie.tscn`)
 
