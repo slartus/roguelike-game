@@ -40,7 +40,11 @@ var _volley_timer: float = 0.0
 # коридоры между пулями.
 var _volley_index: int = 0
 var _minions: Array = []
-var _summon_cooldown_timer: float = SUMMON_COOLDOWN
+# Стартовое значение = 0.0 → первый physics-тик сразу запустит каст
+# первого батча. Босс с ходу колдует свиту, а не тратит 10 s на «зарядку»
+# — игрок мгновенно видит роль призывателя. Каст (`SUMMON_CAST_DURATION`)
+# всё ещё даёт окно на реакцию.
+var _summon_cooldown_timer: float = 0.0
 var _summon_cast_timer: float = 0.0
 var _visual_base_modulate: Color = Color.WHITE
 

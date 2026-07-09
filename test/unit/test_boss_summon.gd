@@ -34,6 +34,17 @@ func _spawn_player_and_floor():
 	p.add_to_group("player")
 	add_child_autofree(p)
 
+func test_boss_summon_cooldown_starts_at_zero_for_immediate_cast() -> void:
+	# Босс — призыватель, роль должна читаться сразу. `_summon_cooldown_timer`
+	# инициализирован нулём → первый physics-тик тут же запускает каст свиты.
+	var boss = _spawn_boss()
+	assert_eq(boss._summon_cooldown_timer, 0.0,
+		"кулдаун стартует нулевым — каст свиты стартует на первом же тике")
+	assert_eq(boss._summon_cast_timer, 0.0,
+		"каст ещё не стартовал, это делает _maybe_start_summon в _physics_process")
+	assert_eq(boss._minions.size(), 0,
+		"миньонов пока нет: скелет появляется после SUMMON_CAST_DURATION")
+
 func test_boss_summons_full_batch_of_five_on_first_cast() -> void:
 	_spawn_player_and_floor()
 	var boss = _spawn_boss()
