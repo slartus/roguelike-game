@@ -33,35 +33,67 @@ def render(rows: list[str], palette: dict[str, tuple[int, int, int, int]]) -> Im
     return img
 
 
-# --- POTION ICON 12×12 --------------------------------------------
-# Круглая колба на короткой шейке с пробкой + блик слева.
+# --- POTION ICON 12×12 (Diablo-стиль) -----------------------------
+# Круглая колба-сфера на короткой пробке. Стеклянный ободок вокруг
+# всей колбы читается как «толстое стекло», яркий блик в верхнем-
+# левом квадранте — как отражение источника света. Referens: red
+# health potion из Diablo 2 (сферическая, коротышка, cork на макушке).
 POTION_PALETTE = {
     ".": (0, 0, 0, 0),
-    "C": (85, 55, 25, 255),       # тёмная пробка
-    "c": (140, 90, 45, 255),      # светлая пробка
-    "R": (155, 40, 55, 255),      # тёмный контур жидкости
-    "F": (220, 55, 75, 255),      # красная жидкость
-    "L": (255, 180, 190, 255),    # блик
-    "S": (110, 25, 40, 255),      # глубокая тень
+    "C": (85, 55, 25, 255),        # тёмная пробка
+    "c": (140, 90, 45, 255),       # светлая пробка / шов
+    "O": (60, 60, 65, 255),        # тёмное стеклянное горлышко
+    "R": (140, 30, 45, 255),       # стеклянный ободок колбы (тёмно-красный)
+    "F": (220, 55, 75, 255),       # красная жидкость
+    "L": (255, 200, 210, 255),     # яркий блик
+    "l": (255, 140, 155, 255),     # переходный блик
+    "S": (95, 20, 30, 255),        # глубокая тень внизу колбы
 }
 POTION_ICON = [
     "............",
-    "....cCCc....",
-    "....cCCc....",
-    "....RFFR....",
-    "...RFLFFR...",
-    "..RFLFFFFR..",
-    ".RFFLFFFFFR.",
-    ".RFFFFFFFFR.",
-    ".RFFFFFFFFR.",
-    ".RSFFFFFFSR.",
-    "..RSSFFSSR..",
-    "...RRRRRR...",
+    "....CC......",
+    "...cCCc.....",
+    "...OccO.....",
+    "..RRFFRR....",
+    ".RFLlFFFR...",
+    ".RFlFFFFR...",
+    ".RFFFFFFR...",
+    ".RFFFFFFR...",
+    "..RFFFFR....",
+    "..RSFFSR....",
+    "...RRRR.....",
 ]
 
 
 SPRITES = [
     ("potion_icon.png", POTION_ICON, POTION_PALETTE),
+]
+
+# Ground pickup — тот же силуэт, но 16×16 (крупнее, чуть больше
+# детализации сфере). Живёт рядом с пикапом-сценой, не в HUD.
+PICKUP_DIR = Path(__file__).resolve().parents[1] / "assets" / "sprites" / "pickups"
+
+POTION_PICKUP = [
+    "................",
+    "................",
+    ".....CC.........",
+    "....cCCc........",
+    "....cCCc........",
+    "....OccO........",
+    "...RRFFRR.......",
+    "..RFLlFFFR......",
+    "..RFllFFFR......",
+    "..RFFFFFFR......",
+    "..RFFFFFFR......",
+    "...RFFFFR.......",
+    "...RSFFSR.......",
+    "....RRRR........",
+    "................",
+    "................",
+]
+
+PICKUP_SPRITES = [
+    ("health_potion.png", POTION_PICKUP, POTION_PALETTE),
 ]
 
 
@@ -70,6 +102,12 @@ def main() -> None:
     for filename, rows, palette in SPRITES:
         img = render(rows, palette)
         out = OUT_DIR / filename
+        img.save(out)
+        print(f"wrote {out} ({img.width}x{img.height})")
+    PICKUP_DIR.mkdir(parents=True, exist_ok=True)
+    for filename, rows, palette in PICKUP_SPRITES:
+        img = render(rows, palette)
+        out = PICKUP_DIR / filename
         img.save(out)
         print(f"wrote {out} ({img.width}x{img.height})")
 
