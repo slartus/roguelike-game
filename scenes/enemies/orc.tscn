@@ -7,6 +7,7 @@
 radius = 8.0
 
 [node name="Orc" type="CharacterBody2D"]
+z_index = 1
 script = ExtResource("1_enemy")
 display_name = "ENEMY_ORC"
 max_health = 8

@@ -2,6 +2,8 @@
 
 Все враги добавляются в группу `enemy` в `_ready`. При смерти начисляют XP и gold через `GameState.award_xp()` / `award_gold()`. Общий бэкстори — классический fantasy RPG-бестиарий: слизни, гоблиноиды, орки, нежить, пауки.
 
+**Порядок рендера.** Корневой `CharacterBody2D` каждого врага (включая боса) имеет `z_index = 1`. Пикапы, пол и портал остаются на default `z_index = 0`, поэтому враг всегда рисуется поверх сундука/сердечка/оружейного пикапа, а не за ним. Тот же контракт у игрока (см. `pickups.md`).
+
 ## Balance-таблицы (D&D 5e-inspired)
 
 **Базовые** значения `max_health` / `contact_damage` / `xp_reward` / `gold_reward` в таблицах ниже — это floor-1 stats. Каждый монстр при спавне в `_ready` применяет линейный scaling по `GameState.current_floor_number` через `Balance.scaled_*` (см. `progression.md`).

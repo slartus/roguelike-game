@@ -8,6 +8,7 @@
 radius = 14.0
 
 [node name="Necromancer" type="CharacterBody2D"]
+z_index = 1
 script = ExtResource("1_boss")
 bullet_scene = ExtResource("2_ebullet")
 display_name = "ENEMY_NECROMANCER"
