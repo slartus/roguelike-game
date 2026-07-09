@@ -42,11 +42,19 @@ HUD помечен `process_mode = ALWAYS` в `.tscn` — иначе после 
 
 ## Нижний левый угол — Инвентарь
 
-Панель `InventoryPanel` (`PanelContainer`) с одной ячейкой `PotionSlot` (`Label`, `font_size = 12`). Ключ `UI_POTION_SLOT` → «[1] Зелье ×N» / «[1] Potion x%d». Обновляется через сигнал `GameState.health_potions_changed(count)` в `hud.gd::set_potion_count`.
+Панель `InventoryPanel` (`Control`, без фонового тона) с одной квадратной ячейкой `PotionSlot` (`Panel` 20×20 с прозрачным `StyleBoxFlat`, `border_color = Color(0.55, 0.55, 0.6)`, `border_width = 1` по всем сторонам). Внутри ячейки:
+- `PotionIcon` (`TextureRect`, `res://assets/sprites/ui/potion_icon.png` 12×12) — в центре, `expand_mode = 1`, `stretch_mode = 5`;
+- `PotionCount` (`Label`, `font_size = 10`) — в правом-нижнем углу ячейки, формат `«×N»`.
+
+`hud.gd::set_potion_count` показывает или прячет **обе** дочерние ноды в зависимости от количества:
+- `count == 0` → `PotionIcon.visible = false`, `PotionCount.visible = false`. Пользователь видит только рамку слота — «пустой квадратик без количества».
+- `count > 0` → обе видны, счётчик пишет `«×3»`.
+
+Пользователь просил «убрать затенение» — в старой версии `InventoryPanel` был `PanelContainer` с дефолтным полупрозрачным фоном; теперь `Control` без фона и sub-slot использует только 1-px рамку.
 
 Активация — клавиша `1` (input action `inventory_slot_1`) в `player.gd::_unhandled_input`. Если игрок с полным HP или инвентарь пуст — no-op, зелье не тратится (см. `docs/gamedesign/pickups.md`).
 
-Пока в инвентаре один слот — зелья лечения. Расширяется: новые слоты можно повесить рядом с `PotionSlot` в `hud.tscn` и подписаться на соответствующие сигналы `GameState`.
+Пока в инвентаре один слот — зелья лечения. Расширяется: новые квадратные слоты можно добавить как sibling'и `PotionSlot` (сдвинуть по `offset_left`) с их собственными иконками и подпиской на соответствующие сигналы `GameState`.
 
 ## Правый нижний угол — Combat Log
 

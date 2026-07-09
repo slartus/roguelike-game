@@ -47,17 +47,24 @@ func test_reset_run_clears_potions() -> void:
 	assert_eq(GameState.health_potions, 0,
 		"после смерти зелья сгорают вместе с прогрессом")
 
-func test_hud_updates_potion_slot_on_signal() -> void:
+func test_hud_slot_shows_icon_and_count_when_potions_present() -> void:
 	var hud = HudScene.instantiate()
 	add_child_autofree(hud)
 	await get_tree().process_frame
-	var slot: Label = hud.get_node("InventoryPanel/PotionSlot")
+	var icon: TextureRect = hud.get_node("InventoryPanel/PotionSlot/PotionIcon")
+	var count_label: Label = hud.get_node("InventoryPanel/PotionSlot/PotionCount")
+	# Стартовое: 0 → пустой слот (только рамка, ни иконки, ни числа).
+	assert_false(icon.visible,
+		"при 0 зелий иконка бутылька должна быть скрыта")
+	assert_false(count_label.visible,
+		"при 0 зелий счётчик должен быть скрыт")
 	GameState.add_health_potion()
 	GameState.add_health_potion()
 	GameState.add_health_potion()
-	# Signal → set_potion_count → label.text
-	assert_true(slot.text.ends_with("3"),
-		"HUD-слот должен показывать текущее число: text='%s'" % slot.text)
+	assert_true(icon.visible, "при непустом инвентаре иконка видна")
+	assert_true(count_label.visible, "и счётчик видим")
+	assert_eq(count_label.text, "×3",
+		"счётчик формата '×N': text='%s'" % count_label.text)
 
 func test_input_action_inventory_slot_1_is_defined() -> void:
 	assert_true(InputMap.has_action("inventory_slot_1"),

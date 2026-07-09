@@ -10,7 +10,8 @@ const LOG_FONT_SIZE: int = 8
 @onready var _level_label: Label = $LevelLabel
 @onready var _xp_label: Label = $XpLabel
 @onready var _gold_label: Label = $GoldLabel
-@onready var _potion_slot_label: Label = $InventoryPanel/PotionSlot
+@onready var _potion_icon: TextureRect = $InventoryPanel/PotionSlot/PotionIcon
+@onready var _potion_count_label: Label = $InventoryPanel/PotionSlot/PotionCount
 @onready var _pause_panel: ColorRect = $PausePanel
 @onready var _log_box: VBoxContainer = $CombatLog
 
@@ -32,7 +33,14 @@ func _toggle_pause() -> void:
 	_pause_panel.visible = paused
 
 func set_potion_count(count: int) -> void:
-	_potion_slot_label.text = tr("UI_POTION_SLOT") % count
+	# Пустой слот — только рамка ячейки, без иконки и числа
+	# (пользователь: «если зелий нет — пустой квадратик без количества»).
+	# С непустым — показываем иконку зелья и счётчик "×N" в углу.
+	var has_potions := count > 0
+	_potion_icon.visible = has_potions
+	_potion_count_label.visible = has_potions
+	if has_potions:
+		_potion_count_label.text = "×%d" % count
 
 func set_health(current: int, maximum: int) -> void:
 	_health_label.text = tr("UI_HEALTH") % [current, maximum]

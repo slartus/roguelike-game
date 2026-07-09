@@ -1,6 +1,15 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scenes/ui/hud.gd" id="1_hud"]
+[ext_resource type="Texture2D" path="res://assets/sprites/ui/potion_icon.png" id="2_potion"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slot"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.55, 0.55, 0.6, 1)
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
@@ -46,22 +55,49 @@ offset_bottom = 86.0
 theme_override_font_sizes/font_size = 12
 text = "Gold: 0"
 
-[node name="InventoryPanel" type="PanelContainer" parent="."]
-anchors_preset = 12
+[node name="InventoryPanel" type="Control" parent="."]
+anchors_preset = 2
 anchor_top = 1.0
-anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 8.0
-offset_top = -32.0
-offset_right = 120.0
+offset_top = -28.0
+offset_right = 32.0
 offset_bottom = -4.0
 grow_vertical = 0
 
-[node name="PotionSlot" type="Label" parent="InventoryPanel"]
-theme_override_font_sizes/font_size = 12
-text = "[1] Зелье ×0"
-horizontal_alignment = 1
-vertical_alignment = 1
+[node name="PotionSlot" type="Panel" parent="InventoryPanel"]
+custom_minimum_size = Vector2(20, 20)
+offset_right = 20.0
+offset_bottom = 20.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_slot")
+
+[node name="PotionIcon" type="TextureRect" parent="InventoryPanel/PotionSlot"]
+visible = false
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 16.0
+offset_bottom = 16.0
+texture = ExtResource("2_potion")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="PotionCount" type="Label" parent="InventoryPanel/PotionSlot"]
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -14.0
+offset_top = -12.0
+offset_right = -1.0
+offset_bottom = -1.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_font_sizes/font_size = 10
+text = "0"
+horizontal_alignment = 2
+vertical_alignment = 2
 
 [node name="PausePanel" type="ColorRect" parent="."]
 visible = false
