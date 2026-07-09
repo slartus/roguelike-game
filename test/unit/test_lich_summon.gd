@@ -120,6 +120,58 @@ func test_summon_succeeds_when_at_least_one_cell_is_free() -> void:
 	assert_not_null(lich._summoned_minion,
 		"на пустом этаже лич должен призвать скелета")
 
+func test_summon_position_biased_toward_player() -> void:
+	# Когда игрок известен и весь этаж walkable, скелет должен
+	# заспавниться ПО НАПРАВЛЕНИЮ к игроку. Проверяем что вектор от
+	# лича к скелету имеет положительный dot-product с вектором к
+	# игроку в 8+ из 10 попыток (arc ±50° → отклонения возможны, но
+	# доминанта должна быть чёткой).
+	var fake_floor := FakeFloor.new(200, 200, false)
+	add_child_autofree(fake_floor)
+	var player := Node2D.new()
+	player.global_position = Vector2(300, 0)   # игрок справа от лича
+	player.add_to_group("player")
+	add_child_autofree(player)
+	var toward_player_hits := 0
+	for i in 10:
+		var lich = _spawn_lich()
+		lich.global_position = Vector2(100, 100)
+		lich._target = player
+		lich._summon_cooldown_timer = 0.0
+		lich._maybe_start_summon(0.05)
+		lich._tick_cast(lich.SUMMON_CAST_DURATION + 0.1)
+		var minion = lich._summoned_minion
+		assert_not_null(minion, "спавн должен пройти на пустом этаже")
+		var to_minion: Vector2 = (minion.global_position - lich.global_position).normalized()
+		var to_player: Vector2 = (player.global_position - lich.global_position).normalized()
+		if to_minion.dot(to_player) > 0.2:
+			toward_player_hits += 1
+		minion.queue_free()
+	assert_gte(toward_player_hits, 8,
+		"минимум 8 из 10 спавнов в сторону игрока; получили %d" % toward_player_hits)
+
+func test_summon_distance_within_bounds() -> void:
+	# Проверяем что новый радиус SUMMON_OFFSET_MIN/MAX реально
+	# ограничивает расстояние (миньон не появляется в 40+ px, как
+	# раньше — «где-то там»).
+	var fake_floor := FakeFloor.new(200, 200, false)
+	add_child_autofree(fake_floor)
+	var lich = _spawn_lich()
+	lich.global_position = Vector2(100, 100)
+	for i in 10:
+		lich._summoned_minion = null
+		lich._summon_cooldown_timer = 0.0
+		lich._maybe_start_summon(0.05)
+		lich._tick_cast(lich.SUMMON_CAST_DURATION + 0.1)
+		var minion = lich._summoned_minion
+		assert_not_null(minion)
+		var dist: float = minion.global_position.distance_to(lich.global_position)
+		assert_gte(dist, lich.SUMMON_OFFSET_MIN - 0.5,
+			"миньон не ближе SUMMON_OFFSET_MIN: dist=%.1f" % dist)
+		assert_lte(dist, lich.SUMMON_OFFSET_MAX + 0.5,
+			"миньон не дальше SUMMON_OFFSET_MAX: dist=%.1f" % dist)
+		minion.queue_free()
+
 func test_summoned_skeleton_has_no_rewards() -> void:
 	var lich = _spawn_lich()
 	lich._summon_cooldown_timer = 0.0

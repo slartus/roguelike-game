@@ -14,9 +14,20 @@ extends "res://scenes/enemies/ranged_enemy.gd"
 const SkeletonScene: PackedScene = preload("res://scenes/enemies/skeleton.tscn")
 
 const SUMMON_COOLDOWN: float = 5.0
-const SUMMON_OFFSET_MIN: float = 24.0
-const SUMMON_OFFSET_MAX: float = 40.0
+# Радиус спавна миньона — «рядом», не «где-то там». В tile'ах: min ~
+# 0.75 тайла, max ~ 1.5 тайла. Ближе не пускаем чтобы скелет не
+# спавнился внутри самого лича / коллизии рвались.
+const SUMMON_OFFSET_MIN: float = 14.0
+const SUMMON_OFFSET_MAX: float = 28.0
+# Половинный угловой сектор со стороны игрока, в котором приоритетно
+# ищем место. `TAU * 0.28` ≈ 100° — узко достаточно, чтобы миньон
+# оказался между личом и игроком, но не намертво по прямой (в стены
+# упирались бы гораздо чаще).
+const SUMMON_TOWARD_PLAYER_ARC: float = TAU * 0.28
 const SPAWN_ATTEMPTS: int = 12
+# Половина попыток тратится на «в сторону игрока», остальные — на
+# 360°-фолбэк если приоритетный сектор весь в стене.
+const SPAWN_ATTEMPTS_TOWARD_PLAYER: int = 8
 const FLOOR_TILE_SIZE: int = 20
 # Каст-фаза перед появлением скелета: лич подсвечивается зелёным
 # и не стреляет. Даёт игроку окно среагировать (или добить лича
@@ -127,25 +138,61 @@ func _summon_skeleton() -> bool:
 	return true
 
 func _pick_valid_spawn_position() -> Vector2:
-	# Пробуем SPAWN_ATTEMPTS случайных точек в кольце вокруг лича;
-	# берём первую, чья ячейка в AStarGrid2D не solid (не стена).
-	# Без этой проверки спавн иногда попадал внутрь стены — скелет
-	# застревал в геометрии и был неубиваемым.
+	# Приоритет: сначала пробуем сектор в сторону игрока (миньон
+	# оказывается «между личом и игроком» и работает как живой щит),
+	# потом — фолбэк на 360°. В обоих случаях фильтруем по AStarGrid
+	# is_point_solid, иначе скелет спавнится в стену и застревает.
 	var floor_node := get_tree().get_first_node_in_group("floor")
 	# В тестах / автономно (без Main + Floor) деградируем к простому
 	# спавну без валидации — тесты живут без dungeon.
 	if floor_node == null or floor_node.astar_grid == null:
-		var angle := randf() * TAU
-		var distance := randf_range(SUMMON_OFFSET_MIN, SUMMON_OFFSET_MAX)
-		return global_position + Vector2(cos(angle), sin(angle)) * distance
+		return global_position + _random_offset_toward_player()
+	var toward_player := _direction_to_player()
+	if toward_player != Vector2.ZERO:
+		for i in SPAWN_ATTEMPTS_TOWARD_PLAYER:
+			var candidate := global_position + _random_offset_in_arc(toward_player)
+			if _is_walkable(floor_node, candidate):
+				return candidate
+	# Fallback: полное кольцо 360° вокруг лича.
 	for i in SPAWN_ATTEMPTS:
+		var candidate := global_position + _random_offset_in_arc(Vector2.ZERO)
+		if _is_walkable(floor_node, candidate):
+			return candidate
+	return Vector2.INF
+
+func _direction_to_player() -> Vector2:
+	if _target == null or not is_instance_valid(_target):
+		return Vector2.ZERO
+	var diff := _target.global_position - global_position
+	if diff == Vector2.ZERO:
+		return Vector2.ZERO
+	return diff.normalized()
+
+func _random_offset_toward_player() -> Vector2:
+	# Утилита для fallback-ветки без floor: если игрок известен, кладём
+	# скелета в сектор к игроку; иначе — случайное кольцо. Совпадает
+	# по смыслу с приоритетным сектором в основной функции.
+	var toward_player := _direction_to_player()
+	if toward_player == Vector2.ZERO:
 		var angle := randf() * TAU
 		var distance := randf_range(SUMMON_OFFSET_MIN, SUMMON_OFFSET_MAX)
-		var candidate := global_position + Vector2(cos(angle), sin(angle)) * distance
-		var cell := Vector2i(int(candidate.x / FLOOR_TILE_SIZE), int(candidate.y / FLOOR_TILE_SIZE))
-		if not floor_node.astar_grid.is_in_boundsv(cell):
-			continue
-		if floor_node.astar_grid.is_point_solid(cell):
-			continue
-		return candidate
-	return Vector2.INF
+		return Vector2(cos(angle), sin(angle)) * distance
+	return _random_offset_in_arc(toward_player)
+
+func _random_offset_in_arc(center_dir: Vector2) -> Vector2:
+	# center_dir == ZERO → полный круг; иначе сектор SUMMON_TOWARD_PLAYER_ARC
+	# вокруг center_dir.
+	var base_angle: float
+	if center_dir == Vector2.ZERO:
+		base_angle = randf() * TAU
+	else:
+		var center_angle := center_dir.angle()
+		base_angle = center_angle + randf_range(-SUMMON_TOWARD_PLAYER_ARC * 0.5, SUMMON_TOWARD_PLAYER_ARC * 0.5)
+	var distance := randf_range(SUMMON_OFFSET_MIN, SUMMON_OFFSET_MAX)
+	return Vector2(cos(base_angle), sin(base_angle)) * distance
+
+func _is_walkable(floor_node: Node, pos: Vector2) -> bool:
+	var cell := Vector2i(int(pos.x / FLOOR_TILE_SIZE), int(pos.y / FLOOR_TILE_SIZE))
+	if not floor_node.astar_grid.is_in_boundsv(cell):
+		return false
+	return not floor_node.astar_grid.is_point_solid(cell)
