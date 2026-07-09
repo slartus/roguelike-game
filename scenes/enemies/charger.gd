@@ -27,6 +27,12 @@ enum State { WATCH, WAITING, CHARGING }
 @export var xp_reward: int = 8
 @export var gold_reward: int = 1
 @export var perception_radius: float = 130.0
+# В WATCH паук неспешно бродит `move_and_slide` — плавно, без прыжков
+# (в отличие от слайма). Скорость сильно ниже charge_speed: WATCH
+# читается как «прогуливается», а рывок в CHARGING — как реальная
+# атака. Направление меняется по таймеру или при упоре в стену.
+@export var wander_speed: float = 25.0
+@export var wander_change_interval: float = 2.5
 
 var health: int
 var _state: int = State.WATCH
@@ -34,6 +40,8 @@ var _state_timer: float = 0.0
 var _charge_direction: Vector2 = Vector2.ZERO
 var _target: Node2D
 var _contact_timer: float = 0.0
+var _wander_direction: Vector2 = Vector2.ZERO
+var _wander_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -53,9 +61,10 @@ func _physics_process(delta: float) -> void:
 
 	match _state:
 		State.WATCH:
-			velocity = Vector2.ZERO
 			if _target != null and _can_see_target():
 				_enter_waiting()
+			else:
+				_wander(delta)
 		State.WAITING:
 			velocity = Vector2.ZERO
 			if _state_timer <= 0.0 and _target != null:
@@ -106,6 +115,26 @@ func _enter_watch() -> void:
 	_state = State.WATCH
 	_state_timer = 0.0
 	modulate = Color(1, 0.85, 0.55)
+	# Свежий вход в WATCH — сбрасываем таймер направления, чтобы паук
+	# сразу «оглянулся» и выбрал новое направление блуждания.
+	_wander_timer = 0.0
+
+func _wander(delta: float) -> void:
+	_wander_timer -= delta
+	if _wander_timer <= 0.0 or _wander_direction == Vector2.ZERO:
+		_pick_wander_direction()
+	velocity = _wander_direction * wander_speed
+	move_and_slide()
+	# Упёрлись в стену — крутим направление в сторону и обнуляем таймер,
+	# следующий тик выберет новое.
+	if velocity.length() < 1.0:
+		_wander_direction = -_wander_direction.rotated(randf_range(-PI / 3.0, PI / 3.0))
+		_wander_timer = 0.0
+
+func _pick_wander_direction() -> void:
+	var angle := randf() * TAU
+	_wander_direction = Vector2.RIGHT.rotated(angle)
+	_wander_timer = wander_change_interval
 
 func _enter_waiting() -> void:
 	_state = State.WAITING

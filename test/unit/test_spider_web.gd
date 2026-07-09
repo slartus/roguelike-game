@@ -143,6 +143,40 @@ func test_spider_target_beyond_perception_not_visible() -> void:
 	assert_false(charger._can_see_target(),
 		"цель дальше perception_radius не видима, даже без стены")
 
+# ---- Spider: wander in WATCH -----------------------------------------------
+
+func test_spider_wanders_in_watch_state_when_no_target() -> void:
+	# В WATCH без цели паук не стоит столбом, а неспешно бродит через
+	# _wander — velocity после тика не нулевая.
+	var charger = _spawn_charger()
+	charger._target = null
+	charger._wander(0.05)
+	assert_ne(charger.velocity, Vector2.ZERO,
+		"без цели в WATCH паук бродит, а не стоит")
+
+func test_spider_wander_uses_configured_wander_speed_not_charge_speed() -> void:
+	# «Не скачками»: скорость блуждания — wander_speed (низкая), а не
+	# charge_speed. Направление форсим единичным вектором, чтобы
+	# проверять именно магнитуду.
+	var charger = _spawn_charger()
+	charger._wander_direction = Vector2.RIGHT
+	charger._wander_timer = charger.wander_change_interval
+	charger._wander(0.05)
+	assert_almost_eq(charger.velocity.length(), charger.wander_speed, 0.5,
+		"магнитуда velocity в WATCH = wander_speed, не charge_speed")
+	assert_lt(charger.wander_speed, charger.charge_speed,
+		"wander_speed должен быть заметно меньше charge_speed")
+
+func test_spider_wander_picks_new_direction_when_timer_expires() -> void:
+	var charger = _spawn_charger()
+	charger._wander_direction = Vector2.ZERO
+	charger._wander_timer = -1.0
+	charger._wander(0.05)
+	assert_ne(charger._wander_direction, Vector2.ZERO,
+		"по истечении таймера паук выбирает новое направление")
+	assert_almost_eq(charger._wander_direction.length(), 1.0, 0.001,
+		"направление — единичный вектор")
+
 # ---- Spider web: flight and landing ----------------------------------------
 
 func test_web_starts_in_flying_state() -> void:

@@ -257,6 +257,8 @@ _Follow-up:_ `POISON_DAMAGE_PER_TICK` фиксированный (1 hp) и не 
 |----------|----------|
 | max_health | 1 |
 | charge_speed | 220 |
+| wander_speed | 25 |
+| wander_change_interval | 2.5 s |
 | wait_duration | 1.2 s |
 | charge_duration | 0.9 s |
 | contact_damage | 2 |
@@ -266,7 +268,7 @@ _Follow-up:_ `POISON_DAMAGE_PER_TICK` фиксированный (1 hp) и не 
 | gold_reward | 1 |
 
 **Поведение:** state machine.
-1. `WATCH` — стоит на месте, ждёт пока игрок войдёт в `perception_radius` **и** между ними не окажется стены. Переход в `WAITING` требует **LOS**: raycast от паука к игроку не должен упереться в `StaticBody2D` (стены `floor.gd` — единственные `StaticBody2D` в сцене). Стена между пауком и игроком блокирует и плевок паутиной, и рывок.
+1. `WATCH` — неспешно бродит `move_and_slide` со скоростью `wander_speed = 25 px/s` (сильно ниже `charge_speed = 220`), плавно, без прыжков как у слайма. Направление меняется по `wander_change_interval = 2.5 s` или при упоре в стену. Ждёт пока игрок войдёт в `perception_radius` **и** между ними не окажется стены. Переход в `WAITING` требует **LOS**: raycast от паука к игроку не должен упереться в `StaticBody2D` (стены `floor.gd` — единственные `StaticBody2D` в сцене). Стена между пауком и игроком блокирует и плевок паутиной, и рывок.
 2. `WAITING` — стоит `wait_duration` секунд (светлее оттенок через `modulate`). **В момент входа в WAITING** паук плюёт паутиной (`spider_web.tscn`) в текущую позицию игрока — цель фиксируется на этом моменте, не хоминг.
 3. Фиксирует направление к текущей позиции игрока и переходит в `CHARGING`.
 4. `CHARGING` — двигается `charge_speed` в фиксированном направлении `charge_duration` секунд.
