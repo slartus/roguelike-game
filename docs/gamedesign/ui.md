@@ -16,6 +16,14 @@
 
 Обновляются через `hud.set_*` методы; `Main._ready` подключает сигналы `Player.health_changed`, `GameState.xp_changed`, `GameState.leveled_up`, `GameState.gold_changed`.
 
+## Нижний левый угол — Инвентарь
+
+Панель `InventoryPanel` (`PanelContainer`) с одной ячейкой `PotionSlot` (`Label`, `font_size = 12`). Ключ `UI_POTION_SLOT` → «[1] Зелье ×N» / «[1] Potion x%d». Обновляется через сигнал `GameState.health_potions_changed(count)` в `hud.gd::set_potion_count`.
+
+Активация — клавиша `1` (input action `inventory_slot_1`) в `player.gd::_unhandled_input`. Если игрок с полным HP или инвентарь пуст — no-op, зелье не тратится (см. `docs/gamedesign/pickups.md`).
+
+Пока в инвентаре один слот — зелья лечения. Расширяется: новые слоты можно повесить рядом с `PotionSlot` в `hud.tscn` и подписаться на соответствующие сигналы `GameState`.
+
 ## Правый нижний угол — Combat Log
 
 Панель `CombatLog` (`VBoxContainer`) справа-снизу с anchor preset `bottom-right`, `alignment = END` (новые записи прижаты к низу).

@@ -79,6 +79,20 @@ func heal(amount: int) -> void:
 	GameState.player_health = health
 	health_changed.emit(health, max_health)
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("inventory_slot_1"):
+		_try_use_health_potion()
+
+func _try_use_health_potion() -> void:
+	# Зелье не тратится, если HP уже максимальный — иначе игрок случайно
+	# сжигает запас у полного здоровья. Пустой инвентарь тоже тихо no-op.
+	if health >= max_health:
+		return
+	if not GameState.consume_health_potion():
+		return
+	heal(1)
+	EventLog.log_heal(1)
+
 func _die() -> void:
 	GameState.reset_run()
 	# reload_current_scene из physics callback (Bullet.body_entered или

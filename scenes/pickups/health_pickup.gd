@@ -1,15 +1,16 @@
 extends Area2D
 
-@export var heal_amount: int = 1
+# Зелье лечения. Раньше срабатывало мгновенным лечением при контакте
+# (и не тратилось при полном HP). Теперь всегда подбирается в
+# инвентарь (`GameState.health_potions`) — активация через клавишу
+# «1» в слоте инвентаря (см. player.gd::_unhandled_input).
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 
 func _on_body_entered(body: Node) -> void:
-	if not body.is_in_group("player") or not body.has_method("heal"):
+	if not body.is_in_group("player"):
 		return
-	if body.health >= body.max_health:
-		return
-	body.heal(heal_amount)
-	EventLog.log_heal(heal_amount)
+	GameState.add_health_potion()
+	EventLog.log_potion_pickup()
 	queue_free()

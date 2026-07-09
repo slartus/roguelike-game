@@ -10,10 +10,16 @@ const LOG_FONT_SIZE: int = 8
 @onready var _level_label: Label = $LevelLabel
 @onready var _xp_label: Label = $XpLabel
 @onready var _gold_label: Label = $GoldLabel
+@onready var _potion_slot_label: Label = $InventoryPanel/PotionSlot
 @onready var _log_box: VBoxContainer = $CombatLog
 
 func _ready() -> void:
 	EventLog.entry_added.connect(_on_log_entry)
+	GameState.health_potions_changed.connect(set_potion_count)
+	set_potion_count(GameState.health_potions)
+
+func set_potion_count(count: int) -> void:
+	_potion_slot_label.text = tr("UI_POTION_SLOT") % count
 
 func set_health(current: int, maximum: int) -> void:
 	_health_label.text = tr("UI_HEALTH") % [current, maximum]

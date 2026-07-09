@@ -34,6 +34,9 @@ func log_kill(enemy_key: String, xp: int, gold: int) -> void:
 func log_heal(amount: int) -> void:
 	entry_added.emit(tr("LOG_HEAL") % amount, HEAL_TINT)
 
+func log_potion_pickup() -> void:
+	entry_added.emit(tr("LOG_POTION_PICKUP"), HEAL_TINT)
+
 func log_weapon_pickup(weapon_key: String) -> void:
 	var name := tr(weapon_key)
 	entry_added.emit(tr("LOG_WEAPON_PICKUP") % name, WEAPON_TINT)

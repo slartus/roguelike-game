@@ -9,6 +9,9 @@ const HEALTH_PER_LEVEL: int = 1
 signal xp_changed(current: int, max_for_level: int)
 signal leveled_up(new_level: int, new_max_health: int)
 signal gold_changed(total: int)
+# Число зелий здоровья в инвентаре игрока (слот 1). Меняется при
+# подборе HealthPickup и при активации через клавишу "1".
+signal health_potions_changed(count: int)
 
 var current_floor_number: int = 1
 var player_max_health: int = DEFAULT_MAX_HEALTH
@@ -23,6 +26,10 @@ var player_xp: int = 0
 var tower_seed: int = 0
 
 var total_gold: int = 0
+
+# Инвентарь: пока один слот — зелья здоровья. Не сохраняется в save.cfg
+# (потерянные с прошлого забега бутыльки не должны переноситься на новый).
+var health_potions: int = 0
 
 func _ready() -> void:
 	tower_seed = _pick_random_tower_seed()
@@ -49,6 +56,22 @@ func reset_run() -> void:
 	player_level = 1
 	player_xp = 0
 	tower_seed = _pick_random_tower_seed()
+	health_potions = 0
+	health_potions_changed.emit(health_potions)
+
+func add_health_potion() -> void:
+	health_potions += 1
+	health_potions_changed.emit(health_potions)
+
+# Пытается списать одно зелье. Возвращает true, если зелье было в
+# инвентаре и списание прошло. Проверку «здоровье уже полное»
+# делает вызывающая сторона (Player), чтобы не тратить зелье впустую.
+func consume_health_potion() -> bool:
+	if health_potions <= 0:
+		return false
+	health_potions -= 1
+	health_potions_changed.emit(health_potions)
+	return true
 
 func award_xp(amount: int) -> void:
 	if amount <= 0:
