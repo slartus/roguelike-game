@@ -9,35 +9,40 @@ script = ExtResource("1_hud")
 offset_left = 8.0
 offset_top = 6.0
 offset_right = 200.0
-offset_bottom = 24.0
+offset_bottom = 22.0
+theme_override_font_sizes/font_size = 12
 text = "HP: 5 / 5"
 
 [node name="FloorLabel" type="Label" parent="."]
 offset_left = 8.0
-offset_top = 26.0
+offset_top = 22.0
 offset_right = 200.0
-offset_bottom = 44.0
+offset_bottom = 38.0
+theme_override_font_sizes/font_size = 12
 text = "Floor 1"
 
 [node name="LevelLabel" type="Label" parent="."]
 offset_left = 8.0
-offset_top = 46.0
+offset_top = 38.0
 offset_right = 200.0
-offset_bottom = 64.0
+offset_bottom = 54.0
+theme_override_font_sizes/font_size = 12
 text = "LVL 1"
 
 [node name="XpLabel" type="Label" parent="."]
 offset_left = 8.0
-offset_top = 66.0
+offset_top = 54.0
 offset_right = 200.0
-offset_bottom = 84.0
+offset_bottom = 70.0
+theme_override_font_sizes/font_size = 12
 text = "XP: 0 / 20"
 
 [node name="GoldLabel" type="Label" parent="."]
 offset_left = 8.0
-offset_top = 86.0
+offset_top = 70.0
 offset_right = 200.0
-offset_bottom = 104.0
+offset_bottom = 86.0
+theme_override_font_sizes/font_size = 12
 text = "Gold: 0"
 
 [node name="CombatLog" type="VBoxContainer" parent="."]
