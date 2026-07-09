@@ -10,6 +10,24 @@ extends GutTest
 
 const LichScene = preload("res://scenes/enemies/lich.tscn")
 
+# Мок-этаж, притворяющийся Floor'ом в группе "floor". Держит
+# настоящий AStarGrid2D, чтобы lich._pick_valid_spawn_position
+# видел is_point_solid и рабочий is_in_boundsv.
+class FakeFloor:
+	extends Node2D
+	var astar_grid: AStarGrid2D
+	func _init(cols: int, rows: int, solid_everywhere: bool) -> void:
+		astar_grid = AStarGrid2D.new()
+		astar_grid.region = Rect2i(0, 0, cols, rows)
+		astar_grid.cell_size = Vector2(20, 20)
+		astar_grid.update()
+		if solid_everywhere:
+			for x in cols:
+				for y in rows:
+					astar_grid.set_point_solid(Vector2i(x, y), true)
+	func _ready() -> void:
+		add_to_group("floor")
+
 func _spawn_lich():
 	var lich = LichScene.instantiate()
 	add_child_autofree(lich)
@@ -58,6 +76,32 @@ func test_new_summon_after_minion_dies_plus_cooldown() -> void:
 	assert_not_null(lich._summoned_minion)
 	assert_ne(lich._summoned_minion, minion,
 		"после смерти миньона призывается НОВЫЙ, не тот же самый")
+
+func test_summon_skips_when_all_surrounding_cells_are_solid() -> void:
+	# Регресс: лич спавнил скелета в стене. Если все ближайшие
+	# клетки в AStarGrid2D помечены solid — _summon_skeleton должен
+	# вернуть false и НЕ трогать _summoned_minion, чтобы следующий
+	# тик попробовал снова.
+	var fake_floor := FakeFloor.new(200, 200, true)
+	add_child_autofree(fake_floor)
+	var lich = _spawn_lich()
+	lich._summon_cooldown_timer = 0.0
+	lich._update_summon(0.05)
+	assert_null(lich._summoned_minion,
+		"на этаже без свободных клеток скелет НЕ должен спавниться в стену")
+	assert_lt(lich._summon_cooldown_timer, 0.0,
+		"кулдаун остаётся отрицательным — следующий тик снова попробует")
+
+func test_summon_succeeds_when_at_least_one_cell_is_free() -> void:
+	# Инверт-кейс: solid_everywhere=false → все клетки walkable →
+	# спавн должен пройти с первой попытки.
+	var fake_floor := FakeFloor.new(200, 200, false)
+	add_child_autofree(fake_floor)
+	var lich = _spawn_lich()
+	lich._summon_cooldown_timer = 0.0
+	lich._update_summon(0.05)
+	assert_not_null(lich._summoned_minion,
+		"на пустом этаже лич должен призвать скелета")
 
 func test_summoned_skeleton_has_no_rewards() -> void:
 	var lich = _spawn_lich()
