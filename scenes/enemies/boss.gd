@@ -2,6 +2,8 @@ extends CharacterBody2D
 
 signal died_at(position: Vector2)
 
+const SkeletonScene: PackedScene = preload("res://scenes/enemies/skeleton.tscn")
+
 @export var display_name: String = "ENEMY_UNKNOWN"
 @export var max_health: int = 30
 @export var speed: float = 25.0
@@ -14,6 +16,21 @@ signal died_at(position: Vector2)
 @export var xp_reward: int = 40
 @export var gold_reward: int = 20
 
+# Призыв свиты: каждые SUMMON_COOLDOWN секунд топ-ап до SUMMON_COUNT
+# живых скелетов вокруг босса. Кулдаун и каст длиннее чем у обычного
+# лича — босс-битва должна дать игроку окно «босс колдует, добивай
+# минионов пока не появились новые».
+const SUMMON_COOLDOWN: float = 10.0
+const SUMMON_CAST_DURATION: float = 1.2
+const SUMMON_COUNT: int = 5
+const SUMMON_OFFSET_MIN: float = 18.0
+const SUMMON_OFFSET_MAX: float = 40.0
+const SUMMON_TOWARD_PLAYER_ARC: float = TAU * 0.30
+const SPAWN_ATTEMPTS_PER_MINION: int = 10
+const FLOOR_TILE_SIZE: int = 20
+const CAST_PULSE_FREQUENCY: float = PI * 8.0
+const CAST_TINT_COLOR: Color = Color(0.7, 1.6, 0.85, 1.0)
+
 var health: int
 var _target: Node2D
 var _contact_timer: float = 0.0
@@ -22,6 +39,10 @@ var _volley_timer: float = 0.0
 # чтобы визуально паттерн вращался и игрок не мог заучить статичные
 # коридоры между пулями.
 var _volley_index: int = 0
+var _minions: Array = []
+var _summon_cooldown_timer: float = SUMMON_COOLDOWN
+var _summon_cast_timer: float = 0.0
+var _visual_base_modulate: Color = Color.WHITE
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -32,15 +53,30 @@ func _ready() -> void:
 	gold_reward = Balance.scaled_gold_reward(gold_reward, floor_num)
 	health = max_health
 	_volley_timer = volley_interval
+	var visual: Sprite2D = get_node_or_null("Visual") as Sprite2D
+	if visual != null:
+		_visual_base_modulate = visual.modulate
 
 func _physics_process(delta: float) -> void:
 	_contact_timer = max(0.0, _contact_timer - delta)
-	_volley_timer -= delta
 	if _target == null or not is_instance_valid(_target):
 		_target = _find_player()
 	if _target == null:
 		velocity = Vector2.ZERO
 		return
+	# Каст в приоритете: пока идёт, босс не двигается, не бьёт залпом
+	# и не атакует контактом (velocity = 0 → move_and_collide без
+	# перемещения ниже не выполняется). Даёт игроку окно.
+	if _summon_cast_timer > 0.0:
+		_tick_cast(delta)
+		velocity = Vector2.ZERO
+		return
+	_maybe_start_summon(delta)
+	if _summon_cast_timer > 0.0:
+		velocity = Vector2.ZERO
+		return
+
+	_volley_timer -= delta
 
 	var dir := (_target.global_position - global_position).normalized()
 	velocity = dir * speed
@@ -75,6 +111,122 @@ func _compute_volley_angles(index: int) -> Array:
 	for i in volley_count:
 		angles.append(step * float(i) + offset)
 	return angles
+
+# --- Summon свиты -------------------------------------------------
+
+func _maybe_start_summon(delta: float) -> void:
+	_cleanup_minions()
+	if _minions.size() >= SUMMON_COUNT:
+		return
+	_summon_cooldown_timer -= delta
+	if _summon_cooldown_timer > 0.0:
+		return
+	_summon_cast_timer = SUMMON_CAST_DURATION
+
+func _tick_cast(delta: float) -> void:
+	_summon_cast_timer -= delta
+	_apply_cast_visual()
+	if _summon_cast_timer <= 0.0:
+		_finish_cast()
+
+func _finish_cast() -> void:
+	_summon_cast_timer = 0.0
+	_reset_cast_visual()
+	# Топ-ап до SUMMON_COUNT: если жив k, спавним (SUMMON_COUNT − k).
+	# Если ни одного места не нашлось (весь этаж стены), кулдаун
+	# остался ≤ 0 — следующий тик снова запустит каст.
+	var spawned := _summon_batch()
+	if spawned > 0:
+		_summon_cooldown_timer = SUMMON_COOLDOWN
+
+func _summon_batch() -> int:
+	_cleanup_minions()
+	var parent := get_parent()
+	if parent == null:
+		return 0
+	var missing := SUMMON_COUNT - _minions.size()
+	var spawned := 0
+	for i in missing:
+		var pos := _pick_valid_spawn_position()
+		if pos == Vector2.INF:
+			break
+		var skeleton = SkeletonScene.instantiate()
+		skeleton.global_position = pos
+		parent.add_child(skeleton)
+		# Обнуляем награды ПОСЛЕ add_child. В _ready enemy.gd прогоняет
+		# xp/gold через Balance.scaled_*_reward, где maxi(1, …)
+		# превращает 0 в 1 — обнулять до add_child бесполезно.
+		skeleton.xp_reward = 0
+		skeleton.gold_reward = 0
+		skeleton.pickup_scene = null
+		_minions.append(skeleton)
+		spawned += 1
+	return spawned
+
+func _cleanup_minions() -> void:
+	var alive: Array = []
+	for m in _minions:
+		if m != null and is_instance_valid(m):
+			alive.append(m)
+	_minions = alive
+
+func _pick_valid_spawn_position() -> Vector2:
+	# Приоритет: сектор к игроку → миньоны становятся живым щитом
+	# между Necromancer'ом и целью. Fallback: полный круг.
+	var floor_node := get_tree().get_first_node_in_group("floor")
+	if floor_node == null or floor_node.astar_grid == null:
+		return global_position + _random_offset_in_arc(_direction_to_player())
+	var toward_player := _direction_to_player()
+	if toward_player != Vector2.ZERO:
+		for i in SPAWN_ATTEMPTS_PER_MINION:
+			var candidate := global_position + _random_offset_in_arc(toward_player)
+			if _is_walkable(floor_node, candidate):
+				return candidate
+	for i in SPAWN_ATTEMPTS_PER_MINION:
+		var candidate := global_position + _random_offset_in_arc(Vector2.ZERO)
+		if _is_walkable(floor_node, candidate):
+			return candidate
+	return Vector2.INF
+
+func _direction_to_player() -> Vector2:
+	if _target == null or not is_instance_valid(_target):
+		return Vector2.ZERO
+	var diff := _target.global_position - global_position
+	if diff == Vector2.ZERO:
+		return Vector2.ZERO
+	return diff.normalized()
+
+func _random_offset_in_arc(center_dir: Vector2) -> Vector2:
+	var base_angle: float
+	if center_dir == Vector2.ZERO:
+		base_angle = randf() * TAU
+	else:
+		var center_angle := center_dir.angle()
+		base_angle = center_angle + randf_range(-SUMMON_TOWARD_PLAYER_ARC * 0.5, SUMMON_TOWARD_PLAYER_ARC * 0.5)
+	var distance := randf_range(SUMMON_OFFSET_MIN, SUMMON_OFFSET_MAX)
+	return Vector2(cos(base_angle), sin(base_angle)) * distance
+
+func _is_walkable(floor_node: Node, pos: Vector2) -> bool:
+	var cell := Vector2i(int(pos.x / FLOOR_TILE_SIZE), int(pos.y / FLOOR_TILE_SIZE))
+	if not floor_node.astar_grid.is_in_boundsv(cell):
+		return false
+	return not floor_node.astar_grid.is_point_solid(cell)
+
+func _apply_cast_visual() -> void:
+	var visual := get_node_or_null("Visual") as Sprite2D
+	if visual == null:
+		return
+	var progress := 1.0 - clampf(_summon_cast_timer / SUMMON_CAST_DURATION, 0.0, 1.0)
+	var pulse := (sin(progress * CAST_PULSE_FREQUENCY) + 1.0) * 0.5
+	var mix := clampf(0.3 + progress * 0.4 + pulse * 0.3, 0.0, 1.0)
+	visual.modulate = _visual_base_modulate.lerp(CAST_TINT_COLOR, mix)
+
+func _reset_cast_visual() -> void:
+	var visual := get_node_or_null("Visual") as Sprite2D
+	if visual != null:
+		visual.modulate = _visual_base_modulate
+
+# ------------------------------------------------------------------
 
 func _find_player() -> Node2D:
 	var players := get_tree().get_nodes_in_group("player")
