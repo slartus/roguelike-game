@@ -8,9 +8,13 @@ extends "res://scenes/enemies/enemy.gd"
 
 const SkeletonArsenal = preload("res://scenes/enemies/skeleton_arsenal.gd")
 
-const LUNGE_DISTANCE: float = 4.0
-const LUNGE_OUT_DURATION: float = 0.06
-const LUNGE_BACK_DURATION: float = 0.10
+const LUNGE_DISTANCE: float = 10.0
+const LUNGE_OUT_DURATION: float = 0.08
+const LUNGE_BACK_DURATION: float = 0.14
+# Свинг оружия — Weapon-нода поворачивается на угол «замаха».
+# Пивот у Weapon в hilt (см. _apply_weapon_sprite offset), поэтому
+# положительный угол вращает клинок вправо-вниз, читаемо как удар.
+const WEAPON_SWING_ANGLE: float = PI * 0.55
 
 var _visual_base_position: Vector2 = Vector2.ZERO
 var _lunge_tween: Tween
@@ -46,6 +50,12 @@ func _apply_weapon_sprite(sprite_path: String) -> void:
 		weapon.visible = false
 		return
 	weapon.texture = tex
+	# Смещаем sprite вниз на пол-высоты — визуальный центр остаётся
+	# на месте, но Node2D.position теперь совпадает с hilt (верх
+	# клинка). При Node2D.rotation оружие вращается вокруг рукояти,
+	# а не вокруг середины клинка (последнее выглядело бы как «летит»
+	# вокруг ниоткуда).
+	weapon.offset = Vector2(0, tex.get_height() * 0.5)
 	weapon.visible = true
 
 func _play_lunge_animation(target_position: Vector2) -> void:
@@ -61,5 +71,13 @@ func _play_lunge_animation(target_position: Vector2) -> void:
 		return
 	var lunge_offset := _visual_base_position + direction * LUNGE_DISTANCE
 	_lunge_tween = create_tween()
+	# Параллельные треки: тело делает рывок вперёд-назад, оружие в это
+	# же время рубит по дуге. Через .set_parallel(true) следующие
+	# tween_property идут одновременно с предыдущим.
 	_lunge_tween.tween_property(visual, "position", lunge_offset, LUNGE_OUT_DURATION)
+	var weapon: Sprite2D = get_node_or_null("Weapon") as Sprite2D
+	if weapon != null and weapon.visible:
+		_lunge_tween.parallel().tween_property(weapon, "rotation", WEAPON_SWING_ANGLE, LUNGE_OUT_DURATION)
 	_lunge_tween.tween_property(visual, "position", _visual_base_position, LUNGE_BACK_DURATION)
+	if weapon != null and weapon.visible:
+		_lunge_tween.parallel().tween_property(weapon, "rotation", 0.0, LUNGE_BACK_DURATION)
