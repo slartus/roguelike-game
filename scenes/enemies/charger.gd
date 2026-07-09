@@ -73,7 +73,34 @@ func _physics_process(delta: float) -> void:
 				_enter_watch()
 
 func _can_see_target() -> bool:
-	return _target != null and global_position.distance_to(_target.global_position) <= perception_radius
+	if _target == null:
+		return false
+	if global_position.distance_to(_target.global_position) > perception_radius:
+		return false
+	return _has_line_of_sight_to(_target)
+
+func _has_line_of_sight_to(target: Node2D) -> bool:
+	# Raycast от паука к цели: если между ними стена (walls в
+	# floor.gd — единственные StaticBody2D в сцене), паук игрока «не
+	# видит», не переходит в WAITING и не плюётся паутиной сквозь стену.
+	# Если в будущем в сцене появится другой StaticBody2D (например,
+	# разрушаемый ящик), паук перестанет видеть игрока сквозь него —
+	# тогда фильтр надо будет ужесточить (группа/слой стен).
+	if not is_instance_valid(target):
+		return false
+	var world := get_world_2d()
+	if world == null:
+		return true
+	var space_state := world.direct_space_state
+	if space_state == null:
+		return true
+	var query := PhysicsRayQueryParameters2D.create(global_position, target.global_position)
+	query.exclude = [get_rid()]
+	query.collide_with_areas = false
+	var result := space_state.intersect_ray(query)
+	if result.is_empty():
+		return true
+	return not (result.collider is StaticBody2D)
 
 func _enter_watch() -> void:
 	_state = State.WATCH

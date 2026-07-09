@@ -95,6 +95,54 @@ func test_spider_does_not_spit_web_without_target() -> void:
 	assert_eq(_count_webs_under(parent), before,
 		"без цели паук не плюётся")
 
+# ---- Spider: line of sight -------------------------------------------------
+
+func _spawn_wall(pos: Vector2, size: Vector2) -> StaticBody2D:
+	var wall := StaticBody2D.new()
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = size
+	shape.shape = rect
+	wall.add_child(shape)
+	wall.global_position = pos
+	add_child_autofree(wall)
+	return wall
+
+func test_spider_sees_target_without_wall() -> void:
+	var charger = _spawn_charger()
+	charger.global_position = Vector2.ZERO
+	var fake_target := Node2D.new()
+	fake_target.global_position = Vector2(80, 0)
+	add_child_autofree(fake_target)
+	charger._target = fake_target
+	await get_tree().physics_frame
+	assert_true(charger._can_see_target(),
+		"без стены между пауком и игроком LOS свободен")
+
+func test_spider_does_not_see_through_wall() -> void:
+	var charger = _spawn_charger()
+	charger.global_position = Vector2.ZERO
+	var fake_target := Node2D.new()
+	fake_target.global_position = Vector2(80, 0)
+	add_child_autofree(fake_target)
+	charger._target = fake_target
+	_spawn_wall(Vector2(40, 0), Vector2(20, 40))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_false(charger._can_see_target(),
+		"стена между пауком и игроком блокирует LOS — паутина не летит")
+
+func test_spider_target_beyond_perception_not_visible() -> void:
+	var charger = _spawn_charger()
+	charger.global_position = Vector2.ZERO
+	var fake_target := Node2D.new()
+	fake_target.global_position = Vector2(charger.perception_radius + 50.0, 0)
+	add_child_autofree(fake_target)
+	charger._target = fake_target
+	await get_tree().physics_frame
+	assert_false(charger._can_see_target(),
+		"цель дальше perception_radius не видима, даже без стены")
+
 # ---- Spider web: flight and landing ----------------------------------------
 
 func test_web_starts_in_flying_state() -> void:
