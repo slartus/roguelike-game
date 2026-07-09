@@ -28,8 +28,13 @@ var _alive_enemies: int = 0
 var _last_kill_position: Vector2 = Vector2.INF   # позиция смерти последнего убитого врага
 
 func _ready() -> void:
+	# Breadcrumbs для диагностики зависаний: если между двумя строками
+	# в godot.log есть пропуск — hang произошёл ровно в этом шаге.
+	# Работает потому что project.godot: run/flush_stdout_on_print=true.
+	print("[main] _ready begin floor=%d" % GameState.current_floor_number)
 	randomize()
 	_spawn_floor()
+	print("[main] floor spawned, exit=", _floor.exit_position if _floor.get("exit_position") != null else "?")
 	_place_player()
 	_configure_camera_limits()
 	_player.health_changed.connect(_hud.set_health)
@@ -49,7 +54,9 @@ func _ready() -> void:
 	else:
 		EventLog.log_floor(GameState.current_floor_number)
 	_spawn_enemies()
+	print("[main] enemies spawned: %d" % _alive_enemies)
 	_spawn_chests()
+	print("[main] _ready done")
 
 func _spawn_floor() -> void:
 	_floor = FLOOR_SCENE.instantiate()
