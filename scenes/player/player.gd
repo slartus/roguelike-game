@@ -95,6 +95,8 @@ func _try_use_health_potion() -> void:
 
 func _die() -> void:
 	GameState.reset_run()
-	# reload_current_scene из physics callback (Bullet.body_entered или
-	# Enemy.move_and_collide → take_damage → _die) запрещён — оборачиваем.
-	get_tree().call_deferred("reload_current_scene")
+	# После смерти всегда уходим на title screen (стартовый экран).
+	# call_deferred: change_scene_to_file из physics callback
+	# (Bullet.body_entered или Enemy.move_and_collide → take_damage → _die)
+	# запрещён — обёртка через deferred переводит вызов на idle-frame.
+	get_tree().call_deferred("change_scene_to_file", "res://scenes/ui/title_screen.tscn")

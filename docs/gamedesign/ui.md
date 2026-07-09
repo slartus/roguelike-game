@@ -16,6 +16,24 @@
 
 Обновляются через `hud.set_*` методы; `Main._ready` подключает сигналы `Player.health_changed`, `GameState.xp_changed`, `GameState.leveled_up`, `GameState.gold_changed`.
 
+## Title screen (`scenes/ui/title_screen.tscn`)
+
+Точка входа в игру — `project.godot::run/main_scene` = `title_screen.tscn` (не `main.tscn` напрямую). Центрированный `VBoxContainer` с:
+- заголовок «Roguelike» (`font_size = 28`);
+- кнопка «Играть» — `_on_play_pressed` вызывает `GameState.reset_run()` и `change_scene_to_file("res://scenes/main.tscn")`;
+- кнопка «Генерить уровни» — открывает `scenes/dungeon/level_visualizer.tscn`.
+
+Экран также появляется **после смерти игрока**: `player.gd::_die` теперь делает `call_deferred("change_scene_to_file", "res://scenes/ui/title_screen.tscn")` вместо старого `reload_current_scene`. `reset_run` в `_die` уже был раньше — он обнуляет HP/XP/gold/tower_seed/potions.
+
+## Level visualizer (`scenes/dungeon/level_visualizer.tscn`)
+
+Просмотровщик генератора подземелий без игрока и врагов. Инстанцирует `floor.tscn` в `FloorRoot`, `Camera2D` подгоняет `zoom` так, чтобы весь этаж помещался в viewport (с margin ×1.15). В HUD — лейбл текущего `tower_seed` и подсказка «Space — новый seed | ESC — назад».
+
+- `ui_accept` (Enter/Space, встроенное action Godot) — `GameState.tower_seed = randi()` + перегенерирует этаж, показывая новый layout.
+- `ui_cancel` (ESC) — возвращает на title screen.
+
+`GameState.current_floor_number` фиксируется на 1 при каждой перегенерации — визуализатор показывает только «обычные» этажи, boss-layout не превьюит.
+
 ## Пауза (ESC)
 
 Клавиша `ESC` (input action `pause`) в `hud.gd::_unhandled_input` вызывает `_toggle_pause`: переключает `get_tree().paused` и `visible` панели `PausePanel` (полноэкранный `ColorRect` с alpha 0.6 и центрированной `Label` «ПАУЗА», `font_size = 24`).

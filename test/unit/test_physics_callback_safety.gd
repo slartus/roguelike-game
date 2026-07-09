@@ -47,9 +47,12 @@ func _has_synchronous_reload_in_next_floor(src: String) -> bool:
 # --- Player._die ---------------------------------------------------------
 
 func test_player_die_uses_call_deferred() -> void:
+	# После добавления title screen _die переключает сцену на title,
+	# а не перезагружает текущую. Оба варианта смены сцены запрещены
+	# синхронно из physics — обёртка call_deferred обязательна.
 	var src := _read("res://scenes/player/player.gd")
-	assert_string_contains(src, "call_deferred(\"reload_current_scene\")",
-		"Player._die должен использовать call_deferred (вызывается из physics)")
+	assert_string_contains(src, "call_deferred(\"change_scene_to_file\"",
+		"Player._die должен использовать call_deferred для смены сцены (вызывается из physics)")
 
 # --- Chest.monitoring ---------------------------------------------------
 
