@@ -18,6 +18,44 @@ func test_melee_variants_include_all_five_kinds() -> void:
 	assert_true(keys.has("ENEMY_SKELETON_SWORD_WOOD"))
 	assert_true(keys.has("ENEMY_SKELETON_SWORD_IRON"))
 
+func test_melee_variants_have_visible_weapon_sprites() -> void:
+	# Раньше варианты отличались только tint'ом самого скелета и
+	# выглядели одинаково. Теперь у каждого вооружённого варианта
+	# есть отдельный спрайт клинка/рукояти, а безоружный — пустая
+	# строка (Weapon-нода прячется).
+	var by_key: Dictionary = {}
+	for v in Arsenal.MELEE_VARIANTS:
+		by_key[v["display_key"]] = v
+	assert_eq(by_key["ENEMY_SKELETON_UNARMED"]["weapon_sprite"], "",
+		"безоружный не должен иметь weapon_sprite")
+	for key in [
+		"ENEMY_SKELETON_DAGGER_WOOD",
+		"ENEMY_SKELETON_DAGGER_IRON",
+		"ENEMY_SKELETON_SWORD_WOOD",
+		"ENEMY_SKELETON_SWORD_IRON",
+	]:
+		var path: String = by_key[key]["weapon_sprite"]
+		assert_ne(path, "", "%s должен иметь weapon_sprite" % key)
+		assert_true(ResourceLoader.exists(path),
+			"weapon_sprite должен резолвиться: %s" % path)
+		var tex: Texture2D = load(path) as Texture2D
+		assert_not_null(tex,
+			"weapon_sprite должен грузиться как Texture2D: %s" % path)
+
+func test_dagger_and_sword_sprites_are_distinct_per_material() -> void:
+	# Проверяем что все 4 боевых варианта используют РАЗНЫЕ файлы,
+	# иначе fallback на один default превратит фичу в декорацию.
+	var paths: Array = []
+	for v in Arsenal.MELEE_VARIANTS:
+		var p: String = v["weapon_sprite"]
+		if p != "":
+			paths.append(p)
+	var unique: Dictionary = {}
+	for p in paths:
+		unique[p] = true
+	assert_eq(unique.size(), paths.size(),
+		"каждое вооружение должно иметь уникальный sprite_path: " + str(paths))
+
 func test_melee_variants_have_attack_radius_zero_for_touch_weapons() -> void:
 	# Кулаки и кинжалы бьют только впритык — attack_radius = 0.
 	# Меч должен иметь ощутимый reach, иначе фича «у меча дальше»

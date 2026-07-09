@@ -21,5 +21,9 @@ memory = 0.75
 [node name="Visual" type="Sprite2D" parent="."]
 texture = ExtResource("2_tex")
 
+[node name="Weapon" type="Sprite2D" parent="."]
+position = Vector2(5, 3)
+visible = false
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_skeleton")

@@ -14,6 +14,10 @@ extends RefCounted
 #   attack_radius: float — extended melee-reach в пикселях (только для
 #                          MELEE_VARIANTS). 0 = только touch-контакт
 #                          (кулаки, кинжал). >0 = меч с досягаемостью.
+#   weapon_sprite: String — путь к спрайту оружия в руке (только для
+#                          MELEE_VARIANTS). Пустая строка = безоружный
+#                          (Weapon-нода прячется). Спрайты нарисованы
+#                          tools/gen_skeleton_weapon_sprites.py.
 
 const MELEE_VARIANTS: Array = [
 	{
@@ -22,34 +26,39 @@ const MELEE_VARIANTS: Array = [
 		"weight": 0.30,
 		"tint": Color(1.0, 1.0, 1.0),
 		"attack_radius": 0.0,
+		"weapon_sprite": "",
 	},
 	{
 		"display_key": "ENEMY_SKELETON_DAGGER_WOOD",
 		"damage_bonus": 1,
 		"weight": 0.22,
-		"tint": Color(0.85, 0.65, 0.4),
+		"tint": Color(1.0, 1.0, 1.0),
 		"attack_radius": 0.0,
+		"weapon_sprite": "res://assets/sprites/enemies/weapons/dagger_wood.png",
 	},
 	{
 		"display_key": "ENEMY_SKELETON_DAGGER_IRON",
 		"damage_bonus": 2,
 		"weight": 0.18,
-		"tint": Color(0.78, 0.85, 0.95),
+		"tint": Color(1.0, 1.0, 1.0),
 		"attack_radius": 0.0,
+		"weapon_sprite": "res://assets/sprites/enemies/weapons/dagger_iron.png",
 	},
 	{
 		"display_key": "ENEMY_SKELETON_SWORD_WOOD",
 		"damage_bonus": 2,
 		"weight": 0.16,
-		"tint": Color(0.75, 0.55, 0.3),
+		"tint": Color(1.0, 1.0, 1.0),
 		"attack_radius": 22.0,
+		"weapon_sprite": "res://assets/sprites/enemies/weapons/sword_wood.png",
 	},
 	{
 		"display_key": "ENEMY_SKELETON_SWORD_IRON",
 		"damage_bonus": 3,
 		"weight": 0.14,
-		"tint": Color(0.68, 0.78, 0.9),
+		"tint": Color(1.0, 1.0, 1.0),
 		"attack_radius": 26.0,
+		"weapon_sprite": "res://assets/sprites/enemies/weapons/sword_iron.png",
 	},
 ]
 

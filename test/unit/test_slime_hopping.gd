@@ -16,7 +16,9 @@ func _spawn_slime():
 
 func test_starts_in_rest_phase() -> void:
 	var slime = _spawn_slime()
-	await get_tree().process_frame
+	# Не ждём process_frame: _ready уже выполнился в add_child_autofree,
+	# а физический тик мог бы перевести фазу если randf()*REST_DURATION
+	# в _ready дал очень малый _phase_timer.
 	assert_eq(slime._jump_phase, slime.JumpPhase.REST,
 		"слайм должен стартовать в REST — фазе покоя")
 

@@ -28,7 +28,25 @@ func _ready() -> void:
 	if visual != null:
 		visual.modulate = variant["tint"]
 		_visual_base_position = visual.position
+	_apply_weapon_sprite(variant.get("weapon_sprite", ""))
 	attack_played.connect(_play_lunge_animation)
+
+func _apply_weapon_sprite(sprite_path: String) -> void:
+	# Weapon-нода в skeleton.tscn стартует со `visible = false` — она
+	# либо получает нужную текстуру и «включается» (для варианта с
+	# оружием), либо остаётся скрытой (безоружный).
+	var weapon: Sprite2D = get_node_or_null("Weapon") as Sprite2D
+	if weapon == null:
+		return
+	if sprite_path.is_empty():
+		weapon.visible = false
+		return
+	var tex := load(sprite_path) as Texture2D
+	if tex == null:
+		weapon.visible = false
+		return
+	weapon.texture = tex
+	weapon.visible = true
 
 func _play_lunge_animation(target_position: Vector2) -> void:
 	var visual: Sprite2D = get_node_or_null("Visual") as Sprite2D

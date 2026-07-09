@@ -158,13 +158,15 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 **Арсенал (skeleton_arsenal.gd → MELEE_VARIANTS).** При спавне скелет случайно берёт один вариант оружия из таблицы (weighted-random) — он определяет display-key для UI/log, добавку к contact_damage и tint спрайта:
 
-| Вариант | Δ contact_damage | Вес | Tint | attack_radius |
-|---------|-------------------|-----|------|---------------|
-| `ENEMY_SKELETON_UNARMED` | +0 | 0.30 | белый (нейтральный) | 0 (только touch) |
-| `ENEMY_SKELETON_DAGGER_WOOD` | +1 | 0.22 | тёплый охристый | 0 (только touch) |
-| `ENEMY_SKELETON_DAGGER_IRON` | +2 | 0.18 | холодный стальной | 0 (только touch) |
-| `ENEMY_SKELETON_SWORD_WOOD` | +2 | 0.16 | тёмный охристый | 22 px |
-| `ENEMY_SKELETON_SWORD_IRON` | +3 | 0.14 | холодный стальной | 26 px |
+| Вариант | Δ contact_damage | Вес | attack_radius | Спрайт оружия |
+|---------|-------------------|-----|---------------|---------------|
+| `ENEMY_SKELETON_UNARMED` | +0 | 0.30 | 0 (только touch) | — (Weapon-нода скрыта) |
+| `ENEMY_SKELETON_DAGGER_WOOD` | +1 | 0.22 | 0 (только touch) | `dagger_wood.png` (3×6, тёплое дерево) |
+| `ENEMY_SKELETON_DAGGER_IRON` | +2 | 0.18 | 0 (только touch) | `dagger_iron.png` (3×6, стальное лезвие) |
+| `ENEMY_SKELETON_SWORD_WOOD` | +2 | 0.16 | 22 px | `sword_wood.png` (3×10, длинный деревянный клинок) |
+| `ENEMY_SKELETON_SWORD_IRON` | +3 | 0.14 | 26 px | `sword_iron.png` (3×10, стальной клинок) |
+
+**Визуальное отличие вариантов.** До: разница между unarmed / dagger / sword выражалась только subtle `Color`-модуляцией всего скелета — практически неразличимо в тёмном подземелье. Теперь у каждого вооружённого варианта есть отдельный дочерний Sprite2D `Weapon` в `skeleton.tscn` (`position = Vector2(5, 3)`, изначально `visible = false`). В `skeleton.gd::_apply_weapon_sprite` при спавне текстура подставляется из `variant["weapon_sprite"]` и нода включается; для unarmed — остаётся скрытой. Модуляция самого скелета сброшена в `Color(1, 1, 1)` — цвет несёт оружие, а не тело. Спрайты оружия рисуются `tools/gen_skeleton_weapon_sprites.py`.
 
 Δ применяется **до** `Balance.scaled_damage`, поэтому floor-scaling умножается уже на bumped-up значение.
 
