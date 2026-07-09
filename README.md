@@ -41,6 +41,21 @@ addons/          Плагины редактора
 
 Windows / macOS / Linux / Android / iOS. Web не поддерживается.
 
+## Сборка Windows-билда
+
+Из корня проекта:
+
+```bash
+./tools/build_windows.sh
+```
+
+Результат — `dist/Roguelike.exe` (~109 MB, включает Godot runtime) и `dist/Roguelike.pck` (data). Распространяются вместе — при запуске exe ищет .pck рядом.
+
+Требования:
+- Godot 4.7 в `/Applications/Godot.app` (переопределяется через `GODOT_BIN=...`).
+- Установленные Windows export templates для Godot 4.7 (Editor → Manage Export Templates → Download).
+- Секция `[preset.1]` в `export_presets.cfg` с именем `"Windows Desktop"`. Файл в `.gitignore`; при первом клоне добавьте preset через Project → Export → Add → Windows Desktop.
+
 ## План
 
 См. `/Users/artemslinkin/.claude/plans/eventual-purring-dragon.md`.
