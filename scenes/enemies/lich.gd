@@ -4,8 +4,10 @@ extends "res://scenes/enemies/ranged_enemy.gd"
 # скелета-миньона. Правила:
 # - в один момент времени активен максимум один призванный скелет;
 # - если миньон убит — через SUMMON_COOLDOWN секунд призывается новый;
-# - первый призыв случается через SUMMON_COOLDOWN после спавна лича
-#   (даём игроку время реагировать на лича до появления «свиты»).
+# - первый призыв стартует сразу после спавна лича: `_summon_cooldown_timer`
+#   инициализирован нулём, первый же physics-тик запускает каст. Игрок
+#   мгновенно понимает что лич — призыватель (и получает окно каста
+#   `SUMMON_CAST_DURATION` чтобы прервать колдовство).
 #
 # Призванный скелет не даёт XP/золота и не роняет пикапы —
 # это ходячее раздражение, не источник прогресса. Иначе игрок
@@ -37,7 +39,11 @@ const CAST_PULSE_FREQUENCY: float = PI * 8.0
 const CAST_TINT_COLOR: Color = Color(0.7, 1.6, 0.85, 1.0)
 
 var _summoned_minion: Node = null
-var _summon_cooldown_timer: float = SUMMON_COOLDOWN
+# Стартовое значение = 0.0 → на первом же physics-тике `_maybe_start_summon`
+# увидит, что кулдаун истёк, и запустит каст. Скелет появится через
+# SUMMON_CAST_DURATION после спавна лича. Раньше стартовало полным
+# SUMMON_COOLDOWN — игрок 5 s не понимал что лич вообще призыватель.
+var _summon_cooldown_timer: float = 0.0
 var _summon_cast_timer: float = 0.0
 var _visual_base_modulate: Color = Color.WHITE
 

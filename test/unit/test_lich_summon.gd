@@ -1,7 +1,8 @@
 extends GutTest
 
 # Lich призывает одного скелета за раз.
-# - первый призыв — через SUMMON_COOLDOWN после спавна;
+# - первый призыв стартует сразу при спавне: `_summon_cooldown_timer`
+#   инициализирован нулём, следующий physics-тик запускает каст;
 # - пока миньон жив, новый не призывается;
 # - как только миньон невалиден (queue_freed / удалён из дерева),
 #   через SUMMON_COOLDOWN появляется следующий;
@@ -33,12 +34,25 @@ func _spawn_lich():
 	add_child_autofree(lich)
 	return lich
 
-func test_no_immediate_summon_at_spawn() -> void:
+func test_summon_cooldown_starts_at_zero_for_immediate_cast() -> void:
+	# Лич — призыватель, и игроку это должно быть видно сразу. Стартовое
+	# значение _summon_cooldown_timer = 0.0 → первый physics-тик тут же
+	# запустит каст, скелет появится через SUMMON_CAST_DURATION.
 	var lich = _spawn_lich()
 	assert_null(lich._summoned_minion,
-		"сразу после спавна лич ещё не призвал никого")
-	assert_almost_eq(lich._summon_cooldown_timer, lich.SUMMON_COOLDOWN, 0.001,
-		"кулдаун стартует полным")
+		"скелет ещё не заспавнен: между _ready и первым physics-тиком его нет")
+	assert_eq(lich._summon_cooldown_timer, 0.0,
+		"кулдаун стартует нулевым — каст запускается на первом же тике")
+	assert_eq(lich._summon_cast_timer, 0.0,
+		"каст ещё не стартовал — это делает _maybe_start_summon в _physics_process")
+
+func test_first_physics_tick_starts_summon_cast() -> void:
+	# Симулируем один physics-тик: _maybe_start_summon увидит cooldown = 0
+	# и переведёт лича в каст-фазу.
+	var lich = _spawn_lich()
+	lich._maybe_start_summon(0.016)
+	assert_almost_eq(lich._summon_cast_timer, lich.SUMMON_CAST_DURATION, 0.001,
+		"первый же тик запускает каст первого скелета")
 
 func test_summon_after_cooldown_starts_cast_not_immediate_spawn() -> void:
 	# С добавлением каст-фазы _maybe_start_summon только СТАРТУЕТ каст,
