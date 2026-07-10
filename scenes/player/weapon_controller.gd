@@ -13,6 +13,9 @@ extends Node
 # bullet.tscn. WeaponController использует его, когда weapon.projectile_scene
 # не задан.
 @export var default_projectile_scene: PackedScene
+# Сцена ближнего hitbox'а — единственная и используется всеми melee-типами
+# (sword arc и spear thrust отличаются только размером box'а).
+@export var melee_hitbox_scene: PackedScene
 
 var _owner_player: Node2D
 var _cooldown: float = 0.0
@@ -42,8 +45,7 @@ func try_attack(weapon: WeaponResource, target_global_position: Vector2) -> bool
 		"projectile", "spell_projectile":
 			success = _attack_projectile(weapon, direction)
 		"melee_arc", "melee_thrust":
-			# TODO(M3): реализовать через MeleeHitbox.
-			push_warning("melee attack_type='%s' not implemented yet" % weapon.attack_type)
+			success = _attack_melee(weapon, direction)
 		"spell_area":
 			push_warning("spell_area not implemented yet")
 		_:
@@ -86,4 +88,27 @@ func _attack_projectile(weapon: WeaponResource, direction: Vector2) -> bool:
 			# Fallback для тестов, когда current_scene == null: цепляем в
 			# сам Player, чтобы bullet попал в дерево и мог что-то делать.
 			_owner_player.add_child(bullet)
+	return true
+
+func _attack_melee(weapon: WeaponResource, direction: Vector2) -> bool:
+	if melee_hitbox_scene == null:
+		push_warning("WeaponController: melee_hitbox_scene не задан — melee-оружие '%s' не работает" % weapon.id)
+		return false
+	var hitbox := melee_hitbox_scene.instantiate()
+	# configure ДО add_child: он создаёт CollisionShape2D и позиционирует
+	# hitbox. _ready родного узла увидит уже готовое состояние.
+	hitbox.configure(
+		_owner_player,
+		direction,
+		weapon.damage,
+		weapon.hitbox_length,
+		weapon.hitbox_width,
+		weapon.active_time,
+		weapon.knockback,
+	)
+	var scene_root := get_tree().current_scene
+	if scene_root != null:
+		scene_root.add_child(hitbox)
+	else:
+		_owner_player.add_child(hitbox)
 	return true

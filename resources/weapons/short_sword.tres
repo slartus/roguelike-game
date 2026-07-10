@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/weapon_resource.gd" id="1_wr"]
+
+[resource]
+script = ExtResource("1_wr")
+id = "short_sword"
+style = "warrior"
+attack_type = "melee_arc"
+tier = 1
+tags = Array[String](["warrior", "melee", "sword"])
+display_name = "WEAPON_SHORT_SWORD"
+damage = 2
+attack_interval = 0.38
+attack_range = 36.0
+arc_degrees = 80.0
+hitbox_width = 42.0
+hitbox_length = 34.0
+active_time = 0.08
+knockback = 40.0

@@ -1,9 +1,10 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scenes/player/player.gd" id="1_player"]
 [ext_resource type="PackedScene" path="res://scenes/bullets/bullet.tscn" id="2_bullet"]
 [ext_resource type="Texture2D" path="res://assets/sprites/player/player.png" id="3_tex"]
 [ext_resource type="Script" path="res://scenes/player/weapon_controller.gd" id="4_wc"]
+[ext_resource type="PackedScene" path="res://scenes/player/melee_hitbox.tscn" id="5_hb"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 6.0
@@ -25,3 +26,4 @@ position_smoothing_speed = 5.0
 [node name="WeaponController" type="Node" parent="."]
 script = ExtResource("4_wc")
 default_projectile_scene = ExtResource("2_bullet")
+melee_hitbox_scene = ExtResource("5_hb")

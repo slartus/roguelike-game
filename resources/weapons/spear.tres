@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/weapon_resource.gd" id="1_wr"]
+
+[resource]
+script = ExtResource("1_wr")
+id = "spear"
+style = "warrior"
+attack_type = "melee_thrust"
+tier = 1
+tags = Array[String](["warrior", "melee", "spear", "reach"])
+display_name = "WEAPON_SPEAR"
+damage = 2
+attack_interval = 0.48
+attack_range = 56.0
+hitbox_width = 18.0
+hitbox_length = 58.0
+active_time = 0.09
+knockback = 30.0

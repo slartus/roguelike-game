@@ -62,7 +62,35 @@ Data-driven через кастомный `Resource` — `WeaponResource` (class
 
 `fire_interval`, `bullet_speed`, `bullet_lifetime`, `bullet_color`, `bullets_per_shot` — оставлены, чтобы старые `.tres` продолжали работать. Новые ресурсы задают эти же значения через `attack_interval` / `projectile_*`. Helper'ы `get_attack_interval()`, `get_projectile_speed()`, `get_projectile_lifetime()`, `get_projectiles_per_attack()`, `get_projectile_color()` возвращают новое поле, если задано, иначе fallback на legacy. WeaponController v2 (следующий milestone) читает всё через них — так и legacy, и новые оружия проходят один путь.
 
-## Конкретные оружия
+## Warrior — melee_arc / melee_thrust
+
+Ближний бой реализован через `MeleeHitbox` (`scenes/player/melee_hitbox.tscn`) — `Area2D` с прямоугольным `RectangleShape2D`, живёт `active_time` секунд, бьёт каждого врага один раз за swing.
+
+**Как работает:**
+- WeaponController при `attack_type ∈ {melee_arc, melee_thrust}` инстансирует `melee_hitbox_scene`;
+- вызывает `hitbox.configure(source, direction, damage, length, width, active_time, knockback)` **до** `add_child` — конструирует `CollisionShape2D` с `RectangleShape2D(size = length × width)` и позиционирует hitbox в `source.global_position + direction × length/2` с `rotation = direction.angle()`;
+- на первом `_physics_process` сканирует `get_overlapping_bodies()` (враги, стоявшие внутри hitbox'а на момент spawn'а, не выдадут `body_entered`);
+- в течение `active_time` слушает `body_entered` для новых overlap'ов;
+- каждого enemy бьёт максимум один раз (`_hit_targets: Dictionary` как set);
+- по истечении `active_time` — `queue_free`.
+
+**Sword и Spear** — один hitbox scene, разные размеры из `WeaponResource`:
+- Short Sword: `hitbox_length=34`, `hitbox_width=42` — короткий широкий (arc, замах).
+- Spear: `hitbox_length=58`, `hitbox_width=18` — длинный узкий (thrust, укол с дистанции).
+
+Идеальная дуга и визуальная анимация замаха — за пределами M3. Прямоугольный hitbox читается достаточно, чтобы отличить sword от spear.
+
+### Short Sword (`short_sword.tres`)
+
+`style = warrior`, `attack_type = melee_arc`, `damage = 2`, `attack_interval = 0.38`, `attack_range = 36`, `knockback = 40`.
+i18n: `WEAPON_SHORT_SWORD`.
+
+### Spear (`spear.tres`)
+
+`style = warrior`, `attack_type = melee_thrust`, `damage = 2`, `attack_interval = 0.48`, `attack_range = 56`, `knockback = 30`.
+i18n: `WEAPON_SPEAR`.
+
+## Legacy оружия (Dagger/Pistol/Shotgun)
 
 Все `.tres` лежат в `resources/weapons/`. Пул сундука в `chest.gd::WEAPON_POOL`.
 
