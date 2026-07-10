@@ -1,7 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scenes/ui/hud.gd" id="1_hud"]
 [ext_resource type="Texture2D" path="res://assets/sprites/ui/potion_icon.png" id="2_potion"]
+[ext_resource type="Script" path="res://scenes/ui/coin_icon.gd" id="3_coin"]
+[ext_resource type="Script" path="res://scenes/ui/tower_icon.gd" id="4_tower"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slot"]
 bg_color = Color(0, 0, 0, 0)
@@ -14,38 +16,6 @@ border_color = Color(0.55, 0.55, 0.6, 1)
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
 process_mode = 3
-
-[node name="FloorLabel" type="Label" parent="."]
-offset_left = 8.0
-offset_top = 22.0
-offset_right = 200.0
-offset_bottom = 38.0
-theme_override_font_sizes/font_size = 12
-text = "Floor 1"
-
-[node name="LevelLabel" type="Label" parent="."]
-offset_left = 8.0
-offset_top = 38.0
-offset_right = 200.0
-offset_bottom = 54.0
-theme_override_font_sizes/font_size = 12
-text = "LVL 1"
-
-[node name="XpLabel" type="Label" parent="."]
-offset_left = 8.0
-offset_top = 54.0
-offset_right = 200.0
-offset_bottom = 70.0
-theme_override_font_sizes/font_size = 12
-text = "XP: 0 / 20"
-
-[node name="GoldLabel" type="Label" parent="."]
-offset_left = 8.0
-offset_top = 70.0
-offset_right = 200.0
-offset_bottom = 86.0
-theme_override_font_sizes/font_size = 12
-text = "Gold: 0"
 
 [node name="InventoryPanel" type="Control" parent="."]
 anchors_preset = 2
@@ -110,6 +80,66 @@ offset_right = 59.0
 offset_bottom = 13.0
 color = Color(0.85, 0.2, 0.2, 1)
 
+[node name="LevelLabel" type="Label" parent="HealthBar"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_constants/shadow_outline_size = 2
+theme_override_font_sizes/font_size = 10
+text = "LVL 1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BottomRightStats" type="VBoxContainer" parent="."]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -104.0
+offset_top = -44.0
+offset_right = -4.0
+offset_bottom = -4.0
+grow_horizontal = 0
+grow_vertical = 0
+alignment = 2
+theme_override_constants/separation = 2
+
+[node name="GoldRow" type="HBoxContainer" parent="BottomRightStats"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 4
+
+[node name="CoinIcon" type="Control" parent="BottomRightStats/GoldRow"]
+layout_mode = 2
+script = ExtResource("3_coin")
+
+[node name="GoldLabel" type="Label" parent="BottomRightStats/GoldRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "0"
+vertical_alignment = 1
+
+[node name="FloorRow" type="HBoxContainer" parent="BottomRightStats"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 4
+
+[node name="TowerIcon" type="Control" parent="BottomRightStats/FloorRow"]
+layout_mode = 2
+script = ExtResource("4_tower")
+
+[node name="FloorLabel" type="Label" parent="BottomRightStats/FloorRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "1"
+vertical_alignment = 1
+
 [node name="PausePanel" type="ColorRect" parent="."]
 visible = false
 anchors_preset = 15
@@ -124,9 +154,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -120.0
-offset_top = -80.0
+offset_top = -90.0
 offset_right = 120.0
-offset_bottom = 80.0
+offset_bottom = 90.0
 grow_horizontal = 2
 grow_vertical = 2
 alignment = 1
@@ -151,6 +181,12 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Уровень: 1"
+horizontal_alignment = 1
+
+[node name="PauseStatsXp" type="Label" parent="PausePanel/PauseBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "XP: 0 / 20"
 horizontal_alignment = 1
 
 [node name="PauseStatsKills" type="Label" parent="PausePanel/PauseBox"]
@@ -178,9 +214,9 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -210.0
-offset_top = -140.0
+offset_top = -180.0
 offset_right = -4.0
-offset_bottom = -4.0
+offset_bottom = -50.0
 grow_horizontal = 0
 grow_vertical = 0
 alignment = 2
