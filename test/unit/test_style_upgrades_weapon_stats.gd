@@ -125,6 +125,36 @@ func test_pushback_adds_to_knockback() -> void:
 	var sword_stats: WeaponStats = WeaponStats.compute(ShortSword, _mods())
 	assert_almost_eq(sword_stats.knockback, ShortSword.knockback + 20.0, 0.001)
 
+func test_sweeping_blade_widens_arc_degrees_on_arc_weapon() -> void:
+	# После перехода к sector-hitbox'у warrior_arc_multiplier умножает угол
+	# сектора, а не ширину прямоугольника. Sweeping Blade (× 1.15) на arc-
+	# оружии должен расширять `arc_degrees`.
+	GameState.add_player_upgrade(SweepingBlade)
+	var sword_stats: WeaponStats = WeaponStats.compute(ShortSword, _mods())
+	assert_almost_eq(
+		sword_stats.arc_degrees,
+		ShortSword.arc_degrees * 1.15,
+		0.01,
+	)
+
+func test_sweeping_blade_does_not_affect_thrust_arc() -> void:
+	# Регресс: копьё — melee_thrust, у него нет сектора; arc_multiplier
+	# не должен трогать его arc_degrees (WeaponResource всё равно хранит
+	# поле как заготовку — copy без mutation).
+	var Spear = preload("res://resources/weapons/spear.tres")
+	GameState.add_player_upgrade(SweepingBlade)
+	var spear_stats: WeaponStats = WeaponStats.compute(Spear, _mods())
+	assert_almost_eq(spear_stats.arc_degrees, Spear.arc_degrees, 0.01,
+		"thrust не имеет сектора → arc_multiplier не применяется")
+
+func test_arc_degrees_is_capped() -> void:
+	# 5 стеков × 1.15 = 1.15^5 ≈ 2.011 → 80 × 2.011 ≈ 161°. Всё ещё < cap.
+	# Проверяем что даже при экстремальных значениях не переходим 179°.
+	GameState.player_upgrade_stacks = {"sweeping_blade": 20}
+	var sword_stats: WeaponStats = WeaponStats.compute(ShortSword, _mods())
+	assert_lte(sword_stats.arc_degrees, WeaponStats.MAX_ARC_DEGREES,
+		"arc_degrees не должен превышать MAX_ARC_DEGREES (иначе сектор замкнётся)")
+
 func test_arcane_reach_extends_mage_projectile_lifetime() -> void:
 	GameState.add_player_upgrade(ArcaneReach)
 	var wand_stats: WeaponStats = WeaponStats.compute(Wand, _mods())

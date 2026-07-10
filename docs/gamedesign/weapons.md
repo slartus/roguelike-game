@@ -64,21 +64,39 @@ Data-driven через кастомный `Resource` — `WeaponResource` (class
 
 ## Warrior — melee_arc / melee_thrust
 
-Ближний бой реализован через `MeleeHitbox` (`scenes/player/melee_hitbox.tscn`) — `Area2D` с прямоугольным `RectangleShape2D`, живёт `active_time` секунд, бьёт каждого врага один раз за swing.
+Ближний бой реализован через `MeleeHitbox` (`scenes/player/melee_hitbox.tscn`) — `Area2D`, форма которого зависит от `attack_type`:
 
-**Как работает:**
-- WeaponController при `attack_type ∈ {melee_arc, melee_thrust}` инстансирует `melee_hitbox_scene`;
-- вызывает `hitbox.configure(source, direction, damage, length, width, active_time, knockback)` **до** `add_child` — конструирует `CollisionShape2D` с `RectangleShape2D(size = length × width)` и позиционирует hitbox в `source.global_position + direction × length/2` с `rotation = direction.angle()`;
-- на первом `_physics_process` сканирует `get_overlapping_bodies()` (враги, стоявшие внутри hitbox'а на момент spawn'а, не выдадут `body_entered`);
-- в течение `active_time` слушает `body_entered` для новых overlap'ов;
-- каждого enemy бьёт максимум один раз (`_hit_targets: Dictionary` как set);
-- по истечении `active_time` — `queue_free`.
+- **`melee_arc`** — круговой сектор с углом `arc_degrees`, радиусом `hitbox_length`. Технически это `CircleShape2D(radius = hitbox_length)`, стоящий в позиции игрока, плюс angular-filter в `_try_hit`: тело попадает под удар только если его локальный угол (в системе координат, повёрнутой на `direction.angle()`) находится в `±arc_degrees/2`. `hitbox_width` игнорируется — форма секторная.
+- **`melee_thrust`** — прямоугольник `RectangleShape2D(size = hitbox_length × hitbox_width)`, сдвинутый на `hitbox_length/2` вперёд от игрока. Никакого angular-фильтра, вся ловушка в самой форме.
 
-**Sword и Spear** — один hitbox scene, разные размеры из `WeaponResource`:
-- Short Sword: `hitbox_length=34`, `hitbox_width=42` — короткий широкий (arc, замах).
-- Spear: `hitbox_length=58`, `hitbox_width=18` — длинный узкий (thrust, укол с дистанции).
+**Общее поведение:**
+- WeaponController при `attack_type ∈ {melee_arc, melee_thrust}` инстансирует `melee_hitbox_scene` и вызывает `hitbox.configure(source, direction, damage, length, width, active_time, knockback, attack_type, arc_degrees)` **до** `add_child` — конструирует `CollisionShape2D` под нужную форму и позиционирует / поворачивает Area2D.
+- На первом `_physics_process` сканирует `get_overlapping_bodies()` (враги, стоявшие внутри hitbox'а на момент spawn'а, не выдадут `body_entered`).
+- В течение `active_time` слушает `body_entered` для новых overlap'ов.
+- Каждого enemy бьёт максимум один раз за swing (`_hit_targets` как set).
+- После `active_time` — `monitoring = false`, hitbox больше не наносит урон, но остаётся в дереве и продолжает рендериться.
+- По истечении `_visual_life = max(active_time, MIN_VISUAL_LIFE = 0.16)` — `queue_free`.
 
-Идеальная дуга и визуальная анимация замаха — за пределами M3. Прямоугольный hitbox читается достаточно, чтобы отличить sword от spear.
+**Sword и Spear** — один hitbox scene, разные формы и размеры из `WeaponResource`:
+- Short Sword: `attack_type=melee_arc`, `arc_degrees=80`, `hitbox_length=34` (радиус). Широкий замах перед игроком.
+- Spear: `attack_type=melee_thrust`, `hitbox_length=58`, `hitbox_width=18`. Длинный узкий укол с дистанции.
+
+### Анимация hitbox'а (процедурный `_draw`)
+
+Каждый MeleeHitbox сам рисует «след» удара — не сплошную заливку области урона (она перекрывала бы врага), а лёгкие световые штрихи, читаемые как ветер от клинка:
+
+- **`melee_arc`** — два дугообразных «ветерка» вокруг направления атаки: внутренний на радиусе `hitbox_length × ARC_INNER_RADIUS_RATIO` (~0.55) и внешний на `× ARC_OUTER_RADIUS_RATIO` (~0.92). Каждый ветерок покрывает `arc_degrees × ARC_STREAK_COVERAGE` (~85% сектора) — на концах остаются короткие «хвосты», а не резкий обрыв. Внешний штрих светлее и длиннее, читается как кромка замаха; внутренний глухой, поддерживает силу удара.
+- **`melee_thrust`** — два горизонтальных штриха выше и ниже древка копья (`± hitbox_width × THRUST_STREAK_OFFSET_RATIO`, длина `× THRUST_STREAK_LENGTH_RATIO`), плюс треугольный «наконечник» у переднего края. Читается как свист копья при уколе.
+
+Альфа-канал даёт burst-фазу: fade-in первые 15% `_visual_life`, hold 35%, fade-out оставшееся. Хитбокс перестаёт наносить урон после `active_time` (`monitoring = false`), но продолжает рендериться до `_visual_life = max(active_time, MIN_VISUAL_LIFE = 0.16)` — так игрок видит короткое затухание уже после того, как удар прошёл.
+
+![Взмах меча — две дугообразные волны следа клинка](media/melee_arc_swing.gif)
+
+![Укол копья — две линии свиста + наконечник](media/melee_thrust_swing.gif)
+
+### Style upgrade: warrior_arc_multiplier
+
+Sweeping Blade (`melee_arc_multiplier`, × 1.15 за стек) умножает `arc_degrees` — то есть **расширяет сектор удара**. `hitbox_width` не трогается (для arc-типа он не используется). Для `melee_thrust` этот модификатор игнорируется — у копья нет сектора. Общий cap — `MAX_ARC_DEGREES = 179°`: полный круг «съел бы» направление атаки, что визуально и геймплейно неоднозначно.
 
 ### Short Sword (`short_sword.tres`)
 

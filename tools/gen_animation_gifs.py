@@ -339,6 +339,144 @@ def render_web_flying(t: float, draw: ImageDraw.ImageDraw, canvas_size: int) -> 
     draw.ellipse((hx - r_hl, hy - r_hl, hx + r_hl, hy + r_hl), fill=highlight)
 
 
+# ---- melee arc swing (short sword) -----------------------------------------
+
+# Повторяет _draw формулу scenes/player/melee_hitbox.gd для attack_type=melee_arc.
+# Значения — из resources/weapons/short_sword.tres: hitbox_length=34, arc=80°,
+# active_time=0.08. MIN_VISUAL_LIFE=0.16 в скрипте — visual тянется дольше
+# active-фазы, поэтому и в gif duration=0.16.
+MELEE_MIN_VISUAL_LIFE = 0.16
+MELEE_FADE_IN_RATIO = 0.15
+MELEE_HOLD_RATIO = 0.35
+MELEE_ARC_SEGMENTS = 14
+MELEE_ARC_INNER_RADIUS_RATIO = 0.55
+MELEE_ARC_OUTER_RADIUS_RATIO = 0.92
+MELEE_ARC_STREAK_COVERAGE = 0.85
+MELEE_ARC_LINE_WIDTH_PX = 2
+MELEE_SWING_COLOR = (int(1.0 * 255), int(0.95 * 255), int(0.7 * 255), int(0.7 * 255))
+MELEE_SWING_EDGE_COLOR = (int(1.0 * 255), int(0.98 * 255), int(0.85 * 255), int(0.9 * 255))
+MELEE_THRUST_TIP_COLOR = (int(1.0 * 255), int(0.9 * 255), int(0.6 * 255), int(0.9 * 255))
+MELEE_THRUST_STREAK_LENGTH_RATIO = 0.7
+MELEE_THRUST_STREAK_OFFSET_RATIO = 0.35
+PLAYER_MARKER_COLOR = (180, 180, 190, 255)
+PLAYER_MARKER_RADIUS_PX = 2.0
+
+ARC_SHORT_SWORD_LENGTH = 34.0
+ARC_SHORT_SWORD_DEGREES = 80.0
+THRUST_SPEAR_LENGTH = 58.0
+THRUST_SPEAR_WIDTH = 18.0
+
+
+def _melee_visual_alpha(t: float, total: float) -> float:
+    if total <= 0.0:
+        return 0.0
+    n = min(1.0, max(0.0, t / total))
+    if n < MELEE_FADE_IN_RATIO:
+        return n / MELEE_FADE_IN_RATIO
+    end_hold = MELEE_FADE_IN_RATIO + MELEE_HOLD_RATIO
+    if n < end_hold:
+        return 1.0
+    return max(0.0, 1.0 - (n - end_hold) / (1.0 - end_hold))
+
+
+def _apply_alpha(color: tuple, mult: float) -> tuple:
+    r, g, b, a = color
+    return (r, g, b, int(a * max(0.0, min(1.0, mult))))
+
+
+def _draw_arc_streak_gif(
+    draw: ImageDraw.ImageDraw,
+    origin_px: tuple[int, int],
+    radius_game: float,
+    coverage_half: float,
+    color: tuple,
+) -> None:
+    # Полилиния по дуге радиуса `radius_game` (в игровых px). Origin — точка
+    # игрока в pixel-space gif'а. +X = направление атаки.
+    points = []
+    for i in range(MELEE_ARC_SEGMENTS + 1):
+        a = -coverage_half + (2.0 * coverage_half) * (i / MELEE_ARC_SEGMENTS)
+        gx = origin_px[0] + int(math.cos(a) * radius_game * SCALE)
+        gy = origin_px[1] + int(math.sin(a) * radius_game * SCALE)
+        points.append((gx, gy))
+    for a, b in zip(points, points[1:]):
+        draw.line((a[0], a[1], b[0], b[1]), fill=color, width=MELEE_ARC_LINE_WIDTH_PX)
+
+
+def render_melee_arc_swing(t: float, draw: ImageDraw.ImageDraw, canvas_size: int) -> None:
+    cx = canvas_size // 2
+    alpha = _melee_visual_alpha(t, MELEE_MIN_VISUAL_LIFE)
+    # Маркер игрока — небольшой серый круг в центре. Показывает, откуда
+    # «расходятся» дуги ветра.
+    r_marker = PLAYER_MARKER_RADIUS_PX * SCALE
+    draw.ellipse(
+        (cx - r_marker, cx - r_marker, cx + r_marker, cx + r_marker),
+        fill=PLAYER_MARKER_COLOR,
+    )
+    if alpha <= 0.0:
+        return
+    half_arc = math.radians(ARC_SHORT_SWORD_DEGREES) * 0.5
+    length = ARC_SHORT_SWORD_LENGTH
+    coverage_half = half_arc * MELEE_ARC_STREAK_COVERAGE
+    # Два ветерка — внутренний (короче/ближе, меньшая alpha) и внешний
+    # (длиннее/дальше, ярче). Читаются как след клинка.
+    inner_alpha = alpha * 0.85
+    inner_color = _apply_alpha(MELEE_SWING_COLOR, inner_alpha)
+    outer_color = _apply_alpha(MELEE_SWING_EDGE_COLOR, alpha)
+    _draw_arc_streak_gif(
+        draw, (cx, cx), length * MELEE_ARC_INNER_RADIUS_RATIO, coverage_half, inner_color
+    )
+    _draw_arc_streak_gif(
+        draw, (cx, cx), length * MELEE_ARC_OUTER_RADIUS_RATIO, coverage_half, outer_color
+    )
+
+
+def render_melee_thrust_swing(t: float, draw: ImageDraw.ImageDraw, canvas_size: int) -> None:
+    cx = canvas_size // 2
+    alpha = _melee_visual_alpha(t, MELEE_MIN_VISUAL_LIFE)
+    # Игрок смещён на length/2 влево — так штрихи копья визуально центрированы.
+    length = THRUST_SPEAR_LENGTH
+    width = THRUST_SPEAR_WIDTH
+    origin_gif = (cx - int(length * 0.5 * SCALE), cx)
+    r_marker = PLAYER_MARKER_RADIUS_PX * SCALE
+    draw.ellipse(
+        (
+            origin_gif[0] - r_marker,
+            origin_gif[1] - r_marker,
+            origin_gif[0] + r_marker,
+            origin_gif[1] + r_marker,
+        ),
+        fill=PLAYER_MARKER_COLOR,
+    )
+    if alpha <= 0.0:
+        return
+    # Два «ветерка» вдоль направления удара — сверху и снизу от древка.
+    # Локально они центрированы на позиции hitbox-Area2D (в игре это
+    # source + direction * length/2), т.е. на length/2 вперёд от игрока.
+    streak_len = length * MELEE_THRUST_STREAK_LENGTH_RATIO
+    streak_offset = width * MELEE_THRUST_STREAK_OFFSET_RATIO
+    # Центр штриха в pixel-space: origin_gif[0] + length/2 * SCALE.
+    hitbox_center_x = origin_gif[0] + int(length * 0.5 * SCALE)
+    left_x = hitbox_center_x - int(streak_len * 0.5 * SCALE)
+    right_x = hitbox_center_x + int(streak_len * 0.5 * SCALE)
+    top_y = origin_gif[1] - int(streak_offset * SCALE)
+    bot_y = origin_gif[1] + int(streak_offset * SCALE)
+    streak_color = _apply_alpha(MELEE_SWING_EDGE_COLOR, alpha)
+    draw.line((left_x, top_y, right_x, top_y), fill=streak_color, width=MELEE_ARC_LINE_WIDTH_PX)
+    draw.line((left_x, bot_y, right_x, bot_y), fill=streak_color, width=MELEE_ARC_LINE_WIDTH_PX)
+    # Наконечник у переднего края — треугольник, ярче.
+    front_x = origin_gif[0] + int(length * SCALE)
+    tip_color = _apply_alpha(MELEE_THRUST_TIP_COLOR, alpha)
+    tip_len_game = min(6.0, length * 0.2)
+    tip_wid_game = width * 0.5 + 3.0
+    tip_pts = [
+        (front_x, origin_gif[1]),
+        (front_x - int(tip_len_game * SCALE), origin_gif[1] - int(tip_wid_game * SCALE)),
+        (front_x - int(tip_len_game * SCALE), origin_gif[1] + int(tip_wid_game * SCALE)),
+    ]
+    draw.polygon(tip_pts, fill=tip_color)
+
+
 # ---- driver ----------------------------------------------------------------
 
 ANIMATIONS: list[Animation] = [
@@ -347,6 +485,8 @@ ANIMATIONS: list[Animation] = [
     Animation("spider_web_flying", 1.5, 40, render_web_flying),
     Animation("cast_pulse", 0.8, 20, render_cast_pulse),
     Animation("slime_hop", 1.8, 24, render_slime_hop),
+    Animation("melee_arc_swing", MELEE_MIN_VISUAL_LIFE, 80, render_melee_arc_swing),
+    Animation("melee_thrust_swing", MELEE_MIN_VISUAL_LIFE, 130, render_melee_thrust_swing),
 ]
 
 

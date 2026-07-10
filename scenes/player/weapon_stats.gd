@@ -13,6 +13,9 @@ extends RefCounted
 const MIN_ATTACK_INTERVAL := 0.05
 const MAX_ARCHER_PIERCE_BONUS := 2
 
+const MAX_ARC_DEGREES := 179.0
+
+var attack_type: String = ""
 var damage: int = 1
 var attack_interval: float = 0.25
 var projectile_speed: float = 220.0
@@ -23,6 +26,7 @@ var spread_angle_deg: float = 0.0
 var pierce: int = 0
 var hitbox_width: float = 34.0
 var hitbox_length: float = 36.0
+var arc_degrees: float = 80.0
 var active_time: float = 0.08
 var knockback: float = 0.0
 
@@ -33,6 +37,7 @@ static func compute(weapon: WeaponResource, mods: Dictionary) -> WeaponStats:
 	if weapon == null:
 		return s
 	# Скопировали base из weapon через helper'ы (учитывают legacy fallback).
+	s.attack_type = weapon.attack_type
 	s.damage = weapon.damage
 	s.attack_interval = weapon.get_attack_interval()
 	s.projectile_speed = weapon.get_projectile_speed()
@@ -43,6 +48,7 @@ static func compute(weapon: WeaponResource, mods: Dictionary) -> WeaponStats:
 	s.pierce = weapon.pierce
 	s.hitbox_width = weapon.hitbox_width
 	s.hitbox_length = weapon.hitbox_length
+	s.arc_degrees = weapon.arc_degrees
 	s.active_time = weapon.active_time
 	s.knockback = weapon.knockback
 
@@ -53,9 +59,11 @@ static func compute(weapon: WeaponResource, mods: Dictionary) -> WeaponStats:
 		"warrior":
 			s.damage += int(mods.get("warrior_damage_bonus", 0))
 			s.hitbox_length *= float(mods.get("warrior_range_multiplier", 1.0))
-			# arc_multiplier: расширяет hitbox_width только для arc-типа.
+			# arc_multiplier расширяет угол сектора только для arc-типа —
+			# семантически это «шире замах», hitbox_width у arc-оружия больше
+			# не используется (форма — сектор круга, а не прямоугольник).
 			if weapon.attack_type == "melee_arc":
-				s.hitbox_width *= float(mods.get("warrior_arc_multiplier", 1.0))
+				s.arc_degrees *= float(mods.get("warrior_arc_multiplier", 1.0))
 			s.knockback += float(mods.get("warrior_knockback_bonus", 0.0))
 		"archer":
 			s.damage += int(mods.get("archer_damage_bonus", 0))
@@ -76,4 +84,7 @@ static func compute(weapon: WeaponResource, mods: Dictionary) -> WeaponStats:
 	s.attack_interval = maxf(MIN_ATTACK_INTERVAL, s.attack_interval)
 	# Отрицательный spread невозможен.
 	s.spread_angle_deg = maxf(0.0, s.spread_angle_deg)
+	# Сектор дуги ограничиваем строго ниже 360°, иначе арка «замкнётся» в
+	# полный круг и потеряет читаемое направление атаки.
+	s.arc_degrees = clampf(s.arc_degrees, 0.0, MAX_ARC_DEGREES)
 	return s

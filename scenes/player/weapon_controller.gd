@@ -122,6 +122,8 @@ func _attack_melee(weapon: WeaponResource, direction: Vector2) -> bool:
 		stats.hitbox_width,
 		stats.active_time,
 		stats.knockback,
+		stats.attack_type,
+		stats.arc_degrees,
 	)
 	var scene_root := get_tree().current_scene
 	if scene_root != null:
