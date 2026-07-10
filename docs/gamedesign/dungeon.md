@@ -182,6 +182,24 @@ Zone → archetype диспетчер в `DungeonGenerator.generate`:
 
 Легаси `_generate_tower_floor` (BSP+MST+extra edges) остаётся неизменным — его алгоритм ниже. В M6 он **не удалён и не переписан**, только явно закреплён за нижними зонами.
 
+## World abstraction (заготовка)
+
+`scenes/dungeon/world_zones.gd::WorldZones` — минимальный abstraction слой под будущие миры (гора, дерево и т.п.). Публичный API:
+
+```gdscript
+const WORLD_TOWER := "tower"
+static func get_zone_for_world(world_id: String, floor_number: int) -> String
+```
+
+Пока реализован только `WORLD_TOWER` — возвращает `TowerZone.get_tower_zone(floor_number)`. Unknown world молча fallback'ит на tower (не крешит генератор, но и не пытается угадать зоны неизвестного мира).
+
+**Планируемое / не реализовано:**
+
+- `mountain`: summit → monastery → mines → deep caves.
+- `tree`: canopy → branches → trunk → roots → mycelium.
+
+Реальные генераторы для этих миров, их зон, ролей и декора — отдельные фичи. Сейчас в проекте есть только tower, и `GameState`/`DungeonGenerator` опираются на `TowerZone` напрямую. Переключение на `WorldZones` — будущая задача, когда появится второй мир.
+
 ## Генератор — `DungeonGenerator` (BSP + MST + extra edges)
 
 `scenes/dungeon/dungeon_generator.gd` (`class_name DungeonGenerator`). Метод `generate(seed, floor_number, is_boss) → DungeonLayout`.
