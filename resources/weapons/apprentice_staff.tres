@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/weapon_resource.gd" id="1_wr"]
+
+[resource]
+script = ExtResource("1_wr")
+id = "apprentice_staff"
+style = "mage"
+attack_type = "spell_projectile"
+tier = 1
+tags = Array[String](["mage", "spell", "staff", "magic_projectile"])
+display_name = "WEAPON_APPRENTICE_STAFF"
+damage = 3
+attack_interval = 0.62
+projectile_speed = 210.0
+projectile_lifetime = 1.2
+projectile_color = Color(0.5, 0.7, 1.0, 1.0)
+projectiles_per_attack = 1
+spread_angle_deg = 0.0
+pierce = 0
+mana_cost = 0

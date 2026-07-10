@@ -112,6 +112,22 @@ i18n: `WEAPON_SHORT_BOW`.
 `style = archer`, `attack_type = projectile`, `damage = 3`, `attack_interval = 0.75`, `projectile_speed = 300`, `projectile_lifetime = 1.4`, `spread_angle_deg = 0`, `pierce = 1`. Медленнее, но сильнее и пробивает одного врага насквозь.
 i18n: `WEAPON_CROSSBOW`.
 
+## Mage — spell_projectile
+
+Магические оружия v1 — без маны и без сложных заклинаний. Отличаются от archer только identity (`style = mage`, `attack_type = spell_projectile`) и визуально (свои `projectile_color`). WeaponController обрабатывает `spell_projectile` тем же путём, что и `projectile` — общий `_attack_projectile()`.
+
+**mana_cost = 0** в v1 — поле-заготовка. Реальная система маны, spellbook и elemental статусы — backlog.
+
+### Apprentice Staff (`apprentice_staff.tres`)
+
+`style = mage`, `attack_type = spell_projectile`, `damage = 3`, `attack_interval = 0.62`, `projectile_speed = 210`, `projectile_lifetime = 1.2`, `spread_angle_deg = 0`. Сине-голубой снаряд, медленный тяжёлый cast.
+i18n: `WEAPON_APPRENTICE_STAFF`.
+
+### Wand (`wand.tres`)
+
+`style = mage`, `attack_type = spell_projectile`, `damage = 1`, `attack_interval = 0.24`, `projectile_speed = 230`, `projectile_lifetime = 1.0`, `spread_angle_deg = 4`. Пурпурный, лёгкий частый cast.
+i18n: `WEAPON_WAND`.
+
 ## Legacy оружия (Dagger/Pistol/Shotgun)
 
 Все `.tres` лежат в `resources/weapons/`. Пул сундука в `chest.gd::WEAPON_POOL`.
