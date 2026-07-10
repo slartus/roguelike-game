@@ -110,12 +110,22 @@ Data-driven через кастомный `Resource` — `WeaponResource` (class
 
 Скрипт: `scenes/bullets/bullet.gd`.
 
-## Стрельба игрока
+## Атака игрока
 
-- Cooldown берётся из `equipped_weapon.fire_interval`.
-- За один shot спавнится `bullets_per_shot` пуль.
-- При `bullets_per_shot > 1` разброс равномерный от `-spread/2` до `+spread/2`.
-- При `bullets_per_shot == 1` и `spread_angle_deg > 0` — случайное отклонение в диапазоне `±spread/2`.
-- Все пули стартуют из `global_position` игрока в направлении курсора мыши.
+Атака вынесена из `player.gd` в `WeaponController` (child-нода `Player/WeaponController`, скрипт `scenes/player/weapon_controller.gd`). Player только держит `equipped_weapon` и на каждый tick вызывает `_weapon_controller.try_attack(equipped_weapon, get_global_mouse_position())` — controller сам решает как атаковать по `weapon.attack_type`.
+
+**WeaponController отвечает за:**
+- cooldown (`_cooldown` тикает в `_process`, `is_ready()` возвращает готовность);
+- projectile spawning для `projectile` / `spell_projectile`;
+- будущие `melee_arc` / `melee_thrust` / `spell_area` реализации (в M2 они возвращают `false` и логируют warning);
+- fallback на `default_projectile_scene` (= `bullet.tscn` из player.tscn) если `weapon.projectile_scene` не задан.
+
+**`try_attack(weapon, target_global_position) → bool`** — возвращает `true` если атака действительно запущена (weapon не null, cooldown готов, direction не нулевой). Cooldown ставится ТОЛЬКО на успешной атаке — failed attempt не залипает на cooldown'е.
+
+**Projectile spawn:**
+- количество = `weapon.get_projectiles_per_attack()` (v2 поле или fallback на `bullets_per_shot`);
+- при count > 1 — равномерный spread от `-spread/2` до `+spread/2`;
+- при count == 1 и spread > 0 — случайное отклонение `±spread/2`;
+- каждая пуля вызывает `apply_weapon(weapon)` — тот сам подхватывает `damage` / `get_projectile_speed()` / `get_projectile_lifetime()` / `get_projectile_color()`.
 
 Смена оружия — через `WeaponPickup` (см. `pickups.md`); стартовое оружие после смерти сбрасывается в `DEFAULT_WEAPON`.

@@ -18,11 +18,13 @@ func _physics_process(delta: float) -> void:
 func apply_weapon(weapon: WeaponResource) -> void:
 	if weapon == null:
 		return
+	# Читаем через get_* helper'ы — так пуля одинаково работает и с legacy
+	# оружием (Dagger/Pistol), и с новыми v2 ресурсами (short_bow, wand).
 	damage = weapon.damage
-	speed = weapon.bullet_speed
-	lifetime = weapon.bullet_lifetime
+	speed = weapon.get_projectile_speed()
+	lifetime = weapon.get_projectile_lifetime()
 	if _visual != null:
-		_visual.modulate = weapon.bullet_color
+		_visual.modulate = weapon.get_projectile_color()
 
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("player"):

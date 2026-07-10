@@ -1,0 +1,89 @@
+class_name WeaponController
+extends Node
+
+# Единая точка атаки для Player. Player делегирует «атаковать оружием X в
+# направлении Y» — контроллер решает как именно это сделать по
+# weapon.attack_type. В M2 реализованы projectile / spell_projectile
+# (используют текущий bullet.tscn), melee-ветки — заглушки под M3.
+#
+# Cooldown хранится и тикает здесь, не в Player — так одна и та же
+# инфраструктура работает для любого оружия и для будущих модификаторов.
+
+# Player выставляет default_projectile_scene в _ready — это существующий
+# bullet.tscn. WeaponController использует его, когда weapon.projectile_scene
+# не задан.
+@export var default_projectile_scene: PackedScene
+
+var _owner_player: Node2D
+var _cooldown: float = 0.0
+
+func setup(owner_player: Node2D) -> void:
+	_owner_player = owner_player
+
+func _process(delta: float) -> void:
+	_cooldown = maxf(0.0, _cooldown - delta)
+
+func is_ready() -> bool:
+	return _cooldown <= 0.0
+
+# Возвращает true если атака действительно запущена (cooldown был готов и
+# weapon не null). Player использует возврат, чтобы понимать «была ли
+# атака» — сейчас не критично, но пригодится для триггера анимаций/звуков.
+func try_attack(weapon: WeaponResource, target_global_position: Vector2) -> bool:
+	if weapon == null or _owner_player == null:
+		return false
+	if _cooldown > 0.0:
+		return false
+	var direction := (target_global_position - _owner_player.global_position).normalized()
+	if direction == Vector2.ZERO:
+		return false
+	var success := false
+	match weapon.attack_type:
+		"projectile", "spell_projectile":
+			success = _attack_projectile(weapon, direction)
+		"melee_arc", "melee_thrust":
+			# TODO(M3): реализовать через MeleeHitbox.
+			push_warning("melee attack_type='%s' not implemented yet" % weapon.attack_type)
+		"spell_area":
+			push_warning("spell_area not implemented yet")
+		_:
+			push_warning("unknown attack_type='%s'" % weapon.attack_type)
+	if not success:
+		# Cooldown не выставляем — иначе игрок «залипает» на пустой атаке
+		# (например, оружие с забытым projectile_scene): visually ничего не
+		# происходит, но cooldown идёт, и мы не понимаем почему.
+		return false
+	_cooldown = weapon.get_attack_interval()
+	return true
+
+func _attack_projectile(weapon: WeaponResource, direction: Vector2) -> bool:
+	var scene: PackedScene = weapon.projectile_scene
+	if scene == null:
+		scene = default_projectile_scene
+	if scene == null:
+		# Возвращаем false — try_attack не поставит cooldown, игрок сможет
+		# нажать снова (визуально ничего не произойдёт). Warning: тихо
+		# не логируем в push_error, потому что GUT считает push_error за
+		# fail; use push_warning вместо этого для видимости при отладке.
+		push_warning("WeaponController: у оружия '%s' нет projectile_scene и default_projectile_scene пуст" % weapon.id)
+		return false
+	var count := maxi(1, weapon.get_projectiles_per_attack())
+	var spread := deg_to_rad(weapon.spread_angle_deg)
+	var scene_root := get_tree().current_scene
+	for i in count:
+		var offset := 0.0
+		if count > 1:
+			offset = lerp(-spread * 0.5, spread * 0.5, float(i) / float(count - 1))
+		elif spread > 0.0:
+			offset = randf_range(-spread * 0.5, spread * 0.5)
+		var bullet := scene.instantiate()
+		bullet.global_position = _owner_player.global_position
+		bullet.direction = direction.rotated(offset)
+		bullet.apply_weapon(weapon)
+		if scene_root != null:
+			scene_root.add_child(bullet)
+		else:
+			# Fallback для тестов, когда current_scene == null: цепляем в
+			# сам Player, чтобы bullet попал в дерево и мог что-то делать.
+			_owner_player.add_child(bullet)
+	return true
