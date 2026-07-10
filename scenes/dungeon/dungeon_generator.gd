@@ -84,9 +84,14 @@ func generate(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayou
 	rng.seed = seed_value
 	var layout := DungeonLayout.new()
 	layout.is_boss_floor = is_boss
+	# Zone/archetype заполняем первыми — чтобы будущие sub-генераторы могли
+	# смотреть на layout.zone. В M1 все non-boss этажи идут по legacy BSP.
+	layout.zone = TowerZone.get_tower_zone(floor_number)
 	if is_boss:
+		layout.floor_archetype = "boss_arena"
 		_generate_boss_floor(layout)
 	else:
+		layout.floor_archetype = "legacy_bsp"
 		_generate_tower_floor(layout, rng, floor_number)
 	_compute_bounds(layout)
 	_normalize(layout)
