@@ -41,8 +41,11 @@ static func generate(
 	var corridor_rect := Rect2i(0, corridor_y, width_px, corridor_height)
 	layout.corridors.append(corridor_rect)
 
-	var top_band_height: int = corridor_y - TILE
-	var bottom_band_height: int = height_px - (corridor_y + corridor_height) - TILE
+	# Оставляем по 1 tile стены между комнатами и коридором — иначе
+	# doorway имеет высоту 0, в общей стене нет ни двери, ни стены,
+	# комнаты «сливаются» с коридором.
+	var top_band_height: int = corridor_y - TILE - TILE
+	var bottom_band_height: int = height_px - (corridor_y + corridor_height) - TILE - TILE
 	if top_band_height < ROOM_MIN_DEPTH_TILES * TILE:
 		top_band_height = ROOM_MIN_DEPTH_TILES * TILE
 	if bottom_band_height < ROOM_MIN_DEPTH_TILES * TILE:
@@ -56,7 +59,7 @@ static func generate(
 	)
 	_carve_row_of_rooms(
 		layout, rng,
-		width_px, corridor_y + corridor_height, bottom_band_height,
+		width_px, corridor_y + corridor_height + TILE, bottom_band_height,
 		false,
 		corridor_rect,
 	)
@@ -98,7 +101,8 @@ static func _carve_row_of_rooms(
 	)
 	var room_depth_px: int = room_depth_tiles * TILE
 	if rooms_above_corridor:
-		band_y = corridor_rect.position.y - room_depth_px
+		# Оставляем 1 tile под doorway между низом комнат и верхом коридора.
+		band_y = corridor_rect.position.y - TILE - room_depth_px
 
 	var cursor_x: int = TILE
 	var end_x: int = total_width_px - TILE
