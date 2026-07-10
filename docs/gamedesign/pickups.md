@@ -37,7 +37,9 @@
 
 ## WeaponPickup (`weapon_pickup.tscn`)
 
-`Sprite2D` с текстурой из `weapon.icon_texture` (16×16), окрашенный через `modulate = weapon.bullet_color`. Коллизия 14×14. Хранит ссылку на `WeaponResource`.
+`Sprite2D` с текстурой из `weapon.icon_texture` (16×16), окрашенный через `modulate = weapon.icon_modulate`. Коллизия 14×14. Хранит ссылку на `WeaponResource`.
+
+Поле `icon_modulate: Color = Color.WHITE` в `WeaponResource` управляет цветом мирового пикапа независимо от `bullet_color` (тот теперь только про снаряд). Legacy Dagger/Pistol/Shotgun имеют собственные `icon_texture` и default `icon_modulate = WHITE` — их полноцветные спрайты рендерятся без искажения. Новые classical weapons (Sword/Spear/Bow/Crossbow/Staff/Wand) пока используют `dagger.png` как placeholder-иконку, отличаясь друг от друга через `icon_modulate` (стальной для меча, серо-стальной для копья, коричневый для лука, тёмно-серый для арбалета, сине-голубой для посоха, пурпурный для жезла) — до появления настоящих спрайтов.
 
 **Поведение:** при контакте с игроком вызывает `player.equip(weapon)` и удаляется. Игрок сохраняет новое оружие в `GameState.equipped_weapon` — оно живёт до конца забега.
 

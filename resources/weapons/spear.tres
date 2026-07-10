@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="WeaponResource" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://resources/weapon_resource.gd" id="1_wr"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/dagger.png" id="2_icon"]
 
 [resource]
 script = ExtResource("1_wr")
@@ -10,6 +11,7 @@ attack_type = "melee_thrust"
 tier = 1
 tags = Array[String](["warrior", "melee", "spear", "reach"])
 display_name = "WEAPON_SPEAR"
+icon_texture = ExtResource("2_icon")
 damage = 2
 attack_interval = 0.48
 attack_range = 56.0
@@ -17,3 +19,4 @@ hitbox_width = 18.0
 hitbox_length = 58.0
 active_time = 0.09
 knockback = 30.0
+icon_modulate = Color(0.7, 0.75, 0.8, 1.0)

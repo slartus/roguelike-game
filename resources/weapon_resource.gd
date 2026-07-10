@@ -30,6 +30,12 @@ const DEFAULT_PROJECTILE_COLOR := Color(1.0, 0.9, 0.3, 1.0)
 # но это встроенная функция GDScript — shadowing вызывает warning.
 @export var attack_range: float = 80.0
 @export var icon_texture: Texture2D
+# Отдельный цвет для WeaponPickup визуала — не завязан на projectile_color.
+# Legacy Dagger/Pistol/Shotgun имеют реальные icon_texture и оставляют
+# icon_modulate по default'у (белый). Новые v2 оружия без спрайта используют
+# icon_modulate чтобы отличаться визуально в мире (sword — стальной, staff
+# — синий и т.д.). Дефолт WHITE — не искажает уже покрашенный icon_texture.
+@export var icon_modulate: Color = Color.WHITE
 
 # --- Projectile stats (для projectile / spell_projectile / spell_area) ---
 # projectile_scene = null → WeaponController использует default bullet.
