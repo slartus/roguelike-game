@@ -4,6 +4,51 @@
 
 **Порядок рендера.** Корневой `CharacterBody2D` каждого врага (включая боса) имеет `z_index = 1`. Пикапы, пол и портал остаются на default `z_index = 0`, поэтому враг всегда рисуется поверх сундука/сердечка/оружейного пикапа, а не за ним. Тот же контракт у игрока (см. `pickups.md`).
 
+## Spawn-таблица (`MonsterSpawnTable`)
+
+Обычные монстры (не boss) собираются в data-driven таблицу `scenes/enemies/monster_spawn_table.gd`. Каждая запись — Dictionary с полями:
+
+| Поле | Смысл |
+|------|-------|
+| `id` | уникальный slug (для тестов/логов) |
+| `scene` | PackedScene, что спавнить |
+| `min_floor` / `max_floor` | floor gating (закрытый интервал) |
+| `weight` | вес для weighted random |
+| `threat` | стоимость в room-aware budget (см. подфича 5) |
+| `tags` | «что это»: beast, undead, ranged, ... |
+| `room_tags` | какие темы комнаты приветствуют этого врага |
+| `level_offset_min` / `level_offset_max` | смещение monster_level от floor |
+| `elite_chance` | базовый шанс champion (0..1) |
+
+### Текущая таблица
+
+| id | scene | floor range | weight | threat | tags |
+|---|---|---|---:|---:|---|
+| `small_slime` | `small_slime.tscn` | 1–8 | 24 | 1 | beast, swarm, melee |
+| `goblin` | `goblin.tscn` | 1–12 | 18 | 2 | goblinoid, melee, fast |
+| `skeleton` | `skeleton.tscn` | 2–∞ | 14 | 2 | undead, melee, variant |
+| `adult_slime` | `enemy.tscn` | 3–12 | 8 | 4 | beast, swarm_generator, melee |
+| `orc` | `orc.tscn` | 3–∞ | 7 | 4 | goblinoid, brute, melee |
+| `spider` | `charger.tscn` | 3–14 | 8 | 4 | beast, charger, control |
+| `zombie` | `zombie.tscn` | 4–∞ | 10 | 4 | undead, tank, poison, control |
+| `skeleton_archer` | `ranged_enemy.tscn` | 4–∞ | 8 | 3 | undead, ranged, kiter |
+| `lich` | `lich.tscn` | 7–∞ | 3 | 7 | undead, caster, summoner, ranged |
+
+**Eligibility rules** (`get_eligible_defs(floor, room_tags)`):
+1. Первый фильтр — floor gating: `min_floor ≤ floor ≤ max_floor`.
+2. Если `room_tags` не пустой — оставляем def'ы, у которых пересечение `def.room_tags ∩ room_tags` не пусто. Если после этого список пуст — fallback на floor-only список.
+3. Никогда не возвращает boss.
+
+**Weighted choice** (`choose_weighted(defs, rng)`) детерминирован при одинаковом `rng.seed` — критично для reproducible dungeon layouts.
+
+**Monster level** (`roll_monster_level(floor, def, room_danger, rng)`) = `floor + room_danger + randi_range(level_offset_min, level_offset_max)`, минимум 1.
+
+**Elite rank** (`roll_elite_rank(...)`) политика:
+- rank 2 (elite) — только с floor 10+ и с шансом `chance × 0.25`.
+- rank 1 (champion) — обычный roll от `chance = elite_chance + room_danger × 0.03 + max(0, floor - 6) × 0.005`.
+
+Подключение к `Main._spawn_enemies` — подфича 4 плана. Пока таблица только data + eligibility rules.
+
 ## Balance-таблицы (D&D 5e-inspired)
 
 **Базовые** значения `max_health` / `contact_damage` / `xp_reward` / `gold_reward` в таблицах ниже — это level-1 stats. Каждый монстр при спавне в `_ready` применяет линейный scaling по **effective monster level** через `Balance.scaled_*` (см. `progression.md`).
