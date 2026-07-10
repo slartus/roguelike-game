@@ -95,6 +95,10 @@ func generate(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayou
 		_generate_tower_floor(layout, rng, floor_number)
 	_compute_bounds(layout)
 	_normalize(layout)
+	# Roles назначаем ПОСЛЕ normalize — координаты rooms уже финальные,
+	# _find_room_containing по player_start/exit_position/chest_positions
+	# находит правильные комнаты.
+	layout.room_infos = RoomRoles.assign_roles(layout, rng)
 	return layout
 
 # --- Regular floor: BSP + MST + extra edges ------------------------------

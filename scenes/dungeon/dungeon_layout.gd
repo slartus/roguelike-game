@@ -20,3 +20,8 @@ var zone: String = ""
 # / boss_arena / basement_bsp / caves_bsp. Пока используется BSP-путь для
 # всех non-boss этажей; новые архетипы приходят в M4-6.
 var floor_archetype: String = ""
+# Метаданные комнат в том же порядке, что и rooms. Каждый элемент —
+# Dictionary с полями room_index / role / zone / tags / danger
+# (см. `RoomRoles.assign_roles`). Пустой массив для legacy layouts,
+# где роли ещё не проставлены (backward compat).
+var room_infos: Array = []

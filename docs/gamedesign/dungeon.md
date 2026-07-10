@@ -29,6 +29,49 @@
 
 Boss floors (`floor % 5 == 0`) сохраняют старую логику: `floor_archetype = "boss_arena"`, `zone` тоже заполняется (тот же расчёт по этажу) — для будущего thematic-декора boss-арен.
 
+## Роли комнат (`room_infos`)
+
+Каждая комната получает `room_info: Dictionary` с полями:
+
+| Поле | Смысл |
+|---|---|
+| `room_index` | индекс в `layout.rooms` |
+| `role` | назначение комнаты (`entrance`, `bedroom`, `machine_room`, ...) |
+| `zone` | зона мира (совпадает с `layout.zone`) |
+| `tags` | свойства: `[zone, size_tag, ...]` (`small`/`medium`/`large`, а также `treasure`/`entrance`/`exit`) |
+| `danger` | int, используется room-aware spawn budget'ом |
+
+Логика в `scenes/dungeon/room_roles.gd::RoomRoles.assign_roles(layout, rng)`. Правила v1:
+
+1. **start room → `entrance`** — комната, содержащая `player_start`.
+2. **exit room → `exit_core`** — комната с `exit_position`.
+3. **chest room → `treasure_room`** — комнаты, содержащие точки из `chest_positions`.
+4. **остальные** — случайная роль из `ZONE_ROLE_POOL[zone]` (детерминировано по seed).
+5. **boss floor** — все комнаты (обычно одна арена) получают `boss_arena`.
+
+Пулы ролей по зонам:
+
+| Zone | Возможные роли |
+|---|---|
+| `tower_top` | study, storage, ruined_room, small_room |
+| `residential` | bedroom, living_room, kitchen, study, storage, small_room |
+| `technical` | machine_room, boiler_room, switch_room, storage, corridor |
+| `lower_tower` | warehouse, storage, ruined_room, small_room |
+| `basement` | basement_cell, storage, ruined_room |
+| `caves` | cave_chamber, ruined_room |
+
+Размер комнаты определяется через `size_tag_for_area(area)`:
+- `< 6400 px²` → `small`,
+- `> 12000 px²` → `large`,
+- иначе — `medium`.
+
+**Danger v1** (`compute_danger(role, zone)`):
+- treasure_room → +1;
+- dangerous zone (lower_tower/basement/caves) → +1;
+- dangerous role (machine_room/boiler_room/ruined_room/cave_chamber) → +1.
+
+Например `treasure_room` в `caves` даёт danger = 2. Это пригодится room-aware spawn budget'у (см. `enemies.md::MonsterSpawnTable`).
+
 ## Генератор — `DungeonGenerator` (BSP + MST + extra edges)
 
 `scenes/dungeon/dungeon_generator.gd` (`class_name DungeonGenerator`). Метод `generate(seed, floor_number, is_boss) → DungeonLayout`.
