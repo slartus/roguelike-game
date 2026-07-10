@@ -4,7 +4,7 @@ extends GutTest
 # генерации. Также появляется после смерти игрока (см. player.gd::_die).
 #
 # Здесь тестируем только структурный контракт:
-# - сцена грузится и имеет две кнопки Play/Generate;
+# - сцена грузится и имеет три кнопки Play/Generate/Exit;
 # - script имеет соответствующие обработчики;
 # - main scene проекта настроен на title screen;
 # - GameState.reset_run вызывается при play.
@@ -12,16 +12,32 @@ extends GutTest
 const TitleScene = preload("res://scenes/ui/title_screen.tscn")
 const VisualizerScene = preload("res://scenes/dungeon/level_visualizer.tscn")
 
-func test_title_scene_has_play_and_generate_buttons() -> void:
+func test_title_scene_has_play_generate_and_exit_buttons() -> void:
 	var screen = TitleScene.instantiate()
 	add_child_autofree(screen)
 	await get_tree().process_frame
 	var play_btn: Button = screen.get_node_or_null("VBox/PlayButton")
 	var gen_btn: Button = screen.get_node_or_null("VBox/GenerateButton")
+	var exit_btn: Button = screen.get_node_or_null("VBox/ExitButton")
 	assert_not_null(play_btn, "должна быть кнопка PlayButton")
 	assert_not_null(gen_btn, "должна быть кнопка GenerateButton")
+	assert_not_null(exit_btn, "должна быть кнопка ExitButton")
 	assert_ne(play_btn.text, "", "кнопка Играть должна иметь label")
 	assert_ne(gen_btn.text, "", "кнопка Генерить уровни должна иметь label")
+	assert_ne(exit_btn.text, "", "кнопка Выход должна иметь label")
+
+func test_exit_button_signal_wired_to_handler() -> void:
+	# Не вызываем _on_exit_pressed напрямую — иначе get_tree().quit()
+	# завалит тестовый прогон. Проверяем что сигнал подключён к скрипту.
+	var screen = TitleScene.instantiate()
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	var exit_btn: Button = screen.get_node("VBox/ExitButton")
+	var connections := exit_btn.pressed.get_connections()
+	assert_gt(connections.size(), 0,
+		"ExitButton.pressed должен быть подключён (к _on_exit_pressed)")
+	assert_true(screen.has_method("_on_exit_pressed"),
+		"скрипт должен содержать обработчик _on_exit_pressed")
 
 func test_project_main_scene_is_title_screen() -> void:
 	# После добавления title screen точка входа — он, а не сразу main.

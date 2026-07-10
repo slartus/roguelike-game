@@ -30,7 +30,8 @@
 Точка входа в игру — `project.godot::run/main_scene` = `title_screen.tscn` (не `main.tscn` напрямую). Центрированный `VBoxContainer` с:
 - заголовок «Roguelike» (`font_size = 28`);
 - кнопка «Играть» — `_on_play_pressed` вызывает `GameState.reset_run()` и `change_scene_to_file("res://scenes/main.tscn")`;
-- кнопка «Генерить уровни» — открывает `scenes/dungeon/level_visualizer.tscn`.
+- кнопка «Генерить уровни» — открывает `scenes/dungeon/level_visualizer.tscn`;
+- кнопка «Выход» — `_on_exit_pressed` вызывает `get_tree().quit()` (единственный «мирный» способ выйти из десктоп-сборки; ESC на title screen на quit не забинден — только явная кнопка).
 
 Экран также появляется **после смерти игрока**: `player.gd::_die` теперь делает `call_deferred("change_scene_to_file", "res://scenes/ui/title_screen.tscn")` вместо старого `reload_current_scene`. `reset_run` в `_die` уже был раньше — он обнуляет HP/XP/gold/tower_seed/potions.
 

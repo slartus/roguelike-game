@@ -50,3 +50,8 @@ text = "Играть"
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Генерить уровни"
+
+[node name="ExitButton" type="Button" parent="VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Выход"
