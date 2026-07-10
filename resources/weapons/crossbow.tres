@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/weapon_resource.gd" id="1_wr"]
+
+[resource]
+script = ExtResource("1_wr")
+id = "crossbow"
+style = "archer"
+attack_type = "projectile"
+tier = 1
+tags = Array[String](["archer", "projectile", "crossbow", "pierce"])
+display_name = "WEAPON_CROSSBOW"
+damage = 3
+attack_interval = 0.75
+projectile_speed = 300.0
+projectile_lifetime = 1.4
+projectile_color = Color(0.6, 0.6, 0.7, 1.0)
+projectiles_per_attack = 1
+spread_angle_deg = 0.0
+pierce = 1

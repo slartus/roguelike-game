@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/weapon_resource.gd" id="1_wr"]
+
+[resource]
+script = ExtResource("1_wr")
+id = "short_bow"
+style = "archer"
+attack_type = "projectile"
+tier = 1
+tags = Array[String](["archer", "projectile", "bow", "arrow"])
+display_name = "WEAPON_SHORT_BOW"
+damage = 1
+attack_interval = 0.32
+projectile_speed = 260.0
+projectile_lifetime = 1.2
+projectile_color = Color(0.75, 0.55, 0.3, 1.0)
+projectiles_per_attack = 1
+spread_angle_deg = 2.0
+pierce = 0

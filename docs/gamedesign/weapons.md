@@ -90,6 +90,28 @@ i18n: `WEAPON_SHORT_SWORD`.
 `style = warrior`, `attack_type = melee_thrust`, `damage = 2`, `attack_interval = 0.48`, `attack_range = 56`, `knockback = 30`.
 i18n: `WEAPON_SPEAR`.
 
+## Archer — projectile
+
+Классические ranged-оружия используют текущий `bullet.tscn` через `WeaponController._attack_projectile`. Отличаются от legacy Dagger/Pistol только identity (`style = archer`) и v2-полями (`projectile_speed / lifetime / color / pierce`).
+
+**Pierce.** Новое поле `pierce: int` в `WeaponResource`. Bullet `apply_weapon` копирует его в `_pierce_remaining`. При попадании во врага:
+1. если враг уже был в `_hit_bodies` (Area2D может слать `body_entered` повторно) — пропускаем;
+2. иначе наносим `damage`, отмечаем в `_hit_bodies`;
+3. если `_pierce_remaining > 0` — decrement, пуля летит дальше;
+4. иначе — `queue_free`.
+
+Legacy (Dagger/Pistol/Shotgun) не задают `pierce` → default 0 → old behaviour без изменений.
+
+### Short Bow (`short_bow.tres`)
+
+`style = archer`, `attack_type = projectile`, `damage = 1`, `attack_interval = 0.32`, `projectile_speed = 260`, `projectile_lifetime = 1.2`, `spread_angle_deg = 2`, `pierce = 0`. Быстрый и надёжный ranged.
+i18n: `WEAPON_SHORT_BOW`.
+
+### Crossbow (`crossbow.tres`)
+
+`style = archer`, `attack_type = projectile`, `damage = 3`, `attack_interval = 0.75`, `projectile_speed = 300`, `projectile_lifetime = 1.4`, `spread_angle_deg = 0`, `pierce = 1`. Медленнее, но сильнее и пробивает одного врага насквозь.
+i18n: `WEAPON_CROSSBOW`.
+
 ## Legacy оружия (Dagger/Pistol/Shotgun)
 
 Все `.tres` лежат в `resources/weapons/`. Пул сундука в `chest.gd::WEAPON_POOL`.
