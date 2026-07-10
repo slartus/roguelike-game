@@ -114,3 +114,45 @@ func test_chest_only_on_floors_divisible_by_three() -> void:
 		"floor 3 имеет сундук")
 	assert_eq(layout_f4.chest_positions.size(), 0,
 		"floor 4 без сундука")
+
+func test_rooms_are_separated_from_main_corridor_by_wall() -> void:
+	# Регресс: без 1-tile стены между room и main corridor doorway имеет
+	# высоту 0 и не рисуется — комната открывается во всю ширину.
+	for seed_val in [7001, 7002, 7003, 7004]:
+		var layout := _generate(seed_val, 3)
+		var main_corridor: Rect2i = layout.corridors[0]
+		for room in layout.rooms:
+			var above := room.end.y <= main_corridor.position.y
+			var below := room.position.y >= main_corridor.end.y
+			assert_true(above or below,
+				"комната %s должна быть выше или ниже коридора %s (seed=%d)" % [room, main_corridor, seed_val])
+			if above:
+				var gap: int = main_corridor.position.y - room.end.y
+				assert_gte(gap, 20,
+					"gap выше коридора должен быть >=1 tile (got=%d, seed=%d)" % [gap, seed_val])
+			else:
+				var gap: int = room.position.y - main_corridor.end.y
+				assert_gte(gap, 20,
+					"gap ниже коридора должен быть >=1 tile (got=%d, seed=%d)" % [gap, seed_val])
+
+func test_every_side_room_has_doorway_to_corridor() -> void:
+	# Инвариант: у каждой боковой комнаты есть doorway-corridor rect,
+	# соединяющий её с main corridor. Иначе комната недостижима.
+	for seed_val in [7101, 7102, 7103, 7104]:
+		var layout := _generate(seed_val, 3)
+		var main_corridor: Rect2i = layout.corridors[0]
+		var doorways: Array = []
+		for i in range(1, layout.corridors.size()):
+			doorways.append(layout.corridors[i])
+		for room in layout.rooms:
+			var connected := false
+			for door: Rect2i in doorways:
+				var touches_room := door.position.y == room.end.y or door.end.y == room.position.y
+				var touches_corridor := door.end.y == main_corridor.position.y or door.position.y == main_corridor.end.y
+				var x_overlap := door.position.x >= room.position.x and door.end.x <= room.end.x
+				if touches_room and touches_corridor and x_overlap:
+					connected = true
+					break
+			assert_true(connected,
+				"у комнаты %s должен быть doorway в main corridor (seed=%d)" % [room, seed_val])
+

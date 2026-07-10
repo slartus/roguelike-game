@@ -50,8 +50,12 @@ static func generate(
 	layout.corridors.append(corridor_rect)
 
 	# 3. Нарезаем rooms сверху и снизу. Слева-направо, пока хватает места.
-	var top_band_height: int = corridor_y - TILE  # 1 tile под верхнюю границу
-	var bottom_band_height: int = height_px - (corridor_y + corridor_height) - TILE
+	# Между низом верхнего ряда и верхом коридора (симметрично снизу)
+	# резервируем 1 tile для стены, в которую пробивается doorway. Без этой
+	# прослойки комнаты сливаются с коридором в открытые альковы — двери
+	# визуально пропадают.
+	var top_band_height: int = corridor_y - TILE - TILE
+	var bottom_band_height: int = height_px - (corridor_y + corridor_height) - TILE - TILE
 	if top_band_height < ROOM_MIN_DEPTH_TILES * TILE:
 		top_band_height = ROOM_MIN_DEPTH_TILES * TILE
 	if bottom_band_height < ROOM_MIN_DEPTH_TILES * TILE:
@@ -65,7 +69,7 @@ static func generate(
 	)
 	_carve_row_of_rooms(
 		layout, rng,
-		width_px, corridor_y + corridor_height, bottom_band_height,
+		width_px, corridor_y + corridor_height + TILE, bottom_band_height,
 		false,  # rooms снизу → дверной проём сверху
 		corridor_rect,
 	)
@@ -112,9 +116,10 @@ static func _carve_row_of_rooms(
 	)
 	var room_depth_px: int = room_depth_tiles * TILE
 	if rooms_above_corridor:
-		# Верхний ряд: band начинается сверху и заканчивается у коридора.
-		# Комнаты выравниваем по низу band — прижаты к коридору.
-		band_y = corridor_rect.position.y - room_depth_px
+		# Верхний ряд: комнаты прижаты к 1-tile стене под коридором.
+		# room.end.y == corridor.position.y - TILE — оставляем ровно один
+		# tile под doorway.
+		band_y = corridor_rect.position.y - TILE - room_depth_px
 
 	var cursor_x: int = TILE  # 1 tile отступ слева
 	var end_x: int = total_width_px - TILE

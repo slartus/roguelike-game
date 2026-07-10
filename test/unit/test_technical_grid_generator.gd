@@ -92,3 +92,43 @@ func test_technical_decor_profile_not_cave() -> void:
 	for cave in DecorProfiles.CAVE_ONLY_DECOR:
 		assert_false(all_types.has(cave),
 			"technical machine_room НЕ должен иметь cave-декор %s" % cave)
+
+func test_rooms_are_separated_from_service_corridor_by_wall() -> void:
+	# Регресс: без 1-tile стены doorway имеет высоту 0 и не рисуется —
+	# машинная сливается со служебным коридором в открытый альков.
+	for seed_val in [7001, 7002, 7003, 7004]:
+		var layout := _generate(seed_val, 8)
+		var main_corridor: Rect2i = layout.corridors[0]
+		for room in layout.rooms:
+			var above := room.end.y <= main_corridor.position.y
+			var below := room.position.y >= main_corridor.end.y
+			assert_true(above or below,
+				"комната %s должна быть выше или ниже коридора %s (seed=%d)" % [room, main_corridor, seed_val])
+			if above:
+				var gap: int = main_corridor.position.y - room.end.y
+				assert_gte(gap, 20,
+					"gap выше коридора должен быть >=1 tile (got=%d, seed=%d)" % [gap, seed_val])
+			else:
+				var gap: int = room.position.y - main_corridor.end.y
+				assert_gte(gap, 20,
+					"gap ниже коридора должен быть >=1 tile (got=%d, seed=%d)" % [gap, seed_val])
+
+func test_every_service_room_has_doorway_to_corridor() -> void:
+	for seed_val in [7101, 7102, 7103, 7104]:
+		var layout := _generate(seed_val, 8)
+		var main_corridor: Rect2i = layout.corridors[0]
+		var doorways: Array = []
+		for i in range(1, layout.corridors.size()):
+			doorways.append(layout.corridors[i])
+		for room in layout.rooms:
+			var connected := false
+			for door: Rect2i in doorways:
+				var touches_room := door.position.y == room.end.y or door.end.y == room.position.y
+				var touches_corridor := door.end.y == main_corridor.position.y or door.position.y == main_corridor.end.y
+				var x_overlap := door.position.x >= room.position.x and door.end.x <= room.end.x
+				if touches_room and touches_corridor and x_overlap:
+					connected = true
+					break
+			assert_true(connected,
+				"у служебной комнаты %s должен быть doorway в служебный коридор (seed=%d)" % [room, seed_val])
+
