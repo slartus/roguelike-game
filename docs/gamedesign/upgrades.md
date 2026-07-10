@@ -116,7 +116,7 @@ Second Wind сбрасывается в `next_floor()` и `reset_run()`. Это 
 |---|---|---:|---|
 | `heavy_strike` | common | 3 | damage +1 |
 | `long_reach` | uncommon | 2 | hitbox_length × 1.10 |
-| `sweeping_blade` | uncommon | 2 | hitbox_width × 1.15 (только `melee_arc`) |
+| `sweeping_blade` | uncommon | 2 | arc_degrees × 1.15 (только `melee_arc`) |
 | `pushback` | common | 2 | knockback +20 |
 
 ### Archer (`resources/upgrades/archer/`)
