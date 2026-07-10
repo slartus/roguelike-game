@@ -168,3 +168,23 @@ func test_face_left_flips_melee_rest_rotation_sign() -> void:
 	player.face(-1)
 	assert_almost_eq(weapon_sprite.rotation, -rot_right, 0.001,
 		"rest rotation симметричен при смене facing")
+
+func test_face_change_during_swing_kills_tween_and_resets_rest() -> void:
+	# Регресс: `_apply_facing_visuals` пишет rotation напрямую. Если facing
+	# меняется посреди активного swing tween (out+back = 180ms), tween
+	# захватит старый rest_rot как back-target и вернёт rotation в чужой
+	# знак. Фикс: face() убивает активный swing и мгновенно ставит sprite
+	# в свежую rest-позу под новый facing.
+	GameState.equipped_weapon = ShortSwordRes
+	var player := _make_player()
+	await get_tree().process_frame
+	player.face(1)
+	var weapon_sprite: Sprite2D = player.get_node("Weapon")
+	var rest_right := weapon_sprite.rotation
+	# Запускаем swing → tween живёт ~180ms.
+	player.play_attack_visual(Vector2(100, 0), ShortSwordRes)
+	# Игрок в этот момент разворачивается влево — свинг должен оборваться,
+	# rotation мгновенно уйти к rest под facing left (симметричный знак).
+	player.face(-1)
+	assert_almost_eq(weapon_sprite.rotation, -rest_right, 0.001,
+		"смена facing во время swing мгновенно ставит новый rest_rotation")

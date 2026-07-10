@@ -118,6 +118,14 @@ func face(direction: int) -> void:
 	if direction == 0 or direction == _facing:
 		return
 	_facing = 1 if direction > 0 else -1
+	# Активный swing tween был спланирован под старый facing (swing_target
+	# и restore rest_rotation captured'ы по знаку прошлого _facing). Если
+	# не убить — back-фаза вернёт rotation в чужой знак, а мгновенное
+	# присваивание в _apply_facing_visuals успеет перезаписаться tween'ом.
+	# Прерываем свинг: игрок в момент удара сменил направление курсора —
+	# честнее оборвать анимацию и мгновенно встать в новую rest-позу.
+	if _swing_tween != null and _swing_tween.is_valid():
+		_swing_tween.kill()
 	_apply_facing_visuals()
 
 # WeaponController зовёт это на успешной атаке. Играет короткий
