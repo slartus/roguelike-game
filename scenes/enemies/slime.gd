@@ -11,19 +11,22 @@ extends "res://scenes/enemies/enemy.gd"
 # Visual синхронно «подпрыгивает»: во время JUMP scale раздувается по Y
 # и слегка сжимается по X через sin(t*PI) — стандартный squash-and-stretch.
 #
-# Почкование: при первом переходе WANDER→CHASE (агра) стартует
-# BUD_DELAY-таймер. По истечении спавнится ещё один слайм рядом.
-# Каждый слайм почкуется максимум один раз — `_has_budded` защищает
-# от повторов, даже если слайм снова уходит в WANDER и опять агрится.
-# Дочерний слайм — обычный, поэтому сам он тоже сможет отпочковаться
-# при собственном первом агра.
+# Скрипт делится на Adult (enemy.tscn) и Small (small_slime.tscn) варианты
+# через @export'ы can_bud / can_split_on_death / bud_scene / death_split_scene.
 #
-# Разделение при смерти: убитый слайм распадается на DEATH_SPLIT_COUNT
-# слаймов половинного размера. Дети помечены `_is_sterile = true` —
-# это одновременно блокирует и почкование, и повторное разделение при
-# их смерти (иначе один слайм генерировал бы бесконечную цепь). Дети
-# также без пикапов, с половинными HP/наградами — экономическая
-# компенсация «одного слайма превращаем в трёх».
+# Почкование: если can_bud=true и есть bud_scene — при первом переходе
+# WANDER→CHASE стартует BUD_DELAY-таймер, по истечении спавнится дитё из
+# bud_scene. Каждый слайм почкуется максимум один раз (`_has_budded`).
+# У Adult bud_scene = small_slime.tscn (в .tscn) — почка это Small.
+# Small имеет can_bud=false и сам не почкуется.
+#
+# Разделение при смерти: если can_split_on_death=true и есть death_split_scene —
+# при летальном ударе спавнятся death_split_count детей из death_split_scene.
+# У Adult death_split_scene = small_slime.tscn — Adult распадается на 2 Small.
+# Экономический баланс держится через собственные stat Small Slime
+# (max_health=1, xp=2, gold=1) в его .tscn, а не runtime-половинием на кадре
+# смерти. pickup_scene у детей обнуляется, чтобы почкование не превращалось
+# в лут-механику.
 
 const REST_DURATION: float = 0.55
 const JUMP_DURATION: float = 0.35
@@ -40,12 +43,24 @@ const BUD_OFFSET_MAX: float = 22.0
 const BUD_SPAWN_ATTEMPTS: int = 8
 const BUD_FLOOR_TILE_SIZE: int = 20
 
-const DEATH_SPLIT_COUNT: int = 2
-const DEATH_SPLIT_SCALE: float = 0.5
 # Осколки летят по противоположным сторонам от точки смерти на
-# DEATH_SPLIT_OFFSET пикселей. Значение подобрано под масштаб 0.5
-# (r=3.5 в мире), чтобы два ребёнка не перекрывались коллизиями.
+# DEATH_SPLIT_OFFSET пикселей. Значение подобрано под визуал Small Slime
+# (~r=3.5 в мире), чтобы два ребёнка не перекрывались коллизиями.
 const DEATH_SPLIT_OFFSET: float = 4.0
+
+# Разделяем семейство слаймов на Adult (эта сцена, enemy.tscn) и Small
+# (small_slime.tscn). Adult размножается: почкуется при агре и распадается
+# на Small при смерти. Small не размножается: can_bud=false и
+# can_split_on_death=false в .tscn small_slime.tscn.
+#
+# bud_scene / death_split_scene позволяют задать «во что именно» превращаются
+# дети — обычно это ExtResource small_slime.tscn. Если сцена не задана,
+# соответствующая механика не работает (spawn_bud вернёт false).
+@export var can_bud: bool = true
+@export var can_split_on_death: bool = true
+@export var bud_scene: PackedScene
+@export var death_split_scene: PackedScene
+@export var death_split_count: int = 2
 
 enum JumpPhase { REST, JUMP }
 
@@ -59,10 +74,10 @@ var _has_budded: bool = false
 var _bud_delay_timer: float = 0.0
 var _was_chasing: bool = false
 
-# Дети-осколки не могут ни почковаться (см. _tick_bud), ни делиться
-# при своей смерти (см. take_damage override). Одно поле управляет
-# обеими защитами — так проще держать инварианты «одна семья слаймов
-# — конечная».
+# Runtime-override для сценариев, где даже Adult нужно временно
+# запретить почковаться и делиться (например, спавн из другого места
+# без дальнейшего размножения). Основной путь блокировки — через
+# can_bud / can_split_on_death в .tscn (Small Slime).
 var _is_sterile: bool = false
 
 func _ready() -> void:
@@ -117,7 +132,7 @@ func _apply_visual_bounce() -> void:
 	)
 
 func _tick_bud(delta: float) -> void:
-	if _has_budded or _is_sterile:
+	if _has_budded or _is_sterile or not can_bud:
 		return
 	var is_chasing := _state == State.CHASE
 	# Ловим фронт WANDER→CHASE. Таймер стартует только один раз за
@@ -140,18 +155,15 @@ func _tick_bud(delta: float) -> void:
 	# со всех сторон одновременно.
 
 func _spawn_bud() -> bool:
+	if bud_scene == null:
+		return false
 	var parent := get_parent()
 	if parent == null:
 		return false
 	var spawn_pos := _pick_bud_position()
 	if spawn_pos == Vector2.INF:
 		return false
-	# load() вместо preload(): enemy.tscn использует slime.gd, из slime.gd
-	# preload(enemy.tscn) даст циклическую зависимость на парсинге.
-	var scene: PackedScene = load("res://scenes/enemies/enemy.tscn")
-	if scene == null:
-		return false
-	var bud = scene.instantiate()
+	var bud = bud_scene.instantiate()
 	bud.global_position = spawn_pos
 	parent.add_child(bud)
 	return true
@@ -188,33 +200,28 @@ func take_damage(amount: int) -> void:
 	# быть валидными.
 	var was_alive := health > 0
 	super.take_damage(amount)
-	if was_alive and health <= 0 and not _is_sterile:
+	if was_alive and health <= 0 and not _is_sterile and can_split_on_death:
 		_spawn_death_split()
 
 func _spawn_death_split() -> void:
+	if death_split_scene == null:
+		return
 	var parent := get_parent()
 	if parent == null:
-		return
-	var scene: PackedScene = load("res://scenes/enemies/enemy.tscn")
-	if scene == null:
 		return
 	# Случайный угол разлёта: дети летят в противоположные стороны от
 	# точки смерти, чтобы не спавниться поверх друг друга.
 	var angle := randf() * TAU
 	var axis := Vector2(cos(angle), sin(angle)) * DEATH_SPLIT_OFFSET
-	for i in DEATH_SPLIT_COUNT:
-		var child = scene.instantiate()
+	for i in death_split_count:
+		var child = death_split_scene.instantiate()
 		var offset := axis if i == 0 else -axis
 		child.global_position = global_position + offset
 		parent.add_child(child)
-		# Всё что ниже — ПОСЛЕ add_child, потому что _ready прогоняет
-		# Balance.scaled_* и записывает `health = max_health`. Мы половиним
-		# уже отскейленные значения — так дети остаются согласованными
-		# с текущим floor, но вдвое слабее матери на этом этаже.
-		child.scale = Vector2(DEATH_SPLIT_SCALE, DEATH_SPLIT_SCALE)
-		child.max_health = maxi(1, child.max_health / 2)
-		child.health = child.max_health
-		child.xp_reward = maxi(1, child.xp_reward / 2)
-		child.gold_reward = maxi(1, child.gold_reward / 2)
-		child.pickup_scene = null  # осколки не роняют пикапы (fix фарма)
-		child._is_sterile = true
+		# Осколки Small Slime уже балансируются собственными stat в
+		# small_slime.tscn (низкий HP, xp=2, gold=1). Экономически цепь
+		# «adult 5xp + 2 × 2xp = 9xp» слабее чем «одиночный adult
+		# + одиночный small свободные» — фарм-баланс из .tscn.
+		# Pickup всё равно занулим — иначе small unconstrained мог бы
+		# ронять зелья и превращать почкование в лут-механику.
+		child.pickup_scene = null

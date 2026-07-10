@@ -1,11 +1,17 @@
 extends GutTest
 
-# Слайм при смерти распадается на 2 половинных слайма:
-# - `_spawn_death_split` спавнит DEATH_SPLIT_COUNT=2 детей у родителя;
-# - дети получают scale=0.5, половинные HP/xp/gold, no pickup_scene;
-# - дети помечены `_is_sterile=true` — не почкуются и не делятся дальше;
+# Adult Slime при смерти распадается на death_split_count детей из
+# death_split_scene (по конфигу enemy.tscn — small_slime.tscn):
+# - `_spawn_death_split` спавнит детей у родителя;
+# - дети — реальные Small Slime со своими stat из .tscn (max_health=1,
+#   xp=2, gold=1, scale=0.5) — половинить их вручную больше не нужно;
+# - дети не могут почковаться (`can_bud=false` в small_slime.tscn) и
+#   не делятся дальше (`can_split_on_death=false`);
+# - у детей обнуляется `pickup_scene` — иначе почкование становилось
+#   бы лут-механикой;
 # - take_damage override при смертельном ударе триггерит split, но
-#   стерильные слаймы split пропускают.
+#   стерильные слаймы (`_is_sterile=true` или `can_split_on_death=false`)
+#   split пропускают.
 
 const SlimeScene = preload("res://scenes/enemies/enemy.tscn")
 
@@ -41,7 +47,9 @@ func test_direct_split_spawns_two_children() -> void:
 	assert_eq(_count_slimes_under(parent), before + 2,
 		"split должен спавнить ровно 2 детей")
 
-func test_split_children_are_sterile() -> void:
+func test_split_children_cannot_bud_or_split() -> void:
+	# Small Slime как дети — сам себя блокирует через can_bud=false и
+	# can_split_on_death=false, поэтому цепь остаётся конечной.
 	var slime = _spawn_slime()
 	var parent := slime.get_parent()
 	var snapshot := parent.get_children().duplicate()
@@ -50,10 +58,14 @@ func test_split_children_are_sterile() -> void:
 	var children := _find_new_slime_children(parent, snapshot, slime)
 	assert_eq(children.size(), 2)
 	for child in children:
-		assert_eq(child._is_sterile, true,
-			"дети split должны быть стерильны")
+		assert_eq(child.can_bud, false,
+			"дети split (Small Slime) не почкуются")
+		assert_eq(child.can_split_on_death, false,
+			"дети split (Small Slime) не распадаются при смерти")
 
-func test_split_children_scaled_half() -> void:
+func test_split_children_scaled_by_scene() -> void:
+	# Small Slime сам маленький через scale в .tscn (0.5, 0.5) — половинить
+	# runtime уже не нужно.
 	var slime = _spawn_slime()
 	var parent := slime.get_parent()
 	var snapshot := parent.get_children().duplicate()
@@ -61,28 +73,29 @@ func test_split_children_scaled_half() -> void:
 	slime._spawn_death_split()
 	var children := _find_new_slime_children(parent, snapshot, slime)
 	for child in children:
-		assert_almost_eq(child.scale.x, slime.DEATH_SPLIT_SCALE, 0.001)
-		assert_almost_eq(child.scale.y, slime.DEATH_SPLIT_SCALE, 0.001)
+		assert_almost_eq(child.scale.x, 0.5, 0.001,
+			"scale Small Slime = 0.5 из .tscn")
+		assert_almost_eq(child.scale.y, 0.5, 0.001)
 
-func test_split_children_have_halved_stats() -> void:
+func test_split_children_have_small_slime_stats() -> void:
+	# Small Slime приходит со своими base stat max_health=1, xp=2, gold=1
+	# (после Balance.scaled_* на текущем этаже).
 	var slime = _spawn_slime()
 	var parent := slime.get_parent()
 	var snapshot := parent.get_children().duplicate()
 	await get_tree().process_frame
-	# max_health/xp/gold после _ready = scaled(base, floor). Ловим их
-	# значения ДО split — они одинаковые у матери и у свежих детей,
-	# потому что и там и там прогоняется Balance с тем же floor.
-	var expected_hp := maxi(1, slime.max_health / 2)
-	var expected_xp := maxi(1, slime.xp_reward / 2)
-	var expected_gold := maxi(1, slime.gold_reward / 2)
+	var floor_num := GameState.current_floor_number
+	var expected_hp := Balance.scaled_hp(1, floor_num)
+	var expected_xp := Balance.scaled_xp_reward(2, floor_num)
+	var expected_gold := Balance.scaled_gold_reward(1, floor_num)
 	slime._spawn_death_split()
 	var children := _find_new_slime_children(parent, snapshot, slime)
 	for child in children:
 		assert_eq(child.max_health, expected_hp,
-			"HP ребёнка = половина от материнского (не меньше 1)")
-		assert_eq(child.health, child.max_health,
-			"health синхронизирован с max_health после половинения")
-		assert_eq(child.xp_reward, expected_xp)
+			"HP ребёнка = scaled(1, floor) — базовый Small Slime")
+		assert_eq(child.health, child.max_health)
+		assert_eq(child.xp_reward, expected_xp,
+			"XP ребёнка = scaled(2, floor)")
 		assert_eq(child.gold_reward, expected_gold)
 
 func test_split_children_have_no_pickup() -> void:

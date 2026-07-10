@@ -1,0 +1,29 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/slime.gd" id="1_small_slime"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/slime.png" id="2_tex"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_small_slime"]
+radius = 3.5
+
+[node name="SmallSlime" type="CharacterBody2D"]
+z_index = 1
+scale = Vector2(0.5, 0.5)
+script = ExtResource("1_small_slime")
+display_name = "ENEMY_SMALL_SLIME"
+speed = 36.0
+max_health = 1
+contact_damage = 1
+pickup_drop_chance = 0.04
+xp_reward = 2
+gold_reward = 1
+perception_radius = 95.0
+memory = 0.3
+can_bud = false
+can_split_on_death = false
+
+[node name="Visual" type="Sprite2D" parent="."]
+texture = ExtResource("2_tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_small_slime")

@@ -155,17 +155,16 @@ func test_bud_spawned_when_at_least_one_cell_walkable() -> void:
 		"на пустом этаже почка должна появиться")
 	assert_true(slime._has_budded)
 
-func test_child_bud_can_also_bud() -> void:
-	# Каждый слайм — независимая единица; у почки собственный
-	# _has_budded=false, и она тоже сможет отпочковаться при своём
-	# агра-цикле.
+func test_child_bud_is_small_slime_and_cannot_bud() -> void:
+	# Почка Adult Slime — это Small Slime (bud_scene = small_slime.tscn).
+	# У Small Slime can_bud=false, поэтому цепь остаётся конечной.
 	var slime = _spawn_slime()
 	await get_tree().process_frame
 	slime._state = slime.State.CHASE
 	slime._tick_bud(0.01)
 	slime._tick_bud(slime.BUD_DELAY + 0.1)
 	assert_true(slime._has_budded)
-	# Ищем почку и проверяем что у неё _has_budded=false и ready-to-bud.
+	# Ищем почку и проверяем её флаги.
 	var parent := slime.get_parent()
 	var bud: Node = null
 	for child in parent.get_children():
@@ -175,5 +174,7 @@ func test_child_bud_can_also_bud() -> void:
 			bud = child
 			break
 	assert_not_null(bud)
-	assert_eq(bud._has_budded, false, "у почки свежий флаг")
-	assert_eq(bud._bud_delay_timer, 0.0, "у почки таймер не запущен")
+	assert_eq(bud.can_bud, false,
+		"почка = Small Slime, она сама не почкуется")
+	assert_eq(bud.can_split_on_death, false,
+		"почка = Small Slime, она не распадается при смерти")
