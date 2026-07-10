@@ -3,7 +3,17 @@
     "allow": [
       "Bash(git *)",
       "Bash(git push)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(/Applications/Godot.app/Contents/MacOS/Godot --headless *)",
+      "Bash(python3 tools/gen_animation_gifs.py)",
+      "Bash(python3 tools/gen_*.py)",
+      "Bash(find assets *)",
+      "Bash(find scenes *)",
+      "Bash(find resources *)",
+      "Bash(find autoloads *)",
+      "Bash(find test *)",
+      "Bash(find docs *)",
+      "Bash(find tools *)"
     ]
   }
 }
