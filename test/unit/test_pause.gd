@@ -11,8 +11,14 @@ const HudScene = preload("res://scenes/ui/hud.tscn")
 
 func after_each() -> void:
 	# Не оставляем tree в paused между тестами — иначе следующие
-	# тесты с await get_tree().process_frame зависнут.
+	# тесты с await get_tree().process_frame зависнут. GameState —
+	# autoload, любые правки полей ниже (для теста pause stats) тоже
+	# восстанавливаем, чтобы соседние тесты не наследовали dirty state.
 	get_tree().paused = false
+	GameState.current_floor_number = 1
+	GameState.player_level = 1
+	GameState.run_gold = 0
+	GameState.run_enemies_killed = 0
 
 func test_pause_input_action_is_defined() -> void:
 	assert_true(InputMap.has_action("pause"),
@@ -40,3 +46,31 @@ func test_toggle_pause_pauses_tree_and_shows_panel() -> void:
 	hud._toggle_pause()
 	assert_false(get_tree().paused, "второй toggle снимает паузу")
 	assert_false(panel.visible, "панель скрывается")
+
+func test_pause_panel_shows_current_run_stats() -> void:
+	# При паузе отображаем прогресс ТЕКУЩЕГО забега (current_floor_number,
+	# player_level, run_gold, run_enemies_killed), не last_run_* — те
+	# заполняются только при смерти.
+	GameState.current_floor_number = 5
+	GameState.player_level = 3
+	GameState.run_gold = 27
+	GameState.run_enemies_killed = 11
+	var hud = HudScene.instantiate()
+	add_child_autofree(hud)
+	await get_tree().process_frame
+	hud._toggle_pause()
+	var floor_lbl: Label = hud.get_node("PausePanel/PauseBox/PauseStatsFloor")
+	var level_lbl: Label = hud.get_node("PausePanel/PauseBox/PauseStatsLevel")
+	var kills_lbl: Label = hud.get_node("PausePanel/PauseBox/PauseStatsKills")
+	var gold_lbl: Label = hud.get_node("PausePanel/PauseBox/PauseStatsGold")
+	assert_true(floor_lbl.text.contains("5"),
+		"floor label содержит текущий этаж, actual='%s'" % floor_lbl.text)
+	assert_true(level_lbl.text.contains("3"),
+		"level label содержит текущий уровень, actual='%s'" % level_lbl.text)
+	assert_true(kills_lbl.text.contains("11"),
+		"kills label содержит run_enemies_killed, actual='%s'" % kills_lbl.text)
+	assert_true(gold_lbl.text.contains("27"),
+		"gold label содержит run_gold, actual='%s'" % gold_lbl.text)
+	# cleanup — снять паузу перед тестами дальше. GameState restore —
+	# в after_each.
+	hud._toggle_pause()

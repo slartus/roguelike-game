@@ -19,6 +19,10 @@ const HEALTH_BAR_PADDING: float = 1.0
 @onready var _potion_icon: TextureRect = $InventoryPanel/PotionSlot/PotionIcon
 @onready var _potion_count_label: Label = $InventoryPanel/PotionSlot/PotionCount
 @onready var _pause_panel: ColorRect = $PausePanel
+@onready var _pause_stats_floor: Label = $PausePanel/PauseBox/PauseStatsFloor
+@onready var _pause_stats_level: Label = $PausePanel/PauseBox/PauseStatsLevel
+@onready var _pause_stats_kills: Label = $PausePanel/PauseBox/PauseStatsKills
+@onready var _pause_stats_gold: Label = $PausePanel/PauseBox/PauseStatsGold
 @onready var _log_box: VBoxContainer = $CombatLog
 @onready var _health_bar: Control = $HealthBar
 @onready var _health_bar_fill: ColorRect = $HealthBar/Fill
@@ -39,6 +43,17 @@ func _toggle_pause() -> void:
 	var paused := not get_tree().paused
 	get_tree().paused = paused
 	_pause_panel.visible = paused
+	if paused:
+		_refresh_pause_stats()
+
+func _refresh_pause_stats() -> void:
+	# Показываем прогресс текущего забега (не last_run_* — они заполняются
+	# только при смерти игрока). Ключи tr() shared с title screen'ом:
+	# UI_RUN_STATS_* — одна семантика «Итоги забега».
+	_pause_stats_floor.text = tr("UI_RUN_STATS_FLOOR") % GameState.current_floor_number
+	_pause_stats_level.text = tr("UI_RUN_STATS_LEVEL") % GameState.player_level
+	_pause_stats_kills.text = tr("UI_RUN_STATS_KILLS") % GameState.run_enemies_killed
+	_pause_stats_gold.text = tr("UI_RUN_STATS_GOLD") % GameState.run_gold
 
 func set_potion_count(count: int) -> void:
 	# Пустой слот — только рамка ячейки, без иконки и числа

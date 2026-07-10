@@ -117,22 +117,53 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0, 0, 0, 0.6)
 
-[node name="PauseLabel" type="Label" parent="PausePanel"]
+[node name="PauseBox" type="VBoxContainer" parent="PausePanel"]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -80.0
-offset_top = -16.0
-offset_right = 80.0
-offset_bottom = 16.0
+offset_left = -120.0
+offset_top = -80.0
+offset_right = 120.0
+offset_bottom = 80.0
 grow_horizontal = 2
 grow_vertical = 2
+alignment = 1
+
+[node name="PauseLabel" type="Label" parent="PausePanel/PauseBox"]
+layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "ПАУЗА"
 horizontal_alignment = 1
-vertical_alignment = 1
+
+[node name="Spacer" type="Control" parent="PausePanel/PauseBox"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="PauseStatsFloor" type="Label" parent="PausePanel/PauseBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Этаж: 1"
+horizontal_alignment = 1
+
+[node name="PauseStatsLevel" type="Label" parent="PausePanel/PauseBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Уровень: 1"
+horizontal_alignment = 1
+
+[node name="PauseStatsKills" type="Label" parent="PausePanel/PauseBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Убито врагов: 0"
+horizontal_alignment = 1
+
+[node name="PauseStatsGold" type="Label" parent="PausePanel/PauseBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Собрано золота: 0"
+horizontal_alignment = 1
 
 [node name="CombatLog" type="VBoxContainer" parent="."]
 anchors_preset = 3
