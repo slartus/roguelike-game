@@ -2,8 +2,16 @@ extends GutTest
 
 # Декор пола/стен (плесень, канделябры, трещины, кровяные пятна)
 # добавляется в отдельный узел DecorRoot как Sprite2D без коллизии.
+#
+# С M3 tower_floor_generation: cave-декор ставится только там, где
+# зона/роль его разрешает. Тесты используют глубокие этажи (basement
+# zone, floor 15) — на них mold/crack/candle обязаны появляться.
+# Верхние residential/technical этажи — под тем же декор-путём, но
+# профиль пустой, поэтому декор не спавнится (см. test_decor_profiles.gd
+# и test_floor_decor_zones.gd).
+#
 # Контракт:
-# 1. на достаточно большом этаже хотя бы один декор появляется;
+# 1. на deep этаже хотя бы один cave-декор появляется;
 # 2. размещение детерминировано от seed — тот же tower_seed / floor
 #    даёт то же самое расположение;
 # 3. декор не пересекается с проходимой геометрией: floor-декали лежат
@@ -44,17 +52,17 @@ func _decor_signature(floor_node: Node2D) -> Array:
 	items.sort()
 	return items
 
-func test_decor_root_exists_and_populates_for_typical_floor() -> void:
-	# На типичном 4-м этаже (footprint 460×320, много стен, много пола)
-	# что-нибудь из декора обязано выпасть — иначе feature мёртвая.
-	var floor_node := _instantiate_floor(123456, 4)
+func test_decor_root_exists_and_populates_for_deep_floor() -> void:
+	# Basement zone (floor 15-18) — mold/candle/crack разрешены.
+	# Взято floor 16 чтобы точно попасть в basement, не boss.
+	var floor_node := _instantiate_floor(123456, 16)
 	assert_gt(_decor_root(floor_node).get_child_count(), 0,
-		"на среднем этаже должен быть хотя бы один декор")
+		"на deep этаже (basement) должен быть хотя бы один декор")
 
 func test_decor_placement_is_deterministic_for_same_seed() -> void:
-	var floor_a := _instantiate_floor(987654, 3)
+	var floor_a := _instantiate_floor(987654, 16)
 	var sig_a := _decor_signature(floor_a)
-	var floor_b := _instantiate_floor(987654, 3)
+	var floor_b := _instantiate_floor(987654, 16)
 	var sig_b := _decor_signature(floor_b)
 	assert_eq(sig_a, sig_b,
 		"один и тот же seed должен давать одинаковую раскладку декора")
@@ -62,8 +70,8 @@ func test_decor_placement_is_deterministic_for_same_seed() -> void:
 func test_decor_differs_between_seeds() -> void:
 	# Разные seed'ы должны давать хотя бы немного разную раскладку —
 	# иначе декор ощущается статичным.
-	var floor_a := _instantiate_floor(111, 4)
-	var floor_b := _instantiate_floor(222, 4)
+	var floor_a := _instantiate_floor(111, 16)
+	var floor_b := _instantiate_floor(222, 16)
 	assert_ne(_decor_signature(floor_a), _decor_signature(floor_b),
 		"разные seed'ы должны давать разные раскладки декора")
 
@@ -71,7 +79,7 @@ func test_decor_uses_only_expected_textures() -> void:
 	# Floor 4 — обычный этаж с достаточным числом candidate-тайлов;
 	# boss-этаж (кратный 5) даёт слишком мало стен «в комнату», и
 	# whitelist прошёл бы вакуумно на пустом наборе декалей.
-	var floor_node := _instantiate_floor(42, 4)
+	var floor_node := _instantiate_floor(42, 16)
 	var expected := [
 		MoldTexture, CandleTexture, CrackTexture, BloodTexture,
 	]

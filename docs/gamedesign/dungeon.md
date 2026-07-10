@@ -72,6 +72,41 @@ Boss floors (`floor % 5 == 0`) сохраняют старую логику: `fl
 
 Например `treasure_room` в `caves` даёт danger = 2. Это пригодится room-aware spawn budget'у (см. `enemies.md::MonsterSpawnTable`).
 
+## Декор по зонам и ролям
+
+Каждая tile проходит через `DecorProfiles.decor_profile_for_room(role, zone)` (внутри room'а) или `decor_profile_for_zone(zone)` (в коридорах / промежутках). Профиль — Dictionary `{floor: [...], wall: [...]}` со списком разрешённых типов декора.
+
+**Ключевой инвариант M3.** Верхние зоны (`tower_top`, `residential`, `technical`) фильтруются от cave-only декора (`mold`, `crack`, `blood`, `candle`, `bones`, `stone_rubble`) в `decor_profile_for_room`. Даже если role (например `ruined_room` в `tower_top`) технически бы предлагала эти типы, они удаляются в `_strip_cave_only`. Это предотвращает ситуацию когда жилой этаж внезапно покрывается мхом.
+
+**Типовые профили ролей:**
+
+| Role | Wall | Floor |
+|---|---|---|
+| `bedroom` | bed, wardrobe | rug, small_table |
+| `living_room` | cabinet, bookshelf | rug, small_table, chair |
+| `kitchen` | cabinet, shelf | small_table, chair |
+| `study` | bookshelf, cabinet | small_table, chair |
+| `machine_room` | pipe, cable_bundle | machine_block, valve |
+| `boiler_room` | pipe, vent | boiler, valve |
+| `switch_room` | cable_bundle, vent | switch_box |
+| `basement_cell` | mold, candle | crack, stone_rubble |
+| `ruined_room` | mold, candle | crack, broken_furniture, stone_rubble |
+| `cave_chamber` | mold | crack, stone_rubble, bones, blood |
+| `treasure_room` | candle, shelf | crate, rug |
+| `entrance`/`exit_core`/`boss_arena` | — | — (пустые, чтобы не блокировать критические точки) |
+
+**Zone fallback** для tile вне rooms (коридоры):
+
+| Zone | Wall | Floor |
+|---|---|---|
+| `tower_top`, `residential` | — | — |
+| `technical` | pipe | — |
+| `lower_tower` | mold | crack |
+| `basement` | mold, candle | crack, stone_rubble |
+| `caves` | mold | crack, stone_rubble, blood |
+
+**Реальные спрайты пока есть только для cave-декора** (`mold.png`, `candle.tscn`, `floor_crack.png`, `floor_blood.png`). Профили верхних зон существуют как контракт — `floor.gd` пока их не рисует (нет ассетов), но rooms с этими профилями не получают cave-декор из-за фильтрации. Спрайты residential/technical декора — задача под следующие milestone'ы или отдельные фичи.
+
 ## Генератор — `DungeonGenerator` (BSP + MST + extra edges)
 
 `scenes/dungeon/dungeon_generator.gd` (`class_name DungeonGenerator`). Метод `generate(seed, floor_number, is_boss) → DungeonLayout`.

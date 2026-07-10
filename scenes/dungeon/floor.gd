@@ -206,8 +206,16 @@ func _create_wall_span(col_start: int, col_end: int, row: int, kind: String) -> 
 
 func _place_decor(seed_value: int) -> void:
 	# Декор — чисто визуальные Sprite2D без коллизии. Раскладывается
-	# детерминированно по seed этажа: тот же tower_seed → та же плесень
-	# и те же канделябры при повторном забеге.
+	# детерминированно по seed этажа: тот же tower_seed → тот же декор
+	# при повторном забеге.
+	#
+	# Начиная с M3 tower_floor_generation: тип декора зависит от
+	# профиля комнаты (RoomRoles / DecorProfiles). Cave-only mold/crack/
+	# blood/candle ставятся только в тех комнатах и зонах, где их
+	# разрешает профиль — верхние этажи (residential/technical) их
+	# больше не показывают, иначе жилые уровни ощущаются как пещеры.
+	# Реальных спрайтов для residential/technical пока нет — эти типы
+	# в профилях остаются как контракт, но floor.gd их не рисует.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value * 31 + 7
 	var bounds := layout.floor_bounds
@@ -216,6 +224,9 @@ func _place_decor(seed_value: int) -> void:
 	for row in rows:
 		for col in cols:
 			var tile_center := Vector2i(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
+			var profile := _decor_profile_at(tile_center)
+			var wall_types: Array = profile.get("wall", [])
+			var floor_types: Array = profile.get("floor", [])
 			if _is_wall_at(tile_center):
 				# Настенный декор ставим только на стены, обращённые
 				# «лицом» в комнату — тайл сверху с полом ниже.
@@ -226,16 +237,28 @@ func _place_decor(seed_value: int) -> void:
 				if not below_is_floor:
 					continue
 				var roll := rng.randf()
-				if roll < CANDLE_CHANCE:
+				if wall_types.has(DecorProfiles.DECOR_CANDLE) and roll < CANDLE_CHANCE:
 					_spawn_candle(Vector2(tile_center) + Vector2(0, -1))
-				elif roll < CANDLE_CHANCE + MOLD_CHANCE:
+				elif wall_types.has(DecorProfiles.DECOR_MOLD) and roll < CANDLE_CHANCE + MOLD_CHANCE:
 					_spawn_decor(MOLD_TEXTURE, Vector2(tile_center) + Vector2(0, 2))
 			else:
 				var roll := rng.randf()
-				if roll < CRACK_CHANCE:
+				if floor_types.has(DecorProfiles.DECOR_CRACK) and roll < CRACK_CHANCE:
 					_spawn_decor(FLOOR_CRACK_TEXTURE, Vector2(tile_center))
-				elif roll < CRACK_CHANCE + BLOOD_CHANCE:
+				elif floor_types.has(DecorProfiles.DECOR_BLOOD) and roll < CRACK_CHANCE + BLOOD_CHANCE:
 					_spawn_decor(FLOOR_BLOOD_TEXTURE, Vector2(tile_center))
+
+func _decor_profile_at(tile_center: Vector2i) -> Dictionary:
+	# Ищем комнату, содержащую tile. Если нашли — используем её role
+	# profile (M3 room-aware декор). Иначе (коридоры, промежутки) —
+	# берём zone-fallback профиль.
+	if layout.room_infos.is_empty():
+		return DecorProfiles.decor_profile_for_zone(layout.zone)
+	for info in layout.room_infos:
+		var room: Rect2i = layout.rooms[info.room_index]
+		if room.has_point(tile_center):
+			return DecorProfiles.decor_profile_for_room(info.role, info.zone)
+	return DecorProfiles.decor_profile_for_zone(layout.zone)
 
 func _spawn_decor(texture: Texture2D, at: Vector2) -> void:
 	var sprite := Sprite2D.new()
