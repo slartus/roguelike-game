@@ -1,0 +1,70 @@
+# Upgrade cards
+
+Прогрессия игрока внутри забега не сводится к «+1 HP каждый уровень». На нечётных level-up игрок получает выбор из 3 карточек, которые улучшают билд под текущий стиль оружия (warrior / archer / mage) или добавляют общие бонусы (HP, скорость, сопротивление).
+
+Общие принципы v1:
+
+- **Run-scoped.** Стеки карт живут только один забег, `reset_run()` их обнуляет. Никакой meta-progress в этой фиче.
+- **Style emerges from cards + weapon**, а не жёсткий class-lock. Игрок с мечом, собирающий Warrior-карты, чувствует себя воином; со сменой оружия на лук те же Warrior-карты остаются в run state, но становятся неактивными.
+- **Weapon resources immutable.** Модификаторы применяются на runtime поверх base weapon stats через WeaponStats-слой (появится в M7), а не мутируют `.tres`.
+- **Никаких permanent карт**, hub'а, class-selection screen'а, skill tree, mana, armor, criticals в этой фиче. Это отдельные направления backlog'а.
+
+## Data model (M1)
+
+Каждая карта — `PlayerUpgradeResource` (`resources/upgrades/player_upgrade_resource.gd`):
+
+| Поле | Тип | Смысл |
+|---|---|---|
+| `id` | `String` | Уникальный slug (`thick_skin`, `heavy_strike`) |
+| `display_name` | `String` | i18n ключ (`UPGRADE_*`) |
+| `description` | `String` | i18n ключ (`UPGRADE_*_DESC`) |
+| `rarity` | `enum` | `common` / `uncommon` / `rare` |
+| `max_stacks` | `int` | Максимум стеков (1..N) |
+| `tags` | `Array[String]` | Свободные теги для фильтра |
+| `style` | `String` | `""` (general) / `warrior` / `archer` / `mage` |
+| `effect_type` | `String` | Ключ типа эффекта (список ниже) |
+| `parameters` | `Dictionary` | Параметры эффекта, зависят от `effect_type` |
+| `icon_texture` | `Texture2D` | Иконка на карточке |
+
+**Известные `effect_type`** (список расширяется в M6/M7 при добавлении конкретных карт):
+
+General:
+- `max_health_bonus` — `{"amount": int}` — увеличивает max HP.
+- `speed_multiplier` — `{"multiplier": float}` — множитель скорости игрока.
+- `potion_heal_bonus` — `{"amount": int}` — зелья лечат на N больше.
+- `slow_resistance` — `{"amount": float}` — уменьшает силу slow-эффектов.
+- `poison_resistance` — `{"duration_multiplier": float}` — сокращает длительность яда.
+- `second_wind` — `{"heal": int}` — раз в этаж переживает летальный урон.
+
+Style (Warrior/Archer/Mage):
+- `style_damage_bonus` — `{"style": String, "amount": int}` — +damage к оружию совпадающего style.
+- `melee_range_multiplier` — `{"multiplier": float}` — melee reach.
+- `melee_arc_multiplier` — `{"multiplier": float}` — ширина arc-hitbox'а.
+- `knockback_bonus` — `{"amount": float}` — отбрасывание.
+- `style_attack_interval_multiplier` — `{"style": String, "multiplier": float}` — cooldown между атаками.
+- `pierce_bonus` — `{"amount": int}` — +pierce к projectile.
+- `spread_multiplier` — `{"style": String, "multiplier": float}` — уменьшение спреда.
+- `projectile_speed_multiplier` — `{"style": String, "multiplier": float}` — скорость снаряда.
+- `projectile_lifetime_multiplier` — `{"style": String, "multiplier": float}` — дальность полёта.
+- `area_radius_multiplier` — `{"style": String, "multiplier": float}` — радиус area-эффектов.
+
+Все эти keys фиксированы в `PlayerUpgradeLibrary.KNOWN_EFFECT_TYPES`. Валидатор (`validate_all()`) flag'ит карты с unknown `effect_type` — так опечатки не проходят до runtime.
+
+## Library
+
+`PlayerUpgradeLibrary` (`resources/upgrades/player_upgrade_library.gd`, RefCounted):
+
+- `get_all_upgrades()` — все загруженные resources.
+- `get_upgrade_by_id(id)` — конкретная карта или null.
+- `validate_all()` — Array[String] ошибок (empty = OK). Проверяет: непустой id, уникальность id, префикс `UPGRADE_` у display_name/description, `max_stacks >= 1`, valid `rarity` / `style` / `effect_type`.
+- `get_eligible_upgrades(current_stacks)` — карты, у которых игрок ещё не набрал max_stacks. Offer generator (M4) фильтрует через это перед weighted choice.
+
+В M1 `UPGRADE_PATHS = []` — конкретные карты приходят в M6 (general) и M7 (style).
+
+## Run state, генерация оффера, UI
+
+- **M2** добавит `GameState.player_upgrade_stacks: Dictionary`, `add_player_upgrade`, `reset_run` очистка, `get_player_upgrade_modifiers` snapshot.
+- **M3** — hybrid level rhythm: чётные уровни → HP, нечётные (3+) → upgrade choice queue.
+- **M4** — deterministic 3-of-N offer generator с rarity weights.
+- **M5** — modal choice panel.
+- **M6/M7** — конкретные карты и их эффекты.
