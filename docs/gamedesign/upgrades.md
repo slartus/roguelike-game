@@ -63,7 +63,17 @@ Style (Warrior/Archer/Mage):
 
 ## Run state, генерация оффера, UI
 
-- **M2** добавит `GameState.player_upgrade_stacks: Dictionary`, `add_player_upgrade`, `reset_run` очистка, `get_player_upgrade_modifiers` snapshot.
+- **M2** — Run state в GameState:
+  - `player_upgrade_stacks: Dictionary` — `{upgrade_id: int}`.
+  - `pending_upgrade_levels: Array` — очередь уровней, для которых игрок должен выбрать карту (M5 UI обрабатывает по одному).
+  - `upgrade_offer_counter: int` — компонент seed'а для deterministic offer generator (M4).
+  - `second_wind_used_this_floor: bool` — сбрасывается в `next_floor()` и `reset_run()`.
+  - API: `get_upgrade_stack(id)`, `add_player_upgrade(upgrade)`, `has_pending_upgrade_choice()`, `pop_next_pending_upgrade_level()`, `get_player_upgrade_modifiers()`.
+  - Сигналы: `upgrade_choice_requested(level)` (эмитится в M3 на нечётных уровнях), `upgrades_changed()` (эмитится после `add_player_upgrade`).
+  - `add_player_upgrade` инкрементирует stack и применяет **immediate effects**: `max_health_bonus` увеличивает `player_max_health` + heal на amount. Остальные эффекты — snapshot через `get_player_upgrade_modifiers`, не immediate.
+  - `reset_run()` очищает все 4 поля upgrade state.
+
+`get_player_upgrade_modifiers()` возвращает Dictionary с 17 полями (speed_multiplier, potion_heal_bonus, slow_resistance_bonus, poison_duration_multiplier + 4 style-специфичных набора для warrior/archer/mage). Пересчитывается на каждом вызове — стеков мало, дешевле чем держать derived dict в sync с сигналами. Base upgrade resources при этом не мутируются (проверено `test_modifier_snapshot_does_not_mutate_resource`).
 - **M3** — hybrid level rhythm: чётные уровни → HP, нечётные (3+) → upgrade choice queue.
 - **M4** — deterministic 3-of-N offer generator с rarity weights.
 - **M5** — modal choice panel.
