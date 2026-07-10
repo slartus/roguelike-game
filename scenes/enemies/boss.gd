@@ -13,6 +13,13 @@ const SkeletonScene: PackedScene = preload("res://scenes/enemies/skeleton.tscn")
 @export var bullet_scene: PackedScene
 @export var volley_interval: float = 2.0
 @export var volley_count: int = 8
+# Босс, помимо звёздочки-залпа, стреляет прицельным aimed-снарядом
+# (как обычный лич — magic_bolt), с упреждением по вектору движения
+# игрока. Отдельная пуля и таймер (`_aimed_fire_timer`), чтобы залп
+# звёзд и прицельный выстрел жили независимо: reload одного никогда
+# не влияет на другой, оба тикают параллельно каждый physics-frame.
+@export var aimed_bullet_scene: PackedScene
+@export var aimed_fire_interval: float = 1.0
 @export var xp_reward: int = 40
 @export var gold_reward: int = 20
 
@@ -31,6 +38,11 @@ const FLOOR_TILE_SIZE: int = 20
 const CAST_PULSE_FREQUENCY: float = PI * 8.0
 const CAST_TINT_COLOR: Color = Color(0.7, 1.6, 0.85, 1.0)
 
+# Скорость aimed-пули для расчёта упреждения. Должна соответствовать
+# aimed_bullet_scene::speed (magic_bolt = 100). Как и в lich.gd, читаем
+# через константу, не создаём инстанс bullet ради `.speed`.
+const AIMED_BULLET_SPEED: float = 100.0
+
 var health: int
 var _target: Node2D
 var _contact_timer: float = 0.0
@@ -39,6 +51,7 @@ var _volley_timer: float = 0.0
 # чтобы визуально паттерн вращался и игрок не мог заучить статичные
 # коридоры между пулями.
 var _volley_index: int = 0
+var _aimed_fire_timer: float = 0.0
 var _minions: Array = []
 # Стартовое значение = 0.0 → первый physics-тик сразу запустит каст
 # первого батча. Босс с ходу колдует свиту, а не тратит 10 s на «зарядку»
@@ -57,6 +70,7 @@ func _ready() -> void:
 	gold_reward = Balance.scaled_gold_reward(gold_reward, floor_num)
 	health = max_health
 	_volley_timer = volley_interval
+	_aimed_fire_timer = aimed_fire_interval
 	var visual: Sprite2D = get_node_or_null("Visual") as Sprite2D
 	if visual != null:
 		_visual_base_modulate = visual.modulate
@@ -81,6 +95,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_volley_timer -= delta
+	_aimed_fire_timer -= delta
 
 	var dir := (_target.global_position - global_position).normalized()
 	velocity = dir * speed
@@ -95,6 +110,10 @@ func _physics_process(delta: float) -> void:
 	if _volley_timer <= 0.0:
 		_volley_timer = volley_interval
 		_fire_volley()
+
+	if _aimed_fire_timer <= 0.0:
+		_aimed_fire_timer = aimed_fire_interval
+		_fire_aimed_shot()
 
 func _fire_volley() -> void:
 	if bullet_scene == null:
@@ -115,6 +134,37 @@ func _compute_volley_angles(index: int) -> Array:
 	for i in volley_count:
 		angles.append(step * float(i) + offset)
 	return angles
+
+# Прицельный выстрел «как у лича» — magic_bolt с упреждением по вектору
+# движения игрока. Формула идентична lich.gd::_compute_lead_direction,
+# отдельная константа AIMED_BULLET_SPEED соответствует aimed_bullet_scene.
+func _fire_aimed_shot() -> void:
+	if aimed_bullet_scene == null or _target == null:
+		return
+	var target_velocity: Vector2 = Vector2.ZERO
+	if _target is CharacterBody2D:
+		target_velocity = _target.velocity
+	var direction := _compute_lead_direction(_target.global_position, target_velocity)
+	if direction == Vector2.ZERO:
+		return
+	var bullet := aimed_bullet_scene.instantiate()
+	bullet.global_position = global_position
+	bullet.direction = direction
+	get_tree().current_scene.add_child(bullet)
+
+# Pure-функция расчёта направления с упреждением. Копия формулы
+# lich.gd::_compute_lead_direction — те же 5 строк, но со своей
+# константой скорости пули (у босса magic_bolt speed = 100, у лича
+# тоже 100 сейчас; хранятся раздельно, потому что aimed_bullet_scene
+# у босса — отдельный export). Тестируется без спавна пули.
+func _compute_lead_direction(target_pos: Vector2, target_velocity: Vector2) -> Vector2:
+	var to_target := target_pos - global_position
+	var distance := to_target.length()
+	if distance <= 0.0:
+		return Vector2.ZERO
+	var time_to_hit := distance / AIMED_BULLET_SPEED
+	var predicted := target_pos + target_velocity * time_to_hit
+	return (predicted - global_position).normalized()
 
 # --- Summon свиты -------------------------------------------------
 
