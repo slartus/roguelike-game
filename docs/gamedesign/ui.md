@@ -16,6 +16,15 @@
 
 Обновляются через `hud.set_*` методы; `Main._ready` подключает сигналы `Player.health_changed`, `GameState.xp_changed`, `GameState.leveled_up`, `GameState.gold_changed`.
 
+## Полоса жизни (визуальный HP-bar)
+
+Рядом с `HealthLabel` в левом верхнем углу — визуальный health bar (`HealthBar` — `Control` 120×14 px, сразу справа от текста HP). Два вложенных `ColorRect`:
+
+- `Background` — тёмный фон полосы (`Color(0.12, 0.12, 0.15, 0.85)`), заливает всю область HealthBar.
+- `Fill` — красный fill (`Color(0.85, 0.2, 0.2, 1)`) с padding 1 px внутри Background. Максимальная ширина `HEALTH_BAR_FILL_MAX_WIDTH = 118 px`. Ширина обновляется в `hud.set_health(current, maximum)` как `HEALTH_BAR_FILL_MAX_WIDTH × clampf(current / max(maximum, 1), 0, 1)` — clamp защищает от `current > maximum` и деления на ноль.
+
+Полоса живёт в первой строке HUD рядом с текстовым `HealthLabel`: цифры слева для точности, визуал справа для быстрого чтения на бегу. `HealthLabel` укорочен до 72 px ширины, чтобы освободить место под полосу.
+
 ## Title screen (`scenes/ui/title_screen.tscn`)
 
 Точка входа в игру — `project.godot::run/main_scene` = `title_screen.tscn` (не `main.tscn` напрямую). Центрированный `VBoxContainer` с:

@@ -5,6 +5,10 @@ const LOG_ENTRY_LIFETIME: float = 5.0
 const LOG_FADE_DURATION: float = 0.4
 const LOG_FONT_SIZE: int = 8
 
+# Полоса жизни справа вверху: Background 120x14 px, Fill внутри с padding 1 px
+# (max width = 118). Fill ресайзится в set_health через `size.x = MAX * pct`.
+const HEALTH_BAR_FILL_MAX_WIDTH: float = 118.0
+
 @onready var _health_label: Label = $HealthLabel
 @onready var _floor_label: Label = $FloorLabel
 @onready var _level_label: Label = $LevelLabel
@@ -14,6 +18,7 @@ const LOG_FONT_SIZE: int = 8
 @onready var _potion_count_label: Label = $InventoryPanel/PotionSlot/PotionCount
 @onready var _pause_panel: ColorRect = $PausePanel
 @onready var _log_box: VBoxContainer = $CombatLog
+@onready var _health_bar_fill: ColorRect = $HealthBar/Fill
 
 func _ready() -> void:
 	EventLog.entry_added.connect(_on_log_entry)
@@ -44,6 +49,11 @@ func set_potion_count(count: int) -> void:
 
 func set_health(current: int, maximum: int) -> void:
 	_health_label.text = tr("UI_HEALTH") % [current, maximum]
+	# maximum == 0 быть не должен, но guard'имся — иначе деление на ноль.
+	var pct := clampf(float(current) / float(maxi(maximum, 1)), 0.0, 1.0)
+	var fill_size := _health_bar_fill.size
+	fill_size.x = HEALTH_BAR_FILL_MAX_WIDTH * pct
+	_health_bar_fill.size = fill_size
 
 func set_floor(number: int) -> void:
 	_floor_label.text = tr("UI_FLOOR") % number
