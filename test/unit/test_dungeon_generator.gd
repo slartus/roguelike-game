@@ -38,7 +38,7 @@ func test_boss_floor_has_single_room_and_no_doorways() -> void:
 func test_player_start_is_in_top_left_room() -> void:
 	# Top-left = argmin(position.x + position.y)
 	var layout = _gen.generate(42, 4, false)
-	var target := layout.rooms[0]
+	var target: Rect2i = layout.rooms[0]
 	for room in layout.rooms:
 		if room.position.x + room.position.y < target.position.x + target.position.y:
 			target = room
@@ -48,7 +48,7 @@ func test_player_start_is_in_top_left_room() -> void:
 func test_exit_is_in_bottom_right_room() -> void:
 	# Bottom-right = argmax(end.x + end.y)
 	var layout = _gen.generate(42, 4, false)
-	var target := layout.rooms[0]
+	var target: Rect2i = layout.rooms[0]
 	for room in layout.rooms:
 		if room.end.x + room.end.y > target.end.x + target.end.y:
 			target = room

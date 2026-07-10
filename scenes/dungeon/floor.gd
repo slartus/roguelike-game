@@ -108,23 +108,50 @@ func _draw_tiled_rect(rect: Rect2i, texture: Texture2D) -> void:
 	_floors_root.add_child(poly)
 
 func _build_walls() -> void:
+	# Каждая wall-tile может быть двух видов:
+	# - solid — обычная стена с коллизией.
+	# - overlap-cap — верхний ряд толстой (2+ tile) горизонтальной стены,
+	#   где сверху комната/коридор, а снизу ещё wall. Рендерится визуально
+	#   как стена (сохраняем «глубину» дизайна), но коллизии не имеет —
+	#   персонаж и враги могут визуально «зайти» под верхнюю кромку стены
+	#   на 1 tile сверху вниз, что создаёт effect глубины top-down.
+	# Merge горизонтальных span'ов идёт отдельно для каждого вида — они
+	# разные Godot-объекты (StaticBody2D vs pure Polygon2D).
 	var bounds := layout.floor_bounds
 	var cols := int(ceil(float(bounds.size.x) / TILE_SIZE))
 	var rows := int(ceil(float(bounds.size.y) / TILE_SIZE))
 	for row in rows:
-		var span_start := -1
-		for col in cols:
-			var tile_center := Vector2i(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
-			var is_wall := _is_wall_at(tile_center)
-			if is_wall:
-				if span_start == -1:
-					span_start = col
-			else:
-				if span_start >= 0:
-					_create_wall_span(span_start, col, row)
-					span_start = -1
-		if span_start >= 0:
-			_create_wall_span(span_start, cols, row)
+		_build_wall_row(row, cols, "solid")
+		_build_wall_row(row, cols, "cap")
+
+func _build_wall_row(row: int, cols: int, kind: String) -> void:
+	var span_start := -1
+	for col in cols:
+		if _wall_kind_at(col, row) == kind:
+			if span_start == -1:
+				span_start = col
+		else:
+			if span_start >= 0:
+				_create_wall_span(span_start, col, row, kind)
+				span_start = -1
+	if span_start >= 0:
+		_create_wall_span(span_start, cols, row, kind)
+
+func _wall_kind_at(col: int, row: int) -> String:
+	# "solid" — обычная стена, есть коллизия. "cap" — верхний ряд толстой
+	# стены (сверху комната/коридор, снизу ещё wall), только визуал.
+	# "" (пустая строка) — не wall (пол).
+	var center := Vector2i(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
+	if not _is_wall_at(center):
+		return ""
+	var above := center + Vector2i(0, -TILE_SIZE)
+	var below := center + Vector2i(0, TILE_SIZE)
+	var bounds := layout.floor_bounds
+	var above_is_floor := above.y >= 0 and not _is_wall_at(above)
+	var below_is_wall := below.y < bounds.size.y and _is_wall_at(below)
+	if above_is_floor and below_is_wall:
+		return "cap"
+	return "solid"
 
 func _is_wall_at(point: Vector2i) -> bool:
 	for room in layout.rooms:
@@ -135,37 +162,45 @@ func _is_wall_at(point: Vector2i) -> bool:
 			return false
 	return true
 
-func _create_wall_span(col_start: int, col_end: int, row: int) -> void:
-	var body := StaticBody2D.new()
+func _create_wall_span(col_start: int, col_end: int, row: int, kind: String) -> void:
 	var span_width := TILE_SIZE * (col_end - col_start)
 	var shape_size := Vector2(span_width, TILE_SIZE)
-	var body_pos := Vector2(col_start * TILE_SIZE + span_width / 2.0, row * TILE_SIZE + TILE_SIZE / 2.0)
-	body.position = body_pos
-	var collision := CollisionShape2D.new()
-	var rect_shape := RectangleShape2D.new()
-	rect_shape.size = shape_size
-	collision.shape = rect_shape
-	body.add_child(collision)
+	var origin_pos := Vector2(col_start * TILE_SIZE + span_width / 2.0, row * TILE_SIZE + TILE_SIZE / 2.0)
 	var half := shape_size / 2.0
-	var visual := Polygon2D.new()
 	var points := PackedVector2Array([
 		-half,
 		Vector2(half.x, -half.y),
 		half,
 		Vector2(-half.x, half.y),
 	])
-	visual.polygon = points
 	# UV на основе абсолютной позиции стены — соседние span-ы бесшовно
 	# продолжают кирпичную кладку.
-	var abs_origin := body_pos - half
-	visual.uv = PackedVector2Array([
+	var abs_origin := origin_pos - half
+	var uv := PackedVector2Array([
 		abs_origin,
 		abs_origin + Vector2(shape_size.x, 0),
 		abs_origin + shape_size,
 		abs_origin + Vector2(0, shape_size.y),
 	])
+	var visual := Polygon2D.new()
+	visual.polygon = points
+	visual.uv = uv
 	visual.texture = WALL_TEXTURE
 	visual.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	if kind == "cap":
+		# Cap-tile: только визуал, без body/collision. Позиция ставится на
+		# Polygon2D напрямую, потому что нет обёртки-body.
+		visual.position = origin_pos
+		_walls_root.add_child(visual)
+		return
+	# solid: StaticBody2D + collision + visual (child).
+	var body := StaticBody2D.new()
+	body.position = origin_pos
+	var collision := CollisionShape2D.new()
+	var rect_shape := RectangleShape2D.new()
+	rect_shape.size = shape_size
+	collision.shape = rect_shape
+	body.add_child(collision)
 	body.add_child(visual)
 	_walls_root.add_child(body)
 
@@ -232,8 +267,10 @@ func _build_astar_grid() -> void:
 	astar_grid.update()
 	for row in rows:
 		for col in cols:
-			var tile_center := Vector2i(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
-			if _is_wall_at(tile_center):
+			# Cap-tile — верхний ряд толстой стены, только визуал без
+			# коллизии. Для pathfinding он проходим, иначе враги не смогут
+			# «зайти» под кромку так же как игрок.
+			if _wall_kind_at(col, row) == "solid":
 				astar_grid.set_point_solid(Vector2i(col, row), true)
 
 func _place_door() -> void:
