@@ -211,19 +211,29 @@ i18n: `WEAPON_WAND`.
 
 ## Модель оружия в руке игрока
 
-`player.tscn` содержит дочерний `Sprite2D` **Weapon** — sprite оружия в правой руке игрока (`position = (5, 3)`, offset вычисляется от icon_texture в `_apply_weapon_visual`, пивот на «рукояти» чтобы вращение читалось как замах).
+`player.tscn` содержит дочерний `Sprite2D` **Weapon**. Позиция и rest-поза зависят от `_facing` (±1, обновляется каждый tick по направлению от игрока к курсору):
 
-- При `_ready` и `equip(weapon)` — `_apply_weapon_visual` подставляет `weapon.icon_texture` и `modulate = weapon.icon_modulate`.
+- `position = (HAND_X_OFFSET * _facing, HAND_Y_OFFSET) = (±5, 3)` — оружие с той стороны, куда смотрит игрок.
+- `flip_h = _facing < 0` — при взгляде влево sprite отражается по горизонтали, чтобы асимметричные оружия (например, лук с дугой на одной стороне) читались правильно.
+- `offset = (0, -icon_texture.height / 2)` — pivot совпадает с рукоятью (нижний край PNG). При вращении handle остаётся в руке, клинок описывает дугу над плечом. Все 9 icon-спрайтов нарисованы в конвенции «blade вверху PNG, handle внизу».
+
+**Rest rotation** (`_get_rest_rotation`):
+- `melee_arc` / `melee_thrust` — `MELEE_REST_ANGLE * _facing` (~20°). Клинок наклонён «наружу» от игрока — читается как «оружие в руке», а не «клинок торчит из плеча».
+- `projectile` / `spell_projectile` — `0.0`. Лук/посох в rest вертикально.
+
+Rest-поза применяется в `_apply_facing_visuals`, вызывается на `equip()` и на смене facing.
+
+- При `_ready` и `equip(weapon)` — `_apply_weapon_visual` подставляет `weapon.icon_texture` и `modulate = weapon.icon_modulate`, затем зовёт `_apply_facing_visuals`.
 - Без equipped weapon (или без icon_texture) — Weapon-нода скрыта.
-- Legacy Dagger / Pistol / Shotgun имеют полноцветные icon_texture, `icon_modulate = WHITE` → рендерятся как есть.
-- Новые 6 classical weapons используют `dagger.png` как placeholder-иконку и отличаются через `icon_modulate` (см. `pickups.md`).
+- Все 9 оружий имеют собственные 16×16 pixel-art спрайты и рендерятся с `icon_modulate = WHITE` (спрайт сам несёт цвет).
+- Legacy Dagger / Pistol / Shotgun генерируются `tools/gen_item_sprites.py`, v2 six (Sword / Spear / Bow / Crossbow / Staff / Wand) — `tools/gen_weapon_sprites.py`.
 
 ## Анимация взмаха
 
 WeaponController при успешной `try_attack` вызывает `player.play_attack_visual(target_pos, weapon)`. Реализация повторяет паттерн `skeleton.gd::_play_lunge_animation`:
 
 - Корпус (Sprite2D `Visual`) делает выпад в сторону цели на `SWING_DISTANCE = 6` px за `SWING_OUT_DURATION = 60 ms`, возвращается обратно за `SWING_BACK_DURATION = 120 ms`.
-- Только для melee (`melee_arc` / `melee_thrust`) параллельно с выпадом Weapon-нода поворачивается на `WEAPON_SWING_ANGLE = PI × 0.55` (~99°) и обратно — через пивот на рукояти это читается как рубящий удар.
+- Только для melee (`melee_arc` / `melee_thrust`) параллельно с выпадом Weapon-нода поворачивается от `rest_rotation` к `rest_rotation + WEAPON_SWING_ANGLE * _facing` (`WEAPON_SWING_ANGLE = PI × 0.55` ≈ 99°) и обратно. Знак умножается на `_facing` — удар всегда идёт «в сторону цели»: вправо при facing right, влево при left. Через пивот на рукояти это читается как рубящий удар.
 - Для projectile / spell (лук, посох, жезл) свинг оружия не запускается — только выпад тела: было бы странно если лук «резал».
 - Предыдущий tween убивается через `.kill()` перед стартом нового, чтобы визуал не застревал в промежуточной точке при частой стрельбе.
 

@@ -9,13 +9,13 @@ func _ready() -> void:
 	if weapon != null and _visual != null:
 		if weapon.icon_texture != null:
 			_visual.texture = weapon.icon_texture
-			# icon_modulate по default'у WHITE — не искажает уже покрашенный
-			# спрайт (Dagger/Pistol/Shotgun имеют полноцветные icon_texture).
+			# У всех оружий default icon_modulate = WHITE — рендерят свой
+			# полноцветный спрайт как есть. Кастомный оттенок применится
+			# поверх, если задан в .tres.
 			_visual.modulate = weapon.icon_modulate
 		else:
-			# Fallback: без иконки — красим placeholder в icon_modulate.
-			# Раньше падало в bullet_color, но у новых v2 weapons тот
-			# дефолтный жёлтый — все выглядели одинаково.
+			# Fallback без icon_texture: пустой Sprite2D, только modulate.
+			# По факту не даёт визуал, но не крешит.
 			_visual.modulate = weapon.icon_modulate
 
 func _on_body_entered(body: Node) -> void:

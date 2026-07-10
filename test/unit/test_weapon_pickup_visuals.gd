@@ -18,19 +18,17 @@ func test_all_active_pool_weapons_have_icon_texture() -> void:
 		assert_not_null(weapon.icon_texture,
 			"%s должен иметь icon_texture для WeaponPickup" % weapon.display_name)
 
-func test_new_weapons_have_distinct_icon_modulate() -> void:
-	# Все 6 новых weapons должны отличаться цветом иконки — иначе они
-	# сливаются в мире (у всех placeholder dagger.png).
-	var modulates: Dictionary = {}
+func test_all_pool_weapons_have_distinct_icon_texture() -> void:
+	# Каждое оружие в пуле обязано иметь свой уникальный icon_texture —
+	# иначе игрок не отличит их в мире (все выглядят как один спрайт).
+	# Раньше отличие обеспечивалось через icon_modulate поверх placeholder
+	# dagger.png; теперь у каждого свой собственный 16×16 pixel-art.
+	var textures: Dictionary = {}
 	for weapon in ChestScript.WEAPON_POOL:
-		var key := "%d,%d,%d" % [
-			int(weapon.icon_modulate.r * 255),
-			int(weapon.icon_modulate.g * 255),
-			int(weapon.icon_modulate.b * 255),
-		]
-		modulates[key] = true
-	assert_gte(modulates.size(), 6,
-		"каждое оружие должно иметь свой icon_modulate — иначе визуал сливается")
+		var path: String = weapon.icon_texture.resource_path
+		textures[path] = true
+	assert_eq(textures.size(), ChestScript.WEAPON_POOL.size(),
+		"каждое оружие должно иметь свой icon_texture — иначе визуал сливается")
 
 func test_pickup_uses_icon_modulate_not_bullet_color() -> void:
 	# Регресс M7 acceptance: pickup визуал не зависит от bullet-специфичного
