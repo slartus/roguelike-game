@@ -102,27 +102,11 @@ func _can_see_target() -> bool:
 	return _has_line_of_sight_to(_target)
 
 func _has_line_of_sight_to(target: Node2D) -> bool:
-	# Raycast от паука к цели: если между ними стена (walls в
-	# floor.gd — единственные StaticBody2D в сцене), паук игрока «не
-	# видит», не переходит в WAITING и не плюётся паутиной сквозь стену.
-	# Если в будущем в сцене появится другой StaticBody2D (например,
-	# разрушаемый ящик), паук перестанет видеть игрока сквозь него —
-	# тогда фильтр надо будет ужесточить (группа/слой стен).
+	# Через общий LineOfSight-хелпер: если между пауком и игроком стена,
+	# паук не переходит в WAITING и не плюётся паутиной сквозь неё.
 	if not is_instance_valid(target):
 		return false
-	var world := get_world_2d()
-	if world == null:
-		return true
-	var space_state := world.direct_space_state
-	if space_state == null:
-		return true
-	var query := PhysicsRayQueryParameters2D.create(global_position, target.global_position)
-	query.exclude = [get_rid()]
-	query.collide_with_areas = false
-	var result := space_state.intersect_ray(query)
-	if result.is_empty():
-		return true
-	return not (result.collider is StaticBody2D)
+	return LineOfSight.is_clear(get_world_2d(), global_position, target.global_position, [get_rid()])
 
 func _enter_watch() -> void:
 	_state = State.WATCH

@@ -55,9 +55,14 @@ func _on_body_entered(body: Node) -> void:
 	# пули — Area2D может слать body_entered повторно если body сдвинулся.
 	if _hit_bodies.has(body):
 		return
-	if body.has_method("take_damage"):
-		body.take_damage(damage)
-		_hit_bodies[body] = true
+	# Стена (StaticBody2D) и любые не-урон-цели гасят пулю независимо от
+	# pierce. Иначе pierce-пуля (арбалет, upgrade) пробивала стену, тратя
+	# один заряд, и летела дальше в следующего врага сквозь неё.
+	if not body.has_method("take_damage"):
+		queue_free()
+		return
+	body.take_damage(damage)
+	_hit_bodies[body] = true
 	if _pierce_remaining > 0:
 		_pierce_remaining -= 1
 		return

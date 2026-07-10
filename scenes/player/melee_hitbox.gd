@@ -154,6 +154,10 @@ func _try_hit(body: Node) -> void:
 		return
 	if not _is_in_damage_sector(body):
 		return
+	if not _has_line_of_sight_to(body):
+		# Между источником удара и врагом стена — арка/укол не должны
+		# доставать сквозь неё, даже если враг геометрически в секторе.
+		return
 	_hit_targets[body] = true
 	body.take_damage(damage)
 	# Knockback пока опциональный: если у target есть метод apply_knockback,
@@ -176,6 +180,11 @@ func _is_in_damage_sector(body: Node) -> bool:
 	if to_body_local.length_squared() <= 0.0001:
 		return true
 	return absf(to_body_local.angle()) <= _half_arc_rad
+
+func _has_line_of_sight_to(body: Node) -> bool:
+	if not (body is Node2D):
+		return true
+	return LineOfSight.is_clear(get_world_2d(), _source_position, body.global_position)
 
 func _draw() -> void:
 	var alpha := _visual_alpha()
