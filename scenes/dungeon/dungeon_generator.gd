@@ -91,12 +91,18 @@ func generate(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayou
 		layout.floor_archetype = "boss_arena"
 		_generate_boss_floor(layout)
 	else:
-		# Верхние зоны (tower_top, residential) — план здания с центральным
-		# коридором. Остальные — legacy BSP, который в M6 будет
-		# переосмыслен как lower/basement/caves.
+		# Верхние зоны — spine (residential-план здания);
+		# technical — grid со служебным коридором и большими машинными;
+		# остальные (lower_tower / basement / caves) — legacy BSP.
 		if layout.zone == TowerZone.ZONE_TOWER_TOP or layout.zone == TowerZone.ZONE_RESIDENTIAL:
 			layout.floor_archetype = "residential_spine"
 			ResidentialSpineGenerator.generate(
+				layout, rng, floor_number,
+				footprint_tiles_for_floor(floor_number),
+			)
+		elif layout.zone == TowerZone.ZONE_TECHNICAL:
+			layout.floor_archetype = "technical_grid"
+			TechnicalGridGenerator.generate(
 				layout, rng, floor_number,
 				footprint_tiles_for_floor(floor_number),
 			)

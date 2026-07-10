@@ -143,6 +143,21 @@ Room roles применяются как обычно: комната содер
 
 Boss floors (`floor % 5 == 0`) в residential zone всё ещё получают `boss_arena`, а не spine — boss логика имеет приоритет.
 
+## Technical Grid floors
+
+Для зоны `technical` (floor 7-10) генератор выбирает архетип `technical_grid`. Реализация — `scenes/dungeon/technical_grid_generator.gd`. Внешне схема остаётся spine-подобной (main corridor + rooms сверху/снизу), но параметры отличают служебный этаж от жилого:
+
+| Параметр | Residential Spine | Technical Grid |
+|---|---|---|
+| `CORRIDOR_WIDTH_TILES` | 3 (60 px, комфорт) | 2 (40 px, узкий служебный) |
+| Room width | 4-8 tiles (жилая) | 3 tiles (closet) или 8-12 (машинная) |
+| Room depth | 4-6 tiles | 5-7 tiles (глубже) |
+| Mix | равномерные bedroom/study/kitchen | случайные small closet (35%) + большие машинные |
+
+Small closets между большими машинными дают классический служебный feel: пара крупных генераторов + пара маленьких щитков. Room roles приходят из `ZONE_ROLE_POOL["technical"]` (`machine_room`, `boiler_room`, `switch_room`, `storage`, `corridor`).
+
+Boss floor 10 остаётся `boss_arena` независимо от zone — boss логика имеет приоритет.
+
 ## Генератор — `DungeonGenerator` (BSP + MST + extra edges)
 
 `scenes/dungeon/dungeon_generator.gd` (`class_name DungeonGenerator`). Метод `generate(seed, floor_number, is_boss) → DungeonLayout`.
