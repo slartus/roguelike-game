@@ -8,22 +8,25 @@
 
 | Label | Ключ tr() | Что показывает |
 |-------|-----------|----------------|
-| `HealthLabel` | `UI_HEALTH` | `HP: %d / %d` |
-| `RoomLabel` | `UI_ROOM` | Номер комнаты |
+| `FloorLabel` | `UI_FLOOR` | Номер этажа |
 | `LevelLabel` | `UI_LEVEL` | Текущий уровень |
 | `XpLabel` | `UI_XP` | XP к следующему уровню |
-| `GoldLabel` | `UI_GOLD` | Общее золото (mета) |
+| `GoldLabel` | `UI_GOLD` | Общее золото (мета) |
 
-Обновляются через `hud.set_*` методы; `Main._ready` подключает сигналы `Player.health_changed`, `GameState.xp_changed`, `GameState.leveled_up`, `GameState.gold_changed`.
+Обновляются через `hud.set_*` методы; `Main._ready` подключает сигналы `GameState.xp_changed`, `GameState.leveled_up`, `GameState.gold_changed`.
 
 ## Полоса жизни (визуальный HP-bar)
 
-Рядом с `HealthLabel` в левом верхнем углу — визуальный health bar (`HealthBar` — `Control` 120×14 px, сразу справа от текста HP). Два вложенных `ColorRect`:
+HP не показывается текстом — только визуальной полосой в самом верхнем-левом углу (`HealthBar` — `Control`, offset_left=8, offset_top=8). Два вложенных `ColorRect`:
 
-- `Background` — тёмный фон полосы (`Color(0.12, 0.12, 0.15, 0.85)`), заливает всю область HealthBar.
-- `Fill` — красный fill (`Color(0.85, 0.2, 0.2, 1)`) с padding 1 px внутри Background. Максимальная ширина `HEALTH_BAR_FILL_MAX_WIDTH = 118 px`. Ширина обновляется в `hud.set_health(current, maximum)` как `HEALTH_BAR_FILL_MAX_WIDTH × clampf(current / max(maximum, 1), 0, 1)` — clamp защищает от `current > maximum` и деления на ноль.
+- `Background` — тёмный фон (`Color(0.12, 0.12, 0.15, 0.85)`), anchor 15, растягивается на всю область HealthBar.
+- `Fill` — красный fill (`Color(0.85, 0.2, 0.2, 1)`) с padding 1 px внутри Background.
 
-Полоса живёт в первой строке HUD рядом с текстовым `HealthLabel`: цифры слева для точности, визуал справа для быстрого чтения на бегу. `HealthLabel` укорочен до 72 px ширины, чтобы освободить место под полосу.
+**Полоса растёт вместе с `max_health`.** `HEALTH_BAR_PX_PER_HP = 12` — ширина одного «hp-делителя». В `hud.set_health(current, maximum)`:
+- `HealthBar.size.x = maximum * PX_PER_HP + 2 * padding` (background увеличивается вместе с level up).
+- `Fill.size.x = current * PX_PER_HP` (заполнение = сколько ещё осталось).
+
+`clampi` защищает от `current > max` и `max <= 0`. Player сигнал `Player.health_changed` пробрасывает `(current, max_health)` в `hud.set_health`, поэтому level up (расширяющий `max_health`) визуально расширяет саму полосу, а не только пропорцию заполнения.
 
 ## Title screen (`scenes/ui/title_screen.tscn`)
 

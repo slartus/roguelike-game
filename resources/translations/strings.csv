@@ -1,5 +1,4 @@
 keys,en,ru
-UI_HEALTH,"HP: %d / %d","HP: %d / %d"
 UI_FLOOR,"Floor %d","Этаж %d"
 UI_LEVEL,"LVL %d","Ур. %d"
 UI_XP,"XP: %d / %d","XP: %d / %d"

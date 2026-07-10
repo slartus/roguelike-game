@@ -1,13 +1,14 @@
 extends GutTest
 
-# HUD-лейблы игрока (HP, floor, level, xp, gold) должны иметь
+# HUD-лейблы игрока (floor, level, xp, gold) должны иметь
 # уменьшенный font_size, иначе они перекрывают игровое поле.
 # Дефолт Godot — 16; проектный target — 12.
+# HealthLabel убран — HP отображается визуальной полосой (см. test_hud_health_bar).
 
 const HudScene = preload("res://scenes/ui/hud.tscn")
 const EXPECTED_FONT_SIZE: int = 12
 const STAT_LABEL_NAMES: Array[String] = [
-	"HealthLabel", "FloorLabel", "LevelLabel", "XpLabel", "GoldLabel",
+	"FloorLabel", "LevelLabel", "XpLabel", "GoldLabel",
 ]
 
 func test_all_stat_labels_have_reduced_font_size() -> void:

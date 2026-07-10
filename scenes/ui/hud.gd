@@ -5,11 +5,13 @@ const LOG_ENTRY_LIFETIME: float = 5.0
 const LOG_FADE_DURATION: float = 0.4
 const LOG_FONT_SIZE: int = 8
 
-# Полоса жизни справа вверху: Background 120x14 px, Fill внутри с padding 1 px
-# (max width = 118). Fill ресайзится в set_health через `size.x = MAX * pct`.
-const HEALTH_BAR_FILL_MAX_WIDTH: float = 118.0
+# Полоса жизни слева вверху растёт вместе с max_health: 1 hp = HEALTH_BAR_PX_PER_HP
+# пикселей ширины. Fill — свободные px (current), Background — total = max_health.
+# Padding 1 px с каждой стороны внутри Background, поэтому Fill.size.x =
+# current * HEALTH_BAR_PX_PER_HP, а HealthBar.size.x = max_health * HEALTH_BAR_PX_PER_HP + 2.
+const HEALTH_BAR_PX_PER_HP: float = 12.0
+const HEALTH_BAR_PADDING: float = 1.0
 
-@onready var _health_label: Label = $HealthLabel
 @onready var _floor_label: Label = $FloorLabel
 @onready var _level_label: Label = $LevelLabel
 @onready var _xp_label: Label = $XpLabel
@@ -18,6 +20,7 @@ const HEALTH_BAR_FILL_MAX_WIDTH: float = 118.0
 @onready var _potion_count_label: Label = $InventoryPanel/PotionSlot/PotionCount
 @onready var _pause_panel: ColorRect = $PausePanel
 @onready var _log_box: VBoxContainer = $CombatLog
+@onready var _health_bar: Control = $HealthBar
 @onready var _health_bar_fill: ColorRect = $HealthBar/Fill
 
 func _ready() -> void:
@@ -48,11 +51,16 @@ func set_potion_count(count: int) -> void:
 		_potion_count_label.text = "×%d" % count
 
 func set_health(current: int, maximum: int) -> void:
-	_health_label.text = tr("UI_HEALTH") % [current, maximum]
-	# maximum == 0 быть не должен, но guard'имся — иначе деление на ноль.
-	var pct := clampf(float(current) / float(maxi(maximum, 1)), 0.0, 1.0)
+	# Полоса и её fill пересчитываются от текущего max_health, поэтому level up
+	# (который расширяет max_health) визуально растит саму полосу, а не только
+	# пропорцию заполнения. clampi защищает от отрицательных значений и current > max.
+	var safe_max := maxi(maximum, 1)
+	var safe_current := clampi(current, 0, safe_max)
+	var bar_size := _health_bar.size
+	bar_size.x = safe_max * HEALTH_BAR_PX_PER_HP + 2.0 * HEALTH_BAR_PADDING
+	_health_bar.size = bar_size
 	var fill_size := _health_bar_fill.size
-	fill_size.x = HEALTH_BAR_FILL_MAX_WIDTH * pct
+	fill_size.x = safe_current * HEALTH_BAR_PX_PER_HP
 	_health_bar_fill.size = fill_size
 
 func set_floor(number: int) -> void:
