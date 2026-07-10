@@ -6,7 +6,17 @@
 
 ## Balance-таблицы (D&D 5e-inspired)
 
-**Базовые** значения `max_health` / `contact_damage` / `xp_reward` / `gold_reward` в таблицах ниже — это floor-1 stats. Каждый монстр при спавне в `_ready` применяет линейный scaling по `GameState.current_floor_number` через `Balance.scaled_*` (см. `progression.md`).
+**Базовые** значения `max_health` / `contact_damage` / `xp_reward` / `gold_reward` в таблицах ниже — это level-1 stats. Каждый монстр при спавне в `_ready` применяет линейный scaling по **effective monster level** через `Balance.scaled_*` (см. `progression.md`).
+
+**Effective monster level.** У каждого обычного enemy family (`enemy.gd` — Slime/Goblin/Orc/Skeleton/Zombie, `ranged_enemy.gd` — Archer/Lich, `charger.gd` — Spider) есть `@export var monster_level: int = 0` и `@export var elite_rank: int = 0`. Boss из этой системы исключён — он остаётся на floor-scaling. Общая формула вынесена в `MonsterLevelUtil.effective_level()` и работает так:
+
+- `monster_level <= 0` → fallback на `GameState.current_floor_number` (старый режим, ничего специально не настраивая).
+- `monster_level > 0` → используется заданный уровень независимо от текущего этажа.
+- `elite_rank = 1` → +1 к effective level (champion).
+- `elite_rank = 2` → +2 к effective level (elite).
+- Минимум — 1.
+
+Настраивается через `configure_spawn(level, elite)` **до** `add_child()` — иначе `_ready` уже применит scaling к дефолтному нулю. Spawn-система задаёт уровень явно (см. `MonsterSpawnTable`), поэтому один и тот же монстр может встречаться на floor 3 как level 2 (легче) и на floor 8 как level 9 elite champion. Визуальные elite-эффекты пока не реализованы — только offset статов.
 
 Источник цифр — D&D 5e Monster Manual (SRD), нормализованные к roguelike-масштабу (~1/5 оригинальных HP). Например Goblin D&D CR 1/4 имеет 7 HP → у нас 4 (base). Orc CR 1/2 имеет 15 HP → у нас 8.
 

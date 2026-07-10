@@ -14,6 +14,12 @@ signal died_at(position: Vector2)
 
 @export var display_name: String = "ENEMY_UNKNOWN"
 @export var max_health: int = 2
+# monster_level <= 0 → fallback на GameState.current_floor_number.
+# Spawn-система задаёт monster_level > 0 через configure_spawn() ДО add_child(),
+# чтобы _ready увидел уже финальный уровень и корректно применил Balance.scaled_*.
+@export var monster_level: int = 0
+# elite_rank прибавляется к effective monster level: champion +1, elite +2.
+@export var elite_rank: int = 0
 @export var fire_interval: float = 1.5
 @export var bullet_scene: PackedScene
 @export var pickup_scene: PackedScene
@@ -50,12 +56,19 @@ var _wander_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
-	var floor_num := GameState.current_floor_number
-	max_health = Balance.scaled_hp(max_health, floor_num)
-	xp_reward = Balance.scaled_xp_reward(xp_reward, floor_num)
-	gold_reward = Balance.scaled_gold_reward(gold_reward, floor_num)
+	var level := get_effective_monster_level()
+	max_health = Balance.scaled_hp(max_health, level)
+	xp_reward = Balance.scaled_xp_reward(xp_reward, level)
+	gold_reward = Balance.scaled_gold_reward(gold_reward, level)
 	health = max_health
 	_fire_timer = randf() * fire_interval
+
+func get_effective_monster_level() -> int:
+	return MonsterLevelUtil.effective_level(monster_level, elite_rank)
+
+func configure_spawn(level: int, elite: int = 0) -> void:
+	monster_level = maxi(1, level)
+	elite_rank = maxi(0, elite)
 
 func _physics_process(delta: float) -> void:
 	if _target == null or not is_instance_valid(_target):

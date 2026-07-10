@@ -41,6 +41,14 @@ const ESCAPE_DURATION: float = 0.4
 @export var max_health: int = 3
 @export var contact_damage: int = 1
 @export var contact_cooldown: float = 0.6
+# monster_level <= 0 → fallback на GameState.current_floor_number.
+# Так старые сцены без явной настройки продолжают скейлиться по этажу.
+# Spawn-система задаёт monster_level > 0 через configure_spawn() ДО add_child(),
+# чтобы _ready увидел уже финальный уровень и корректно применил Balance.scaled_*.
+@export var monster_level: int = 0
+# elite_rank прибавляется к effective monster level: champion +1, elite +2.
+# Визуальных ауры/effects пока нет — только stat-offset.
+@export var elite_rank: int = 0
 # Максимальное расстояние (px), с которого враг наносит melee-урон
 # «на замах». 0 = только физический контакт коллизий (default для
 # unarmed/dagger). Меч у скелета делает этот радиус больше, чтобы
@@ -75,13 +83,20 @@ var _last_escape_side: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
-	var floor_num := GameState.current_floor_number
-	max_health = Balance.scaled_hp(max_health, floor_num)
-	contact_damage = Balance.scaled_damage(contact_damage, floor_num)
-	xp_reward = Balance.scaled_xp_reward(xp_reward, floor_num)
-	gold_reward = Balance.scaled_gold_reward(gold_reward, floor_num)
+	var level := get_effective_monster_level()
+	max_health = Balance.scaled_hp(max_health, level)
+	contact_damage = Balance.scaled_damage(contact_damage, level)
+	xp_reward = Balance.scaled_xp_reward(xp_reward, level)
+	gold_reward = Balance.scaled_gold_reward(gold_reward, level)
 	health = max_health
 	_floor = get_tree().get_first_node_in_group("floor")
+
+func get_effective_monster_level() -> int:
+	return MonsterLevelUtil.effective_level(monster_level, elite_rank)
+
+func configure_spawn(level: int, elite: int = 0) -> void:
+	monster_level = maxi(1, level)
+	elite_rank = maxi(0, elite)
 
 func _physics_process(delta: float) -> void:
 	_contact_timer = maxf(0.0, _contact_timer - delta)

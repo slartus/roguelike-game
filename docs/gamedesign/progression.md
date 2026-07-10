@@ -44,16 +44,26 @@ XP до следующего уровня: `xp_to_next(L) = (L+1)³ − L³ = 3L
 
 ## Награды и scaling монстров
 
-Базовые награды и характеристики монстров зафиксированы в их `.tscn` файлах (см. `enemies.md`). Каждый монстр при спавне `_ready` применяет линейное scaling по номеру этажа:
+Базовые награды и характеристики монстров зафиксированы в их `.tscn` файлах (см. `enemies.md`). Каждый монстр при спавне `_ready` применяет линейное scaling по **effective monster level**:
 
-| Стат | Формула | Прирост / этаж |
-|------|---------|----------------|
-| max_health | `base * (1 + 0.12 * (floor - 1))` | +12% |
-| contact_damage | `base * (1 + 0.10 * (floor - 1))` | +10% |
-| xp_reward | `base * (1 + 0.15 * (floor - 1))` | +15% |
-| gold_reward | `base * (1 + 0.20 * (floor - 1))` | +20% |
+| Стат | Формула | Прирост / уровень |
+|------|---------|-------------------|
+| max_health | `base * (1 + 0.12 * (level - 1))` | +12% |
+| contact_damage | `base * (1 + 0.10 * (level - 1))` | +10% |
+| xp_reward | `base * (1 + 0.15 * (level - 1))` | +15% |
+| gold_reward | `base * (1 + 0.20 * (level - 1))` | +20% |
 
 Формулы — `Balance.scaled_hp / scaled_damage / scaled_xp_reward / scaled_gold_reward`. Каждый результат `maxi(1, roundi(...))` — минимум 1, никаких 0.
+
+### Уровень монстра
+
+`level` в формулах выше — это **effective monster level**, возвращаемый `get_effective_monster_level()` у monster-скрипта:
+
+- Если `monster_level == 0` (дефолт) — fallback на `GameState.current_floor_number` (обратная совместимость).
+- Если `monster_level > 0` — используется заданный уровень.
+- `elite_rank` (0 normal, 1 champion, 2 elite) прибавляется к effective level.
+
+Spawn-система задаёт уровень через `configure_spawn(level, elite)` **до** `add_child`, иначе `_ready` уже прогонит scaling на дефолтном значении. Boss пока остаётся на floor-scaling — у него нет `monster_level`.
 
 Источник кривой — WoW Classic mob-level table (~10-15% рост stats на уровень). Линейный вариант предсказуемее экспоненты и легче тюнится.
 
