@@ -83,5 +83,12 @@ Style (Warrior/Archer/Mage):
   - Weighted-random по rarity: common=100, uncommon=35, rare=10.
   - Дубликатов в offer'e нет; maxed cards исключены заранее через `PlayerUpgradeLibrary.get_eligible_upgrades`.
   - Graceful degrade: если eligible < 3, offer будет короче, не крешит.
-- **M5** — modal choice panel.
+- **M5** — Modal choice panel (`scenes/ui/upgrade_choice_panel.tscn`):
+  - `CanvasLayer` с `layer=5`, `process_mode = ALWAYS` (обрабатывает input во время pause).
+  - Автоподписывается на `GameState.upgrade_choice_requested` в `_ready`, отписывается в `_exit_tree`.
+  - При событии: pop next pending level → `UpgradeOfferGenerator.generate_offer` → инкремент `upgrade_offer_counter` → рендер 3 кнопок-карточек.
+  - Клик по карточке или клавиши 1/2/3 выбирают карту → `add_player_upgrade` → `EventLog.log_upgrade_selected` → если ещё pending — сразу следующий offer, иначе снятие pause.
+  - Если `offer.is_empty()` (все карты maxed) — тихо пропускается, чтобы игрок не застыл в pause'е.
+  - Подключена в `main.tscn` как sibling HUD.
+  - i18n: `UI_CHOOSE_UPGRADE`, `LOG_UPGRADE_SELECTED`.
 - **M6/M7** — конкретные карты и их эффекты.

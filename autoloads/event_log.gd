@@ -55,3 +55,7 @@ func log_level_up(new_level: int) -> void:
 
 func log_tower_seed(seed_value: int) -> void:
 	entry_added.emit(tr("LOG_TOWER_SEED") % seed_value, SEED_TINT)
+
+func log_upgrade_selected(display_name: String) -> void:
+	# Тот же tint что у level-up — семантически связано.
+	entry_added.emit(tr("LOG_UPGRADE_SELECTED") % display_name, LEVEL_TINT)
