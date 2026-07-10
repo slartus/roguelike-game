@@ -18,7 +18,7 @@ const POISON_DAMAGE_PER_TICK: int = 1
 # на SLOW_FACTOR, пока `_slow_source_count > 0`. Считаем именно источники,
 # а не bool: несколько накладывающихся паутин не «удваивают» slow, но
 # выход из одной не снимает эффект если игрок стоит во второй.
-const SLOW_FACTOR: float = 0.5
+const SLOW_FACTOR: float = 0.3
 
 var max_health: int
 var health: int
