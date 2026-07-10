@@ -53,14 +53,17 @@ func test_award_xp_triggers_level_up_when_threshold_crossed() -> void:
 
 func test_multiple_level_ups_from_big_xp_gain() -> void:
 	# L1 -> L2 нужно 7, L2 -> L3 нужно 19. Итого 26 покрывает 2 уровня.
+	# После M3 (hybrid rhythm): level 2 → +1 HP, level 3 → без HP.
 	GameState.player_xp = 0
 	GameState.player_level = 1
 	GameState.player_max_health = 5
 	GameState.player_health = 5
+	GameState.pending_upgrade_levels = []
 	GameState.award_xp(30)
 	assert_eq(GameState.player_level, 3, "30 xp = 2 level ups (26 xp used)")
 	assert_eq(GameState.player_xp, 4, "4 xp left over")
-	assert_eq(GameState.player_max_health, 7, "+2 max hp")
+	assert_eq(GameState.player_max_health, 6,
+		"+1 max hp (только level 2 даёт HP, level 3 — карту)")
 
 func test_reset_run_clears_run_state_but_keeps_gold() -> void:
 	GameState.current_floor_number = 5

@@ -148,10 +148,26 @@ func award_xp(amount: int) -> void:
 
 func _level_up() -> void:
 	player_level += 1
-	player_max_health += HEALTH_PER_LEVEL
+	# Чётные уровни (2, 4, 6, ...) → HP-награда. Нечётные >= 3 → upgrade card.
+	# Level 1→2 всегда даёт HP (первый level-up дружелюбен).
+	if is_hp_reward_level(player_level):
+		player_max_health += HEALTH_PER_LEVEL
+	# Full heal сохраняется на любом level-up до v2 balance pass.
 	player_health = player_max_health
 	EventLog.log_level_up(player_level)
 	leveled_up.emit(player_level, player_max_health)
+	if is_upgrade_reward_level(player_level):
+		# Ставим уровень в очередь. UI (M5) слушает upgrade_choice_requested
+		# и обрабатывает pending уровни один за другим — множественный
+		# level-up (одним XP-hit'ом) сложит несколько запросов подряд.
+		pending_upgrade_levels.append(player_level)
+		upgrade_choice_requested.emit(player_level)
+
+func is_hp_reward_level(level: int) -> bool:
+	return level % 2 == 0
+
+func is_upgrade_reward_level(level: int) -> bool:
+	return level >= 3 and level % 2 == 1
 
 func award_gold(amount: int) -> void:
 	if amount <= 0:

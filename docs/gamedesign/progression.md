@@ -40,7 +40,12 @@ XP до следующего уровня: `xp_to_next(L) = (L+1)³ − L³ = 3L
 
 Формулы живут в `autoloads/balance.gd`: `Balance.total_xp_for_level(L)`, `Balance.xp_to_next_level(L)`. `GameState.award_xp` использует `Balance.xp_to_next_level(player_level)` вместо старой константы.
 
-При level-up: **+1 max_health** и **full heal** (`HEALTH_PER_LEVEL = 1`).
+При level-up:
+- **чётные уровни** (2, 4, 6, ...) → +1 max_health + full heal;
+- **нечётные ≥ 3** (3, 5, 7, ...) → без HP, эмитится `upgrade_choice_requested(level)` — игрок выбирает карту прогрессии (см. `upgrades.md`);
+- **full heal** сохраняется на любом level-up до v2 balance-pass.
+
+Helper'ы: `GameState.is_hp_reward_level(level)` и `is_upgrade_reward_level(level)`. Multi-level-up (одним XP-hit'ом сразу через несколько уровней) собирает все upgrade-уровни в очередь `pending_upgrade_levels` — UI обрабатывает их по одному.
 
 ## Награды и scaling монстров
 
