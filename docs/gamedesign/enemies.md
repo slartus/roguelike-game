@@ -353,6 +353,14 @@ Bonus прибавляется к `damage` каждой заспавненной
 
 Роль: продвинутый маг. Крепче лучника и стреляет чаще. Держится ближе (preferred_range 130 vs 160 у лучника).
 
+**Умный обстрел с упреждением (`lich.gd::_shoot`).** В отличие от базового `ranged_enemy._shoot` (стреляет в текущую позицию игрока), лич считает точку упреждения по вектору движения игрока:
+
+- `time_to_hit = distance / BULLET_SPEED_FOR_LEAD` (`BULLET_SPEED_FOR_LEAD = 110` — соответствует `enemy_bullet.gd::speed` по умолчанию);
+- `predicted = target.position + target.velocity * time_to_hit`;
+- `direction = (predicted - lich.position).normalized()`.
+
+Одна итерация (без recompute predicted после смены distance) — намеренная простота: игрок редко резко разворачивается за флайт 0.3–1.0 s, а идеально-точное упреждение делало бы боя невыносимым. `target.velocity` берётся напрямую из CharacterBody2D (Player). Расчёт вынесен в `_compute_lead_direction(target_pos, target_velocity)` — pure-функция, тестируется отдельно от side-effects `_shoot`.
+
 **Призыв скелета (`lich.gd`).** Помимо стрельбы magic-bolt лич поддерживает одного скелета-миньона.
 
 | Параметр | Значение |

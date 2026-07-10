@@ -38,6 +38,12 @@ const SUMMON_CAST_DURATION: float = 0.8
 const CAST_PULSE_FREQUENCY: float = PI * 8.0
 const CAST_TINT_COLOR: Color = Color(0.7, 1.6, 0.85, 1.0)
 
+# Скорость пули лича для расчёта упреждения (соответствует
+# enemy_bullet.gd::speed по умолчанию). Использовать статический
+# константу, а не инстанциировать `bullet_scene` ради `.speed` —
+# каждый `_shoot` инстанс создаётся заново.
+const BULLET_SPEED_FOR_LEAD: float = 110.0
+
 var _summoned_minion: Node = null
 # Стартовое значение = 0.0 → на первом же physics-тике `_maybe_start_summon`
 # увидит, что кулдаун истёк, и запустит каст. Скелет появится через
@@ -202,3 +208,37 @@ func _is_walkable(floor_node: Node, pos: Vector2) -> bool:
 	if not floor_node.astar_grid.is_in_boundsv(cell):
 		return false
 	return not floor_node.astar_grid.is_point_solid(cell)
+
+# Лич не стреляет напрямую в текущую позицию игрока (как базовый
+# ranged_enemy), а вычисляет точку упреждения по вектору движения.
+# Формула: time_to_hit = distance / bullet_speed; предсказанная позиция
+# = target.pos + target.velocity * time_to_hit. Одна итерация —
+# приемлемо: игрок редко резко разворачивается за флайт (0.3–1.0 s), а
+# идеальная точность делала бы боя невыносимым.
+func _shoot() -> void:
+	if bullet_scene == null or _target == null:
+		return
+	var target_velocity: Vector2 = Vector2.ZERO
+	if _target is CharacterBody2D:
+		target_velocity = _target.velocity
+	var direction := _compute_lead_direction(_target.global_position, target_velocity)
+	if direction == Vector2.ZERO:
+		return
+	var bullet := bullet_scene.instantiate()
+	bullet.global_position = global_position
+	bullet.direction = direction
+	_configure_bullet(bullet)
+	get_tree().current_scene.add_child(bullet)
+
+# Pure-функция расчёта направления с упреждением. Вынесена из _shoot,
+# чтобы тесты могли проверить формулу без спавна пули (в тестах
+# get_tree().current_scene == null). Возвращает Vector2.ZERO если
+# target совпадает с позицией лича.
+func _compute_lead_direction(target_pos: Vector2, target_velocity: Vector2) -> Vector2:
+	var to_target := target_pos - global_position
+	var distance := to_target.length()
+	if distance <= 0.0:
+		return Vector2.ZERO
+	var time_to_hit := distance / BULLET_SPEED_FOR_LEAD
+	var predicted := target_pos + target_velocity * time_to_hit
+	return (predicted - global_position).normalized()
