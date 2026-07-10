@@ -107,6 +107,42 @@ Boss floors (`floor % 5 == 0`) сохраняют старую логику: `fl
 
 **Реальные спрайты пока есть только для cave-декора** (`mold.png`, `candle.tscn`, `floor_crack.png`, `floor_blood.png`). Профили верхних зон существуют как контракт — `floor.gd` пока их не рисует (нет ассетов), но rooms с этими профилями не получают cave-декор из-за фильтрации. Спрайты residential/technical декора — задача под следующие milestone'ы или отдельные фичи.
 
+## Residential Spine floors
+
+Для зон `tower_top` (floor 1-2) и `residential` (floor 3-6) генератор выбирает архетип `residential_spine` — план здания с центральным коридором и комнатами по обе стороны. Реализация в `scenes/dungeon/residential_spine_generator.gd::ResidentialSpineGenerator.generate(layout, rng, floor_number, footprint_tiles)`.
+
+Схема:
+```
++---------------------------------------+
+| room1 | room2 | room3 | room4 | room5 |
+|--D------D-------D-------D-------D-----|
+|                                       |
+|            main corridor              |
+|                                       |
+|--D------D-------D-------D-------D-----|
+| room6 | room7 | room8 | room9 |room10 |
++---------------------------------------+
+```
+
+Ключевые параметры (в тайлах, TILE = 20 px):
+- `CORRIDOR_WIDTH_TILES = 3` (60 px) — комфортная ширина для игрока.
+- `ROOM_MIN_WIDTH_TILES = 4`, `ROOM_MAX_WIDTH_TILES = 8` — 80..160 px по X.
+- `ROOM_MIN/MAX_DEPTH_TILES = 4..6` — 80..120 px по Y.
+- `DOORWAY_WIDTH_TILES = 2` (40 px) — совместимо с legacy контрактом.
+
+Алгоритм:
+1. Горизонтальный main corridor в вертикальной середине — `Rect2i` по всей ширине этажа.
+2. Верхний ряд комнат: cursor слева, шаг = случайная ширина комнаты + 1 tile стена между.
+3. Каждая комната получает doorway — узкий corridor rect между её краем и main corridor (случайный X внутри inset).
+4. Симметрично снизу от коридора.
+5. `player_start` = центр левого конца corridor, `exit_position` = центр правого.
+6. Enemy spawns добавляются в каждую комнату (2-3 на комнату), кроме entrance / exit.
+7. Chest — в случайной комнате на этажах кратных `CHEST_FLOOR_INTERVAL = 3`.
+
+Room roles применяются как обычно: комната содержащая chest → `treasure_room`. Player_start и exit_position лежат в коридоре, а не в комнате — `RoomRoles._find_room_containing` через fallback находит ближайшую по центру, ей ставится `entrance` / `exit_core`.
+
+Boss floors (`floor % 5 == 0`) в residential zone всё ещё получают `boss_arena`, а не spine — boss логика имеет приоритет.
+
 ## Генератор — `DungeonGenerator` (BSP + MST + extra edges)
 
 `scenes/dungeon/dungeon_generator.gd` (`class_name DungeonGenerator`). Метод `generate(seed, floor_number, is_boss) → DungeonLayout`.

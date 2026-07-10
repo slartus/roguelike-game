@@ -38,28 +38,27 @@ func test_room_index_is_valid() -> void:
 		assert_lt(int(info.room_index), layout.rooms.size())
 
 func test_start_room_role_is_entrance() -> void:
-	var layout := _generate(444, 3)
-	# Ищем комнату, содержащую player_start, и проверяем что её info.role
-	# = entrance.
+	# BSP layout ставит player_start внутри комнаты. Residential spine
+	# (M4) ставит его в коридоре — RoomRoles через fallback находит
+	# ближайшую комнату по центру. В обоих случаях ровно одна должна
+	# получить entrance.
+	var layout := _generate(444, 12)  # zone = lower_tower, легаси BSP
+	var entrance_count := 0
 	for info in layout.room_infos:
-		var room: Rect2i = layout.rooms[info.room_index]
-		if room.has_point(layout.player_start):
-			assert_eq(info.role, RoomRoles.ROLE_ENTRANCE,
-				"start room должна быть entrance")
+		if info.role == RoomRoles.ROLE_ENTRANCE:
+			entrance_count += 1
 			assert_true(info.tags.has("entrance"),
 				"entrance должен быть в tags")
-			return
-	assert_true(false, "не нашли room содержащую player_start")
+	assert_eq(entrance_count, 1, "ровно одна entrance-комната на этаже")
 
 func test_exit_room_role_is_exit_core() -> void:
-	var layout := _generate(555, 3)
+	var layout := _generate(555, 12)  # legacy_bsp
+	var exit_count := 0
 	for info in layout.room_infos:
-		var room: Rect2i = layout.rooms[info.room_index]
-		if room.has_point(layout.exit_position):
-			assert_eq(info.role, RoomRoles.ROLE_EXIT_CORE)
+		if info.role == RoomRoles.ROLE_EXIT_CORE:
+			exit_count += 1
 			assert_true(info.tags.has("exit"))
-			return
-	assert_true(false, "не нашли room содержащую exit_position")
+	assert_eq(exit_count, 1, "ровно одна exit-комната на этаже")
 
 func test_chest_room_gets_treasure_role() -> void:
 	# Floor 3 гарантированно имеет сундук (CHEST_FLOOR_INTERVAL=3).

@@ -49,12 +49,21 @@ func test_all_zones_constant_covers_full_enum() -> void:
 		assert_ne(zone, "", "нет пустых элементов")
 
 func test_regular_floor_generation_fills_zone_and_archetype() -> void:
+	# После M4 residential zone идёт через residential_spine архетип.
+	# Легаси BSP теперь только для нижних зон (см. M6).
 	var gen := DungeonGeneratorScript.new()
 	var layout: DungeonLayout = gen.generate(12345, 3, false)
 	assert_eq(layout.zone, TowerZone.ZONE_RESIDENTIAL,
 		"floor 3 → residential zone в metadata")
-	assert_eq(layout.floor_archetype, "legacy_bsp",
-		"M1: non-boss всё ещё идёт через BSP-путь")
+	assert_eq(layout.floor_archetype, "residential_spine",
+		"M4: residential zone использует spine архетип")
+
+func test_legacy_bsp_still_used_for_lower_zones() -> void:
+	# Регресс: пока не M6, нижние зоны (lower_tower и глубже) должны
+	# продолжать генерироваться через legacy BSP.
+	var gen := DungeonGeneratorScript.new()
+	var layout: DungeonLayout = gen.generate(2020, 12, false)  # zone = lower_tower
+	assert_eq(layout.floor_archetype, "legacy_bsp")
 
 func test_boss_floor_gets_boss_arena_archetype_but_still_has_zone() -> void:
 	var gen := DungeonGeneratorScript.new()
