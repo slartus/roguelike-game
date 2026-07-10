@@ -9,6 +9,11 @@ extends GutTest
 
 const HudScene = preload("res://scenes/ui/hud.tscn")
 
+var _tower_seed_snapshot: int
+
+func before_each() -> void:
+	_tower_seed_snapshot = GameState.tower_seed
+
 func after_each() -> void:
 	# Не оставляем tree в paused между тестами — иначе следующие
 	# тесты с await get_tree().process_frame зависнут. GameState —
@@ -19,6 +24,7 @@ func after_each() -> void:
 	GameState.player_level = 1
 	GameState.run_gold = 0
 	GameState.run_enemies_killed = 0
+	GameState.tower_seed = _tower_seed_snapshot
 
 func test_pause_input_action_is_defined() -> void:
 	assert_true(InputMap.has_action("pause"),
@@ -73,4 +79,16 @@ func test_pause_panel_shows_current_run_stats() -> void:
 		"gold label содержит run_gold, actual='%s'" % gold_lbl.text)
 	# cleanup — снять паузу перед тестами дальше. GameState restore —
 	# в after_each.
+	hud._toggle_pause()
+
+func test_pause_panel_shows_tower_seed() -> void:
+	# Игрок должен видеть seed текущей башни, чтобы скопировать/поделиться.
+	GameState.tower_seed = 424242
+	var hud = HudScene.instantiate()
+	add_child_autofree(hud)
+	await get_tree().process_frame
+	hud._toggle_pause()
+	var seed_lbl: Label = hud.get_node("PausePanel/PauseBox/PauseStatsSeed")
+	assert_true(seed_lbl.text.contains("424242"),
+		"seed label содержит tower_seed, actual='%s'" % seed_lbl.text)
 	hud._toggle_pause()

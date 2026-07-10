@@ -23,6 +23,7 @@ const HEALTH_BAR_PADDING: float = 1.0
 @onready var _pause_stats_level: Label = $PausePanel/PauseBox/PauseStatsLevel
 @onready var _pause_stats_kills: Label = $PausePanel/PauseBox/PauseStatsKills
 @onready var _pause_stats_gold: Label = $PausePanel/PauseBox/PauseStatsGold
+@onready var _pause_stats_seed: Label = $PausePanel/PauseBox/PauseStatsSeed
 @onready var _log_box: VBoxContainer = $CombatLog
 @onready var _health_bar: Control = $HealthBar
 @onready var _health_bar_fill: ColorRect = $HealthBar/Fill
@@ -54,6 +55,10 @@ func _refresh_pause_stats() -> void:
 	_pause_stats_level.text = tr("UI_RUN_STATS_LEVEL") % GameState.player_level
 	_pause_stats_kills.text = tr("UI_RUN_STATS_KILLS") % GameState.run_enemies_killed
 	_pause_stats_gold.text = tr("UI_RUN_STATS_GOLD") % GameState.run_gold
+	# Seed башни показываем на паузе — игрок может скопировать/поделиться
+	# конкретной башней. Ключ LOG_TOWER_SEED переиспользуется — та же
+	# семантика, что и в первом логе на floor 1.
+	_pause_stats_seed.text = tr("LOG_TOWER_SEED") % GameState.tower_seed
 
 func set_potion_count(count: int) -> void:
 	# Пустой слот — только рамка ячейки, без иконки и числа
