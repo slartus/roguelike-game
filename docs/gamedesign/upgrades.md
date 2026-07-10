@@ -75,6 +75,13 @@ Style (Warrior/Archer/Mage):
 
 `get_player_upgrade_modifiers()` возвращает Dictionary с 17 полями (speed_multiplier, potion_heal_bonus, slow_resistance_bonus, poison_duration_multiplier + 4 style-специфичных набора для warrior/archer/mage). Пересчитывается на каждом вызове — стеков мало, дешевле чем держать derived dict в sync с сигналами. Base upgrade resources при этом не мутируются (проверено `test_modifier_snapshot_does_not_mutate_resource`).
 - **M3** — hybrid level rhythm: чётные уровни → HP, нечётные (3+) → upgrade choice queue.
-- **M4** — deterministic 3-of-N offer generator с rarity weights.
+- **M4** — Deterministic offer generator (`UpgradeOfferGenerator.generate_offer(context, current_stacks)`):
+  - Seed = `tower_seed × 100003 + player_level × 9176 + upgrade_offer_counter × 31337 + 1337`. Одинаковый (tower_seed, level, counter) → одинаковый offer.
+  - **Slot 1** отдаётся current-style (если есть eligible), иначе general.
+  - **Slot 2** отдаётся general (если ещё не занят).
+  - **Slot 3+** — любой из оставшихся eligible.
+  - Weighted-random по rarity: common=100, uncommon=35, rare=10.
+  - Дубликатов в offer'e нет; maxed cards исключены заранее через `PlayerUpgradeLibrary.get_eligible_upgrades`.
+  - Graceful degrade: если eligible < 3, offer будет короче, не крешит.
 - **M5** — modal choice panel.
 - **M6/M7** — конкретные карты и их эффекты.
