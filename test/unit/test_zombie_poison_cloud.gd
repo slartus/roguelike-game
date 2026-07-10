@@ -187,3 +187,34 @@ func test_cloud_ignores_non_player_bodies() -> void:
 	cloud._on_body_entered(zombie)
 	assert_false(zombie.has_method("apply_poison"),
 		"у зомби нет apply_poison — облако его игнорирует")
+
+# ---- Player: poison slow --------------------------------------------------
+
+func test_poison_reduces_speed_by_poison_slow_factor() -> void:
+	var player = _spawn_player()
+	await get_tree().process_frame
+	player.apply_poison(3.0)
+	assert_almost_eq(player.current_speed(),
+		player.speed * player.POISON_SLOW_FACTOR, 0.001,
+		"пока отравлен — скорость × POISON_SLOW_FACTOR")
+
+func test_poison_slow_ends_when_status_expires() -> void:
+	var player = _spawn_player()
+	await get_tree().process_frame
+	player.apply_poison(0.5)
+	# Проматываем длительность одним delta — таймер уходит в 0.
+	player._tick_poison(0.6)
+	assert_eq(player._poison_timer, 0.0,
+		"poison истёк")
+	assert_almost_eq(player.current_speed(), player.speed, 0.001,
+		"после истечения яда скорость возвращается к базовой")
+
+func test_poison_slow_stacks_multiplicatively_with_spider_web() -> void:
+	# Отравлен и одновременно в паутине — множители перемножаются.
+	var player = _spawn_player()
+	await get_tree().process_frame
+	player.apply_poison(3.0)
+	player.enter_slow_source()
+	assert_almost_eq(player.current_speed(),
+		player.speed * player.SLOW_FACTOR * player.POISON_SLOW_FACTOR, 0.001,
+		"stacking: speed × SLOW_FACTOR × POISON_SLOW_FACTOR")

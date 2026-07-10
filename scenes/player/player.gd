@@ -11,8 +11,12 @@ signal weapon_changed(weapon: WeaponResource)
 # попадание в облако (apply_poison) обновляет длительность до полного
 # значения, но не сбрасывает tick-таймер — иначе игрок мог бы
 # избегать урона, ре-заражаясь непосредственно перед каждым тиком.
+# Пока отравлен, скорость домножается на POISON_SLOW_FACTOR: тело
+# скованно, движение тяжелее — умеренный slow (0.7), не такой жёсткий
+# как паутина, но стакается с ней мультипликативно (0.3 × 0.7 = 0.21).
 const POISON_TICK_INTERVAL: float = 1.0
 const POISON_DAMAGE_PER_TICK: int = 1
+const POISON_SLOW_FACTOR: float = 0.7
 
 # Slow-статус (например от паутины паука): скорость игрока умножается
 # на SLOW_FACTOR, пока `_slow_source_count > 0`. Считаем именно источники,
@@ -94,7 +98,12 @@ func take_damage(amount: int) -> void:
 		_die()
 
 func current_speed() -> float:
-	return speed * (SLOW_FACTOR if _slow_source_count > 0 else 1.0)
+	var multiplier := 1.0
+	if _slow_source_count > 0:
+		multiplier *= SLOW_FACTOR
+	if _poison_timer > 0.0:
+		multiplier *= POISON_SLOW_FACTOR
+	return speed * multiplier
 
 func enter_slow_source() -> void:
 	_slow_source_count += 1

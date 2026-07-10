@@ -238,6 +238,7 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 | `POISON_DURATION` (cloud → player) | 3.0 s |
 | `POISON_TICK_INTERVAL` (player) | 1.0 s |
 | `POISON_DAMAGE_PER_TICK` (player) | 1 hp |
+| `POISON_SLOW_FACTOR` (player) | 0.7 |
 
 Облако — Area2D с процедурным рендером (`_draw` без спрайта). Внутри — плотный тёмно-зелёный «сгусток» в центре плюс `PUFF_COUNT = 6` клубков на орбите радиусом `PUFF_ORBIT_RADIUS`. Клубки медленно вращаются вокруг центра со скоростью `CLOUD_ROTATION_SPEED = 0.55 rad/s`, а их радиус пульсирует по `sin(t * PUFF_PULSE_FREQUENCY + phase)` — соседние клубки дышат в противофазе, облако визуально клубится, а не мигает одним куском. Общая прозрачность делает fade-in первых 10% и fade-out оставшихся 90%. По истечении `LIFETIME` облако `queue_free`. Начальный overlap (игрок стоит в точке спавна) обрабатывается через `call_deferred("_check_initial_overlap") → get_overlapping_bodies()`, потому что `body_entered` не срабатывает ретроактивно.
 
@@ -247,7 +248,8 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 - `apply_poison(duration)` ставит `_poison_timer = duration`. Если игрок не был отравлен, дополнительно взводит `_poison_tick_timer = POISON_TICK_INTERVAL` — первый урон случится через 1 s, а не мгновенно.
 - Refresh (повторный `apply_poison` до истечения) обновляет длительность, **но НЕ трогает** `_poison_tick_timer`. Иначе игрок мог бы избегать урона, ре-заражаясь непосредственно перед каждым тиком.
 - `_tick_poison(delta)` в `_physics_process` декрементит оба таймера. По истечении tick-таймера снимается `POISON_DAMAGE_PER_TICK` через `take_damage(1)` и tick-таймер снова 1.0 s.
-- По истечении `_poison_timer` статус пропадает, tick'и прекращаются.
+- Пока `_poison_timer > 0`, `current_speed()` домножает базовую скорость на `POISON_SLOW_FACTOR = 0.7` — тело сковано, движение тяжелее. Slow стакается **мультипликативно** с паутинным (`SLOW_FACTOR = 0.3`): игрок, стоящий в LANDED-паутине и одновременно отравленный, движется `speed × 0.3 × 0.7 = speed × 0.21`. Порядок множителей неважен, обе ветки в `current_speed()` независимы.
+- По истечении `_poison_timer` статус пропадает, tick'и и slow прекращаются.
 
 _Follow-up:_ `POISON_DAMAGE_PER_TICK` фиксированный (1 hp) и не масштабируется по floor через `Balance.scaled_damage`. На глубоких этажах контактный урон зомби растёт, а яд остаётся 1/сек — со временем яд перестанет быть значимой угрозой. Когда балансу это станет мешать, добавить `Balance.scaled_damage(POISON_DAMAGE_PER_TICK, floor_num)` при применении статуса, либо scaling на самом облаке.
 
