@@ -56,6 +56,11 @@ func try_attack(weapon: WeaponResource, target_global_position: Vector2) -> bool
 		# происходит, но cooldown идёт, и мы не понимаем почему.
 		return false
 	_cooldown = weapon.get_attack_interval()
+	# Визуал взмаха у игрока — короткий выпад тела + свинг оружия для
+	# melee. Метод опционален: контроллер работает и без него (тесты
+	# инстансируют fake player без сцены).
+	if _owner_player.has_method("play_attack_visual"):
+		_owner_player.play_attack_visual(target_global_position, weapon)
 	return true
 
 func _attack_projectile(weapon: WeaponResource, direction: Vector2) -> bool:

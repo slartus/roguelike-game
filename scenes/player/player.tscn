@@ -16,6 +16,10 @@ script = ExtResource("1_player")
 [node name="Visual" type="Sprite2D" parent="."]
 texture = ExtResource("3_tex")
 
+[node name="Weapon" type="Sprite2D" parent="."]
+visible = false
+position = Vector2(5, 3)
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_player")
 

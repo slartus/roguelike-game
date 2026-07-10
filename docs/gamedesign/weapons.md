@@ -188,6 +188,24 @@ i18n: `WEAPON_WAND`.
 
 **`try_attack(weapon, target_global_position) → bool`** — возвращает `true` если атака действительно запущена (weapon не null, cooldown готов, direction не нулевой). Cooldown ставится ТОЛЬКО на успешной атаке — failed attempt не залипает на cooldown'е.
 
+## Модель оружия в руке игрока
+
+`player.tscn` содержит дочерний `Sprite2D` **Weapon** — sprite оружия в правой руке игрока (`position = (5, 3)`, offset вычисляется от icon_texture в `_apply_weapon_visual`, пивот на «рукояти» чтобы вращение читалось как замах).
+
+- При `_ready` и `equip(weapon)` — `_apply_weapon_visual` подставляет `weapon.icon_texture` и `modulate = weapon.icon_modulate`.
+- Без equipped weapon (или без icon_texture) — Weapon-нода скрыта.
+- Legacy Dagger / Pistol / Shotgun имеют полноцветные icon_texture, `icon_modulate = WHITE` → рендерятся как есть.
+- Новые 6 classical weapons используют `dagger.png` как placeholder-иконку и отличаются через `icon_modulate` (см. `pickups.md`).
+
+## Анимация взмаха
+
+WeaponController при успешной `try_attack` вызывает `player.play_attack_visual(target_pos, weapon)`. Реализация повторяет паттерн `skeleton.gd::_play_lunge_animation`:
+
+- Корпус (Sprite2D `Visual`) делает выпад в сторону цели на `SWING_DISTANCE = 6` px за `SWING_OUT_DURATION = 60 ms`, возвращается обратно за `SWING_BACK_DURATION = 120 ms`.
+- Только для melee (`melee_arc` / `melee_thrust`) параллельно с выпадом Weapon-нода поворачивается на `WEAPON_SWING_ANGLE = PI × 0.55` (~99°) и обратно — через пивот на рукояти это читается как рубящий удар.
+- Для projectile / spell (лук, посох, жезл) свинг оружия не запускается — только выпад тела: было бы странно если лук «резал».
+- Предыдущий tween убивается через `.kill()` перед стартом нового, чтобы визуал не застревал в промежуточной точке при частой стрельбе.
+
 **Projectile spawn:**
 - количество = `weapon.get_projectiles_per_attack()` (v2 поле или fallback на `bullets_per_shot`);
 - при count > 1 — равномерный spread от `-spread/2` до `+spread/2`;

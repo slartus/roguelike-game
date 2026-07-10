@@ -23,14 +23,27 @@ const POISON_SLOW_FACTOR: float = 0.7
 # выход из одной не снимает эффект если игрок стоит во второй.
 const SLOW_FACTOR: float = 0.3
 
+# Анимация взмаха при атаке. Тот же паттерн что у Skeleton lunge
+# (см. skeleton.gd): корпус игрока делает короткий выпад в сторону
+# цели, оружие в это же время рубит по дуге. Для projectile-оружия
+# (лук, посох) — только выпад, без вращения sprite'а.
+const SWING_DISTANCE: float = 6.0
+const SWING_OUT_DURATION: float = 0.06
+const SWING_BACK_DURATION: float = 0.12
+const WEAPON_SWING_ANGLE: float = PI * 0.55
+
 var max_health: int
 var health: int
 var equipped_weapon: WeaponResource
 var _poison_timer: float = 0.0
 var _poison_tick_timer: float = 0.0
 var _slow_source_count: int = 0
+var _visual_base_position: Vector2 = Vector2.ZERO
+var _swing_tween: Tween
 
 @onready var _weapon_controller: WeaponController = $WeaponController
+@onready var _visual: Sprite2D = $Visual
+@onready var _weapon_sprite: Sprite2D = $Weapon
 
 func _ready() -> void:
 	add_to_group("player")
@@ -39,8 +52,51 @@ func _ready() -> void:
 	equipped_weapon = GameState.equipped_weapon
 	GameState.leveled_up.connect(_on_leveled_up)
 	_weapon_controller.setup(self)
+	if _visual != null:
+		_visual_base_position = _visual.position
+	_apply_weapon_visual(equipped_weapon)
 	health_changed.emit(health, max_health)
 	weapon_changed.emit(equipped_weapon)
+
+# Показать модель оружия в правой руке игрока. Использует
+# icon_texture ресурса, окрашивает через icon_modulate.
+# Melee оружие рисуется чуть повёрнутым к вертикали (rest pose).
+# Ranged (лук/арбалет/посох) — то же смещение, но без вращения.
+func _apply_weapon_visual(weapon: WeaponResource) -> void:
+	if _weapon_sprite == null:
+		return
+	if weapon == null or weapon.icon_texture == null:
+		_weapon_sprite.visible = false
+		return
+	_weapon_sprite.texture = weapon.icon_texture
+	_weapon_sprite.modulate = weapon.icon_modulate
+	# Пивот в верхней точке текстуры — при вращении она вертится вокруг
+	# «рукояти», а не вокруг центра клинка (то же что у Skeleton).
+	_weapon_sprite.offset = Vector2(0, weapon.icon_texture.get_height() * 0.5)
+	_weapon_sprite.rotation = 0.0
+	_weapon_sprite.visible = true
+
+# WeaponController зовёт это на успешной атаке. Играет короткий
+# выпад корпуса + свинг оружия для melee, только выпад для ranged.
+func play_attack_visual(target_position: Vector2, weapon: WeaponResource) -> void:
+	if _visual == null:
+		return
+	if _swing_tween != null and _swing_tween.is_valid():
+		_swing_tween.kill()
+	var direction := (target_position - global_position).normalized()
+	if direction == Vector2.ZERO:
+		return
+	var swing_offset := _visual_base_position + direction * SWING_DISTANCE
+	_swing_tween = create_tween()
+	_swing_tween.tween_property(_visual, "position", swing_offset, SWING_OUT_DURATION)
+	# Свинг оружия только для melee — у projectile/spell вращение выглядит
+	# странно (лук не должен «резать»).
+	var is_melee := weapon != null and weapon.attack_type in ["melee_arc", "melee_thrust"]
+	if is_melee and _weapon_sprite != null and _weapon_sprite.visible:
+		_swing_tween.parallel().tween_property(_weapon_sprite, "rotation", WEAPON_SWING_ANGLE, SWING_OUT_DURATION)
+	_swing_tween.tween_property(_visual, "position", _visual_base_position, SWING_BACK_DURATION)
+	if is_melee and _weapon_sprite != null and _weapon_sprite.visible:
+		_swing_tween.parallel().tween_property(_weapon_sprite, "rotation", 0.0, SWING_BACK_DURATION)
 
 func _on_leveled_up(_new_level: int, new_max_health: int) -> void:
 	max_health = new_max_health
@@ -63,6 +119,7 @@ func equip(weapon: WeaponResource) -> void:
 		return
 	equipped_weapon = weapon
 	GameState.equipped_weapon = weapon
+	_apply_weapon_visual(weapon)
 	weapon_changed.emit(weapon)
 
 func take_damage(amount: int) -> void:
