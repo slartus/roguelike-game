@@ -158,6 +158,30 @@ Small closets между большими машинными дают класс
 
 Boss floor 10 остаётся `boss_arena` независимо от zone — boss логика имеет приоритет.
 
+## Нижняя башня, подвалы и пещеры
+
+Zone → archetype диспетчер в `DungeonGenerator.generate`:
+
+| Zone | Floor | Archetype |
+|---|---|---|
+| `tower_top` | 1-2 | `residential_spine` |
+| `residential` | 3-6 (кроме boss 5) | `residential_spine` |
+| `technical` | 7-10 (кроме boss 10) | `technical_grid` |
+| `lower_tower` | 11-14 | `ruined_bsp` |
+| `basement` | 15-18 (кроме boss 15) | `basement_bsp` |
+| `caves` | 19+ | `caves_bsp` |
+
+**Ruined / basement / caves BSP** — это тот же самый BSP-код что и оригинальный legacy_bsp. Физически `_generate_tower_floor` не переписан: разница между тремя archetype-именами — только явный tag в metadata, который позволяет тестам, spawn tables и будущим генераторам отличать «руины нижней башни» от «подвал» и «пещеры» без изменения геометрии.
+
+Тематическое различие достигается через:
+- **`ZONE_ROLE_POOL`** — разные роли комнат (см. таблицу в разделе Room roles).
+- **`ZONE_FALLBACK_PROFILES`** — разный декор коридоров.
+- **cave-декор разрешён только в этих трёх зонах** — верхние (`tower_top`, `residential`, `technical`) фильтруются `_strip_cave_only` (см. секцию «Декор по зонам»).
+
+**Пещерный стиль намеренно является поздней зоной мира башни, а не основным стилем всех этажей.** Игрок, спустившийся до floor 19+, должен ощущать что он уже не в здании — вот теперь это пещеры под фундаментом башни. Верхние этажи с floor 1 — жилые/технические уровни, где cave-визуал был бы неуместен.
+
+Легаси `_generate_tower_floor` (BSP+MST+extra edges) остаётся неизменным — его алгоритм ниже. В M6 он **не удалён и не переписан**, только явно закреплён за нижними зонами.
+
 ## Генератор — `DungeonGenerator` (BSP + MST + extra edges)
 
 `scenes/dungeon/dungeon_generator.gd` (`class_name DungeonGenerator`). Метод `generate(seed, floor_number, is_boss) → DungeonLayout`.

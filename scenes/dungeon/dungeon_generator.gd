@@ -107,7 +107,20 @@ func generate(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayou
 				footprint_tiles_for_floor(floor_number),
 			)
 		else:
-			layout.floor_archetype = "legacy_bsp"
+			# Нижние зоны идут по одному и тому же BSP-коду, но с разным
+			# archetype-тэгом — это позволяет тестам и spawn table отличать
+			# «руины нижней башни» от «пещеры» без изменения геометрии.
+			# Декор и роли уже расходятся через ZONE_FALLBACK_PROFILES /
+			# ZONE_ROLE_POOL — здесь только явное имя.
+			match layout.zone:
+				TowerZone.ZONE_LOWER_TOWER:
+					layout.floor_archetype = "ruined_bsp"
+				TowerZone.ZONE_BASEMENT:
+					layout.floor_archetype = "basement_bsp"
+				TowerZone.ZONE_CAVES:
+					layout.floor_archetype = "caves_bsp"
+				_:
+					layout.floor_archetype = "legacy_bsp"
 			_generate_tower_floor(layout, rng, floor_number)
 	_compute_bounds(layout)
 	_normalize(layout)

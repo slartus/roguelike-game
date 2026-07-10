@@ -24,10 +24,11 @@ func test_boss_floor_10_still_uses_boss_arena() -> void:
 	assert_eq(layout.floor_archetype, "boss_arena",
 		"boss floor 10 не переключается на technical_grid")
 
-func test_floor_11_falls_back_to_legacy_bsp() -> void:
-	# floor 11 = lower_tower zone — вне M5, всё ещё legacy.
+func test_floor_11_uses_ruined_bsp_for_lower_tower() -> void:
+	# floor 11 = lower_tower zone. После M6 архетип — ruined_bsp,
+	# что физически всё ещё BSP, но помечен читаемым именем.
 	var layout := _generate(104, 11)
-	assert_eq(layout.floor_archetype, "legacy_bsp")
+	assert_eq(layout.floor_archetype, "ruined_bsp")
 
 func test_technical_layout_has_service_corridor() -> void:
 	# Main corridor должен занимать значительную ширину этажа.
