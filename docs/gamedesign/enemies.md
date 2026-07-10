@@ -47,7 +47,7 @@
 - rank 2 (elite) — только с floor 10+ и с шансом `chance × 0.25`.
 - rank 1 (champion) — обычный roll от `chance = elite_chance + room_danger × 0.03 + max(0, floor - 6) × 0.005`.
 
-Подключение к `Main._spawn_enemies` — подфича 4 плана. Пока таблица только data + eligibility rules.
+**Подключение к Main.** `Main._spawn_enemies()` использует `MonsterSpawnTable` для каждого обычного этажа. RNG инжектится детерминированно от `tower_seed × 100003 + floor × 9176 + 1337` — один и тот же (tower_seed, floor) даёт один и тот же набор монстров. Boss floor обрабатывается отдельно и через таблицу не проходит. Подробности в `dungeon.md`.
 
 ## Balance-таблицы (D&D 5e-inspired)
 

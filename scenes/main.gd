@@ -1,16 +1,6 @@
 extends Node2D
 
 const FLOOR_SCENE: PackedScene = preload("res://scenes/dungeon/floor.tscn")
-const ENEMY_SCENES: Array[PackedScene] = [
-	preload("res://scenes/enemies/enemy.tscn"),         # Slime
-	preload("res://scenes/enemies/goblin.tscn"),        # Goblin
-	preload("res://scenes/enemies/orc.tscn"),           # Orc
-	preload("res://scenes/enemies/skeleton.tscn"),      # Skeleton
-	preload("res://scenes/enemies/zombie.tscn"),        # Zombie
-	preload("res://scenes/enemies/charger.tscn"),       # Spider
-	preload("res://scenes/enemies/ranged_enemy.tscn"),  # Skeleton Archer
-	preload("res://scenes/enemies/lich.tscn"),          # Lich
-]
 const BOSS_SCENE: PackedScene = preload("res://scenes/enemies/boss.tscn")
 const PICKUP_SCENE: PackedScene = preload("res://scenes/pickups/health_pickup.tscn")
 const CHEST_SCENE: PackedScene = preload("res://scenes/pickups/chest.tscn")
@@ -78,9 +68,23 @@ func _spawn_enemies() -> void:
 	if _is_boss_floor():
 		_spawn_boss()
 		return
+	# Детерминированный RNG на основе tower_seed × floor. Одинаковый seed
+	# и floor → одинаковый набор spawn'ов (важно для «поделиться башней»).
+	# Не используем глобальный randi/randf — они несовместимы с shared RNG
+	# из других мест (`randomize()` в _ready сдвигает глобальный state).
+	var rng := RandomNumberGenerator.new()
+	rng.seed = GameState.tower_seed * 100003 + GameState.current_floor_number * 9176 + 1337
+	var floor_num := GameState.current_floor_number
 	for spawn_pos in _floor.enemy_spawn_positions:
-		var scene: PackedScene = ENEMY_SCENES.pick_random()
-		var enemy: Node = scene.instantiate()
+		var defs := MonsterSpawnTable.get_eligible_defs(floor_num, ["generic"])
+		var def: Dictionary = MonsterSpawnTable.choose_weighted(defs, rng)
+		if def.is_empty():
+			continue
+		var level := MonsterSpawnTable.roll_monster_level(floor_num, def, 0, rng)
+		var elite := MonsterSpawnTable.roll_elite_rank(floor_num, def, 0, rng)
+		var enemy: Node = def.scene.instantiate()
+		if enemy.has_method("configure_spawn"):
+			enemy.configure_spawn(level, elite)
 		enemy.global_position = spawn_pos
 		if "pickup_scene" in enemy:
 			enemy.pickup_scene = PICKUP_SCENE

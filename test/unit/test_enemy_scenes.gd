@@ -142,14 +142,15 @@ func test_chest_scene_has_both_textures_wired() -> void:
 	assert_not_null(chest.open_texture, "chest must have open_texture")
 	chest.free()
 
-func test_main_enemy_pool_contains_all_eight_regular_types() -> void:
-	var main_script := load("res://scenes/main.gd")
-	var pool = main_script.ENEMY_SCENES
-	assert_eq(pool.size(), 8, "8 regular enemies in pool")
-	var paths: Array = []
-	for scene in pool:
-		paths.append(scene.resource_path)
+func test_spawn_table_covers_all_regular_enemy_types() -> void:
+	# Раньше был плоский Main.ENEMY_SCENES. Теперь пул монстров живёт в
+	# MonsterSpawnTable. Проверяем что все 8 типов (плюс новый small_slime)
+	# по-прежнему в игре — чтобы кто-то случайно не выпилил def в таблице.
+	var scenes: Array = []
+	for def in MonsterSpawnTable.get_all_defs():
+		scenes.append(def.scene.resource_path)
 	var expected := [
+		"res://scenes/enemies/small_slime.tscn",
 		"res://scenes/enemies/enemy.tscn",
 		"res://scenes/enemies/goblin.tscn",
 		"res://scenes/enemies/orc.tscn",
@@ -160,4 +161,5 @@ func test_main_enemy_pool_contains_all_eight_regular_types() -> void:
 		"res://scenes/enemies/lich.tscn",
 	]
 	for path in expected:
-		assert_true(paths.has(path), "pool contains %s" % path)
+		assert_true(scenes.has(path),
+			"MonsterSpawnTable должен содержать %s" % path)
