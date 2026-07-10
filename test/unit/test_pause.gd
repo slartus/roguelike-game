@@ -11,8 +11,11 @@ const HudScene = preload("res://scenes/ui/hud.tscn")
 
 var _tower_seed_snapshot: int
 
+var _player_xp_snapshot: int
+
 func before_each() -> void:
 	_tower_seed_snapshot = GameState.tower_seed
+	_player_xp_snapshot = GameState.player_xp
 
 func after_each() -> void:
 	# Не оставляем tree в paused между тестами — иначе следующие
@@ -24,6 +27,7 @@ func after_each() -> void:
 	GameState.player_level = 1
 	GameState.run_gold = 0
 	GameState.run_enemies_killed = 0
+	GameState.player_xp = _player_xp_snapshot
 	GameState.tower_seed = _tower_seed_snapshot
 
 func test_pause_input_action_is_defined() -> void:
@@ -79,6 +83,21 @@ func test_pause_panel_shows_current_run_stats() -> void:
 		"gold label содержит run_gold, actual='%s'" % gold_lbl.text)
 	# cleanup — снять паузу перед тестами дальше. GameState restore —
 	# в after_each.
+	hud._toggle_pause()
+
+func test_pause_panel_shows_xp() -> void:
+	# XP убран из основного HUD и показывается только на паузе. Проверяем,
+	# что _refresh_pause_stats заполняет PauseStatsXp текущим XP игрока.
+	GameState.player_level = 2
+	GameState.player_xp = 7
+	var hud = HudScene.instantiate()
+	add_child_autofree(hud)
+	await get_tree().process_frame
+	hud._toggle_pause()
+	var xp_lbl: Label = hud.get_node("PausePanel/PauseBox/PauseStatsXp")
+	assert_not_null(xp_lbl, "на паузе должен быть PauseStatsXp — XP переехал сюда из HUD")
+	assert_true(xp_lbl.text.contains("7"),
+		"xp label содержит текущий player_xp, actual='%s'" % xp_lbl.text)
 	hud._toggle_pause()
 
 func test_pause_panel_shows_tower_seed() -> void:

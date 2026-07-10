@@ -12,15 +12,19 @@ const LOG_FONT_SIZE: int = 8
 const HEALTH_BAR_PX_PER_HP: float = 12.0
 const HEALTH_BAR_PADDING: float = 1.0
 
-@onready var _floor_label: Label = $FloorLabel
-@onready var _level_label: Label = $LevelLabel
-@onready var _xp_label: Label = $XpLabel
-@onready var _gold_label: Label = $GoldLabel
+# Уровень персонажа рисуется на самой полосе HP (по центру): подпись
+# «сколько тебе жизни» и «какой ты уровень» — одна визуальная группа.
+# Золото и этаж — в правом-нижнем углу с иконками (монета и башня).
+# XP убран из основного HUD — теперь виден только на паузе.
+@onready var _level_label: Label = $HealthBar/LevelLabel
+@onready var _gold_label: Label = $BottomRightStats/GoldRow/GoldLabel
+@onready var _floor_label: Label = $BottomRightStats/FloorRow/FloorLabel
 @onready var _potion_icon: TextureRect = $InventoryPanel/PotionSlot/PotionIcon
 @onready var _potion_count_label: Label = $InventoryPanel/PotionSlot/PotionCount
 @onready var _pause_panel: ColorRect = $PausePanel
 @onready var _pause_stats_floor: Label = $PausePanel/PauseBox/PauseStatsFloor
 @onready var _pause_stats_level: Label = $PausePanel/PauseBox/PauseStatsLevel
+@onready var _pause_stats_xp: Label = $PausePanel/PauseBox/PauseStatsXp
 @onready var _pause_stats_kills: Label = $PausePanel/PauseBox/PauseStatsKills
 @onready var _pause_stats_gold: Label = $PausePanel/PauseBox/PauseStatsGold
 @onready var _pause_stats_seed: Label = $PausePanel/PauseBox/PauseStatsSeed
@@ -48,11 +52,13 @@ func _toggle_pause() -> void:
 		_refresh_pause_stats()
 
 func _refresh_pause_stats() -> void:
-	# Показываем прогресс текущего забега (не last_run_* — они заполняются
-	# только при смерти игрока). Ключи tr() shared с title screen'ом:
-	# UI_RUN_STATS_* — одна семантика «Итоги забега».
+	# Прогресс ТЕКУЩЕГО забега (не last_run_* — те заполняются только при
+	# смерти игрока). Ключи tr() shared с title screen'ом: UI_RUN_STATS_* —
+	# одна семантика «Итоги забега». XP видно только тут — из основного HUD
+	# убрали, чтобы не перегружать экран.
 	_pause_stats_floor.text = tr("UI_RUN_STATS_FLOOR") % GameState.current_floor_number
 	_pause_stats_level.text = tr("UI_RUN_STATS_LEVEL") % GameState.player_level
+	_pause_stats_xp.text = tr("UI_XP") % [GameState.player_xp, Balance.xp_to_next_level(GameState.player_level)]
 	_pause_stats_kills.text = tr("UI_RUN_STATS_KILLS") % GameState.run_enemies_killed
 	_pause_stats_gold.text = tr("UI_RUN_STATS_GOLD") % GameState.run_gold
 	# Seed башни показываем на паузе — игрок может скопировать/поделиться
@@ -84,16 +90,15 @@ func set_health(current: int, maximum: int) -> void:
 	_health_bar_fill.size = fill_size
 
 func set_floor(number: int) -> void:
-	_floor_label.text = tr("UI_FLOOR") % number
+	# Только число: рядом иконка башни в BottomRightStats — она даёт контекст.
+	_floor_label.text = "%d" % number
 
 func set_level(level: int) -> void:
 	_level_label.text = tr("UI_LEVEL") % level
 
-func set_xp(current: int, needed: int) -> void:
-	_xp_label.text = tr("UI_XP") % [current, needed]
-
 func set_gold(total: int) -> void:
-	_gold_label.text = tr("UI_GOLD") % total
+	# Только число: рядом иконка монеты — она даёт контекст.
+	_gold_label.text = "%d" % total
 
 func _on_log_entry(text: String, tint: Color) -> void:
 	var entry := Label.new()
