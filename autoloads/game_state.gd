@@ -31,6 +31,21 @@ var total_gold: int = 0
 # (потерянные с прошлого забега бутыльки не должны переноситься на новый).
 var health_potions: int = 0
 
+# Статистика текущего забега (run). Инкрементируется во время игры,
+# капчурится в last_run_* при reset_run, чтобы title screen мог показать
+# summary сессии после смерти игрока.
+var run_gold: int = 0
+var run_enemies_killed: int = 0
+
+# Стат-снимок предыдущего run — заполняется в reset_run и живёт до
+# начала следующего забега. Title screen читает эти поля и показывает
+# окно «результаты забега», если has_last_run_stats == true.
+var last_run_floor: int = 0
+var last_run_level: int = 0
+var last_run_gold: int = 0
+var last_run_enemies_killed: int = 0
+var has_last_run_stats: bool = false
+
 func _ready() -> void:
 	tower_seed = _pick_random_tower_seed()
 	_load()
@@ -57,7 +72,28 @@ func reset_run() -> void:
 	player_xp = 0
 	tower_seed = _pick_random_tower_seed()
 	health_potions = 0
+	run_gold = 0
+	run_enemies_killed = 0
 	health_potions_changed.emit(health_potions)
+
+func finish_run() -> void:
+	# Смерть игрока: снимаем snapshot текущего run и потом обнуляем.
+	# has_last_run_stats нужен title screen'у, чтобы понять — показывать
+	# ли окно итогов забега (иначе покажет нули после первого старта).
+	last_run_floor = current_floor_number
+	last_run_level = player_level
+	last_run_gold = run_gold
+	last_run_enemies_killed = run_enemies_killed
+	has_last_run_stats = true
+	reset_run()
+
+func clear_last_run_stats() -> void:
+	# Title screen вызывает это, когда игрок кликнул «Играть» — окно summary
+	# больше не нужно, следующий finish_run заполнит его заново.
+	has_last_run_stats = false
+
+func award_enemy_kill() -> void:
+	run_enemies_killed += 1
 
 func add_health_potion() -> void:
 	health_potions += 1
@@ -93,6 +129,7 @@ func award_gold(amount: int) -> void:
 	if amount <= 0:
 		return
 	total_gold += amount
+	run_gold += amount
 	gold_changed.emit(total_gold)
 	_save()
 

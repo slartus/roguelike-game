@@ -41,6 +41,43 @@ horizontal_alignment = 1
 custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 
+[node name="RunStatsPanel" type="PanelContainer" parent="VBox"]
+visible = false
+layout_mode = 2
+
+[node name="RunStatsBox" type="VBoxContainer" parent="VBox/RunStatsPanel"]
+layout_mode = 2
+
+[node name="RunStatsTitle" type="Label" parent="VBox/RunStatsPanel/RunStatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Итоги забега"
+horizontal_alignment = 1
+
+[node name="RunStatsFloor" type="Label" parent="VBox/RunStatsPanel/RunStatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Достигнутый этаж: 1"
+
+[node name="RunStatsLevel" type="Label" parent="VBox/RunStatsPanel/RunStatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Уровень: 1"
+
+[node name="RunStatsKills" type="Label" parent="VBox/RunStatsPanel/RunStatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Убито врагов: 0"
+
+[node name="RunStatsGold" type="Label" parent="VBox/RunStatsPanel/RunStatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Собрано золота: 0"
+
+[node name="Spacer2" type="Control" parent="VBox"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
 [node name="PlayButton" type="Button" parent="VBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14

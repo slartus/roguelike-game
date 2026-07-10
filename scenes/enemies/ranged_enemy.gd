@@ -176,6 +176,7 @@ func take_damage(amount: int) -> void:
 		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
 		GameState.award_gold(gold_reward)
+		GameState.award_enemy_kill()
 		_drop_pickup()
 		queue_free()
 

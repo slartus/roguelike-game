@@ -155,7 +155,11 @@ func _try_use_health_potion() -> void:
 	EventLog.log_heal(1)
 
 func _die() -> void:
-	GameState.reset_run()
+	# finish_run фиксирует snapshot текущего забега (этаж, уровень, убийства,
+	# золото) и обнуляет run state — title screen прочитает его и покажет
+	# окно «Итоги забега». Если бы мы звали reset_run напрямую, snapshot
+	# потерялся бы.
+	GameState.finish_run()
 	# После смерти всегда уходим на title screen (стартовый экран).
 	# call_deferred: change_scene_to_file из physics callback
 	# (Bullet.body_entered или Enemy.move_and_collide → take_damage → _die)

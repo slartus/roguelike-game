@@ -4,7 +4,7 @@
 
 ## Уровни забега (run-scoped)
 
-Сбрасываются при смерти игрока (`reset_run()`):
+Сбрасываются при смерти игрока (`reset_run()`, вызывается изнутри `finish_run()` после снятия snapshot'а забега):
 
 | Поле | Стартовое значение |
 |------|--------------------|
@@ -14,6 +14,14 @@
 | `equipped_weapon` | Dagger (`DEFAULT_WEAPON`) |
 | `player_level` | 1 |
 | `player_xp` | 0 |
+| `run_gold` | 0 (счётчик золота **за забег**, растёт вместе с `award_gold`) |
+| `run_enemies_killed` | 0 (счётчик убитых врагов **за забег**) |
+
+`total_gold` — meta-поле, между забегами **не** сбрасывается (сохраняется в `save.cfg`).
+
+## Snapshot забега (title screen «Итоги забега»)
+
+`finish_run()` при смерти игрока снимает snapshot текущего `current_floor_number`, `player_level`, `run_gold`, `run_enemies_killed` в поля `last_run_*` и поднимает `has_last_run_stats = true`. Title screen читает эти поля и показывает окно «Итоги забега» (`RunStatsPanel`). Клик «Играть» вызывает `clear_last_run_stats()` — окно гаснет и не появится, пока следующий `finish_run` не заполнит его заново.
 
 ## XP-кривая (Pokémon Medium Fast)
 
