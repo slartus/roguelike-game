@@ -101,6 +101,35 @@ func test_bullet_apply_weapon_reads_pierce_from_resource() -> void:
 	assert_eq(bullet.pierce, 1,
 		"bullet.pierce должен быть скопирован из crossbow.tres")
 
+func test_pierce_bullet_destroyed_by_wall_does_not_pierce_through() -> void:
+	# Регресс: раньше pierce-пуля (арбалет) на стене расходовала один
+	# заряд pierce и летела дальше — то есть пробивала стену. Теперь
+	# любая не-урон-цель (StaticBody2D стены) уничтожает пулю сразу,
+	# независимо от pierce. Enemy за стеной не должен получить урон.
+	var wall := StaticBody2D.new()
+	wall.global_position = Vector2(30, 0)
+	var wall_cs := CollisionShape2D.new()
+	var wall_rect := RectangleShape2D.new()
+	wall_rect.size = Vector2(6, 40)
+	wall_cs.shape = wall_rect
+	wall.add_child(wall_cs)
+	add_child_autofree(wall)
+	var enemy_behind := FakeEnemy.new()
+	enemy_behind.global_position = Vector2(50, 0)
+	add_child_autofree(enemy_behind)
+	var bullet := BulletScene.instantiate()
+	bullet.apply_weapon(CrossbowRes)  # pierce = 1
+	bullet.global_position = Vector2(20, 0)
+	bullet.direction = Vector2.RIGHT
+	add_child_autofree(bullet)
+	# Даём пуле долететь до стены и разрушиться.
+	for _i in 8:
+		await get_tree().physics_frame
+	assert_eq(enemy_behind.hits_received, 0,
+		"pierce-пуля не должна пробивать стену и достигать врага за ней")
+	assert_false(is_instance_valid(bullet),
+		"пуля должна быть уничтожена стеной, а не потратить один pierce")
+
 func test_bullet_pierce_defaults_to_zero_for_legacy_weapon() -> void:
 	# Legacy Dagger не задаёт pierce → default 0.
 	var dagger: WeaponResource = preload("res://resources/weapons/dagger.tres")

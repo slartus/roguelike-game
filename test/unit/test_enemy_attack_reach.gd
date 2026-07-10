@@ -75,6 +75,24 @@ func test_reach_respects_contact_cooldown() -> void:
 	assert_eq(ctx["target"].hit_count, 1,
 		"cooldown блокирует повторный reach-удар до истечения contact_cooldown")
 
+func test_reach_blocked_by_wall_between_enemy_and_target() -> void:
+	# Регресс: reach-удар (skeleton'ий меч) через distance-check доставал
+	# игрока за стеной. Теперь LoS-check отсекает такой удар — игрок
+	# может укрыться за углом даже если формально в attack_radius.
+	var ctx = _spawn_enemy_with_target(30.0, Vector2(20, 0))
+	var wall := StaticBody2D.new()
+	wall.global_position = Vector2(10, 0)
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(6, 30)
+	shape.shape = rect
+	wall.add_child(shape)
+	add_child_autofree(wall)
+	await get_tree().physics_frame
+	ctx["enemy"]._handle_player_contact()
+	assert_eq(ctx["target"].hit_count, 0,
+		"стена между врагом и игроком должна блокировать reach-удар")
+
 func test_skeleton_lunge_animation_hooked_on_attack() -> void:
 	# Скелет подписан на attack_played и создаёт tween — визуальный
 	# feedback замаха. Проверяем что подписка есть.

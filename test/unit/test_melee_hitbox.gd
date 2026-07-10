@@ -35,6 +35,18 @@ func _make_owner_player() -> Node2D:
 	add_child_autofree(p)
 	return p
 
+func _make_wall(pos: Vector2, size: Vector2) -> StaticBody2D:
+	# Стена = StaticBody2D + rect. Используется в LoS-регрессах.
+	var wall := StaticBody2D.new()
+	wall.global_position = pos
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = size
+	shape.shape = rect
+	wall.add_child(shape)
+	add_child_autofree(wall)
+	return wall
+
 func _spawn_arc_hitbox(
 	source: Node2D,
 	direction: Vector2,
@@ -216,6 +228,35 @@ func test_hitbox_ignores_player_group() -> void:
 	await get_tree().physics_frame
 	assert_eq(enemy_like_player.hits_received, 0,
 		"hitbox не должен бить группу player")
+
+func test_arc_hitbox_does_not_hit_enemy_through_wall() -> void:
+	# Регресс: без LoS-фильтра arc-хитбокс (Area2D overlap) бил врагов
+	# за стеной, потому что overlap чисто геометрический. Теперь LoS-check
+	# отсекает такие удары.
+	var enemy := FakeEnemy.new()
+	enemy.global_position = Vector2(30, 0)
+	add_child_autofree(enemy)
+	_make_wall(Vector2(15, 0), Vector2(6, 40))
+	var source := _make_owner_player()
+	_spawn_arc_hitbox(source, Vector2.RIGHT, 3, 60.0, 0.2, 80.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_eq(enemy.hits_received, 0,
+		"стена между игроком и врагом должна блокировать arc-удар")
+
+func test_thrust_hitbox_does_not_hit_enemy_through_wall() -> void:
+	# То же самое для thrust: длинный узкий прямоугольник геометрически
+	# накрывает врага за стеной, но LoS должен отсечь.
+	var enemy := FakeEnemy.new()
+	enemy.global_position = Vector2(40, 0)
+	add_child_autofree(enemy)
+	_make_wall(Vector2(20, 0), Vector2(6, 30))
+	var source := _make_owner_player()
+	_spawn_thrust_hitbox(source, Vector2.RIGHT, 2, 60.0, 20.0, 0.2)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_eq(enemy.hits_received, 0,
+		"стена перед врагом должна блокировать thrust-удар")
 
 func test_arc_hitbox_direction_up_hits_enemy_above() -> void:
 	# Регресс: при direction UP (0, -1) angular filter должен ловить врагов

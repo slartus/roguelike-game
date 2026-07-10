@@ -290,6 +290,8 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 **Радиус урона (`attack_radius`).** Экспортируемое поле в `enemy.gd`. `0` = урон только по физическому касанию `CharacterBody2D` через `get_slide_collision` (кулаки, кинжал). `>0` = extended reach: в `_handle_player_contact` после touch-ветки ещё проверяется `global_position.distance_to(target) <= attack_radius` — так меч бьёт на замахе даже до прижимания. `contact_cooldown` (0.6 s) применяется одинаково к touch- и reach-удару.
 
+Reach-удар дополнительно проверяет **LoS** через `LineOfSight.is_clear` — raycast от врага к игроку, `exclude = [get_rid()]`. Если между ними стена (`StaticBody2D` из `floor.gd`), reach не наносит урон, даже если игрок в `attack_radius`. Touch-ветка через `get_slide_collision` уже гарантирует физический контакт, LoS-check ей не нужен.
+
 **Анимация удара скелета.** На каждый успешный удар `enemy.gd` эмиттит сигнал `attack_played(target_position)`. `skeleton.gd` подписывается и в `_play_lunge_animation` запускает параллельный `Tween`:
 - корпус (`Visual`) рывком смещается на **10 px** в сторону цели за **80 ms**, возвращается за **140 ms**;
 - одновременно `Weapon` рубит по дуге: `rotation` от 0 до **PI·0.55** (~99°) за 80 ms и обратно за 140 ms. Пивот вращения — hilt рукояти (Node2D.position совпадает с верхом клинка через `offset = (0, tex_height/2)`), поэтому свинг читается как замах, а не как оружие, летящее вокруг своего центра.

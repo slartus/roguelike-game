@@ -74,6 +74,7 @@ Data-driven через кастомный `Resource` — `WeaponResource` (class
 - На первом `_physics_process` сканирует `get_overlapping_bodies()` (враги, стоявшие внутри hitbox'а на момент spawn'а, не выдадут `body_entered`).
 - В течение `active_time` слушает `body_entered` для новых overlap'ов.
 - Каждого enemy бьёт максимум один раз за swing (`_hit_targets` как set).
+- **LoS-фильтр (`_has_line_of_sight_to`)** — прежде чем нанести урон, делаем raycast от источника удара (позиция игрока на момент `configure`) к позиции врага через `LineOfSight.is_clear`. Если между ними `StaticBody2D` (стена) — удар не наносится, даже если враг геометрически в секторе / прямоугольнике. Иначе `Area2D` overlap ловил бы врагов за стеной.
 - После `active_time` — `monitoring = false`, hitbox больше не наносит урон, но остаётся в дереве и продолжает рендериться.
 - По истечении `_visual_life = max(active_time, MIN_VISUAL_LIFE = 0.16)` — `queue_free`.
 
@@ -119,6 +120,8 @@ i18n: `WEAPON_SPEAR`.
 4. иначе — `queue_free`.
 
 Legacy (Dagger/Pistol/Shotgun) не задают `pierce` → default 0 → old behaviour без изменений.
+
+**Стены гасят пулю независимо от pierce.** Если `body_entered` пришёл от тела без `take_damage` (единственные такие тела в сцене — `StaticBody2D` стен из `floor.gd`), пуля сразу `queue_free`, не тратя pierce. Раньше pierce-пуля на стене расходовала один заряд и летела дальше — то есть пробивала стену насквозь.
 
 ### Short Bow (`short_bow.tres`)
 

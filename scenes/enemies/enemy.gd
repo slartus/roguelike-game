@@ -265,10 +265,16 @@ func _handle_player_contact() -> void:
 	if attack_radius <= 0.0 or _target == null or not is_instance_valid(_target):
 		return
 	var target_dist := global_position.distance_to(_target.global_position)
-	if target_dist <= attack_radius and _target.has_method("take_damage"):
-		_target.take_damage(contact_damage)
-		_contact_timer = contact_cooldown
-		attack_played.emit(_target.global_position)
+	if target_dist > attack_radius or not _target.has_method("take_damage"):
+		return
+	# Между мечом и игроком стена — reach не должен доставать сквозь неё.
+	# Distance-check сам по себе игнорирует геометрию мира; без LoS игрок
+	# получал бы урон стоя за углом.
+	if not LineOfSight.is_clear(get_world_2d(), global_position, _target.global_position, [get_rid()]):
+		return
+	_target.take_damage(contact_damage)
+	_contact_timer = contact_cooldown
+	attack_played.emit(_target.global_position)
 
 func _wander(delta: float) -> void:
 	_wander_timer -= delta
