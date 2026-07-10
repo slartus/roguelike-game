@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="PlayerUpgradeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/upgrades/player_upgrade_resource.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "second_wind"
+display_name = "UPGRADE_SECOND_WIND"
+description = "UPGRADE_SECOND_WIND_DESC"
+rarity = "rare"
+max_stacks = 1
+style = ""
+effect_type = "second_wind"
+parameters = {"heal": 2}

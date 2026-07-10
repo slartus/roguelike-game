@@ -109,7 +109,7 @@ func test_offer_size_is_three_when_pool_large_enough() -> void:
 	var cards: Array = []
 	for i in 10:
 		cards.append(_make_upgrade("u%d" % i, ""))
-	PlayerUpgradeLibrary._cache = cards
+	PlayerUpgradeLibrary.set_cache_for_testing(cards)
 	var offer: Array = UpgradeOfferGenerator.generate_offer(_basic_context(""), {})
 	assert_eq(offer.size(), 3, "offer размера 3 когда pool большой")
 
@@ -124,7 +124,7 @@ func test_offer_degrades_when_less_than_three_eligible() -> void:
 	assert_gt(offer.size(), 0, "если хотя бы одна eligible — offer не пустой")
 
 func test_empty_library_returns_empty_offer() -> void:
-	PlayerUpgradeLibrary._cache = []
+	PlayerUpgradeLibrary.set_cache_for_testing([])
 	var offer: Array = UpgradeOfferGenerator.generate_offer(_basic_context(""), {})
 	assert_eq(offer.size(), 0, "пустая library → пустой offer, не креш")
 
@@ -139,7 +139,7 @@ func test_rare_cards_are_reachable_but_not_dominant() -> void:
 		_make_upgrade("u1", "", "uncommon"),
 		_make_upgrade("r1", "", "rare"),
 	]
-	PlayerUpgradeLibrary._cache = cards
+	PlayerUpgradeLibrary.set_cache_for_testing(cards)
 	var common_count := 0
 	var rare_count := 0
 	for i in 200:
@@ -166,7 +166,7 @@ func test_seed_changes_with_offer_counter() -> void:
 	var cards: Array = []
 	for i in 8:
 		cards.append(_make_upgrade("u%d" % i, ""))
-	PlayerUpgradeLibrary._cache = cards
+	PlayerUpgradeLibrary.set_cache_for_testing(cards)
 	var ctx := _basic_context("")
 	var offer_a := UpgradeOfferGenerator.generate_offer(ctx, {})
 	ctx.offer_counter = 1

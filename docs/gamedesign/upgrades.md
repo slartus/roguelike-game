@@ -91,4 +91,17 @@ Style (Warrior/Archer/Mage):
   - Если `offer.is_empty()` (все карты maxed) — тихо пропускается, чтобы игрок не застыл в pause'е.
   - Подключена в `main.tscn` как sibling HUD.
   - i18n: `UI_CHOOSE_UPGRADE`, `LOG_UPGRADE_SELECTED`.
-- **M6/M7** — конкретные карты и их эффекты.
+- **M6** — General cards (`resources/upgrades/general/*.tres`):
+
+| ID | Rarity | Max stacks | Эффект |
+|---|---|---:|---|
+| `thick_skin` | common | 3 | +1 max HP + heal 1 (immediate в `add_player_upgrade`) |
+| `light_boots` | common | 3 | speed × 1.08 (стеки мультипликативно) |
+| `potion_mastery` | common | 2 | зелья лечат на +1 HP за стек |
+| `sure_footing` | uncommon | 2 | SLOW_FACTOR (0.3) поднимается на +0.15 за стек, cap 0.9 (никаких slow-immunity) |
+| `antidote_blood` | uncommon | 2 | длительность яда × 0.75 при `apply_poison` |
+| `second_wind` | rare | 1 | раз в этаж переживает летальный урон, восст. 2 HP |
+
+Second Wind сбрасывается в `next_floor()` и `reset_run()`. Это единственная карта с conditional immediate эффектом внутри `Player.take_damage`; остальные общаются через `get_player_upgrade_modifiers`.
+
+- **M7** — Style-specific cards (Warrior/Archer/Mage) + интеграция с WeaponStats layer.

@@ -123,7 +123,18 @@ func equip(weapon: WeaponResource) -> void:
 	weapon_changed.emit(weapon)
 
 func take_damage(amount: int) -> void:
-	health = max(0, health - amount)
+	var new_health: int = max(0, health - amount)
+	# Second Wind: если этот удар был бы летальным и карта взята и её заряд
+	# ещё не потрачен на этом этаже — переживаем удар и восстанавливаем HP
+	# до параметра "heal".
+	if new_health == 0 and _try_trigger_second_wind():
+		health_changed.emit(health, max_health)
+		modulate = Color(1, 0.5, 0.5)
+		await get_tree().create_timer(0.1).timeout
+		if is_inside_tree():
+			modulate = Color.WHITE
+		return
+	health = new_health
 	GameState.player_health = health
 	health_changed.emit(health, max_health)
 	modulate = Color(1, 0.5, 0.5)
@@ -133,10 +144,33 @@ func take_damage(amount: int) -> void:
 	if health == 0:
 		_die()
 
+# Возвращает true если Second Wind сработал — take_damage должен пропустить
+# death path и оставить игрока живым. Charge потрачен, до next_floor() /
+# reset_run() снова не сработает.
+func _try_trigger_second_wind() -> bool:
+	if GameState.second_wind_used_this_floor:
+		return false
+	var stacks := GameState.get_upgrade_stack("second_wind")
+	if stacks <= 0:
+		return false
+	var upgrade := PlayerUpgradeLibrary.get_upgrade_by_id("second_wind")
+	if upgrade == null:
+		return false
+	var heal_amount: int = int(upgrade.parameters.get("heal", 2))
+	health = clampi(heal_amount, 1, max_health)
+	GameState.player_health = health
+	GameState.second_wind_used_this_floor = true
+	return true
+
 func current_speed() -> float:
-	var multiplier := 1.0
+	var mods := GameState.get_player_upgrade_modifiers()
+	var multiplier := float(mods.speed_multiplier)
+	# Sure Footing уменьшает slow: 1.0 → 1.0, но SLOW_FACTOR становится
+	# менее жёстким за счёт bonus.
+	var slow_bonus := float(mods.slow_resistance_bonus)
 	if _slow_source_count > 0:
-		multiplier *= SLOW_FACTOR
+		var effective_slow: float = clampf(SLOW_FACTOR + slow_bonus, SLOW_FACTOR, 0.9)
+		multiplier *= effective_slow
 	if _poison_timer > 0.0:
 		multiplier *= POISON_SLOW_FACTOR
 	return speed * multiplier
@@ -158,7 +192,9 @@ func apply_poison(duration: float) -> void:
 	# облако.
 	if _poison_timer <= 0.0:
 		_poison_tick_timer = POISON_TICK_INTERVAL
-	_poison_timer = duration
+	# Antidote Blood — poison_duration_multiplier < 1.0 сокращает длительность.
+	var mods := GameState.get_player_upgrade_modifiers()
+	_poison_timer = duration * float(mods.poison_duration_multiplier)
 
 func _tick_poison(delta: float) -> void:
 	if _poison_timer <= 0.0:
@@ -187,8 +223,11 @@ func _try_use_health_potion() -> void:
 		return
 	if not GameState.consume_health_potion():
 		return
-	heal(1)
-	EventLog.log_heal(1)
+	# Potion Mastery увеличивает heal.
+	var mods := GameState.get_player_upgrade_modifiers()
+	var heal_amount: int = 1 + int(mods.potion_heal_bonus)
+	heal(heal_amount)
+	EventLog.log_heal(heal_amount)
 
 func _die() -> void:
 	# finish_run фиксирует snapshot текущего забега (этаж, уровень, убийства,

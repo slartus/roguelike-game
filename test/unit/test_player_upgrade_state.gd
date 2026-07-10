@@ -127,7 +127,7 @@ func test_pierce_bonus_reflected_in_archer_modifiers() -> void:
 func test_modifiers_are_default_when_no_stacks() -> void:
 	# Регресс: пустой stacks → все дефолты 1.0 / 0.
 	GameState.player_upgrade_stacks = {}
-	PlayerUpgradeLibrary._cache = []
+	PlayerUpgradeLibrary.set_cache_for_testing([])
 	var mods := GameState.get_player_upgrade_modifiers()
 	assert_almost_eq(mods.speed_multiplier, 1.0, 0.0001)
 	assert_eq(mods.warrior_damage_bonus, 0)

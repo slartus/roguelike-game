@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="PlayerUpgradeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/upgrades/player_upgrade_resource.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "sure_footing"
+display_name = "UPGRADE_SURE_FOOTING"
+description = "UPGRADE_SURE_FOOTING_DESC"
+rarity = "uncommon"
+max_stacks = 2
+style = ""
+effect_type = "slow_resistance"
+parameters = {"amount": 0.15}

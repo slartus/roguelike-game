@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="PlayerUpgradeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/upgrades/player_upgrade_resource.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "antidote_blood"
+display_name = "UPGRADE_ANTIDOTE_BLOOD"
+description = "UPGRADE_ANTIDOTE_BLOOD_DESC"
+rarity = "uncommon"
+max_stacks = 2
+style = ""
+effect_type = "poison_resistance"
+parameters = {"duration_multiplier": 0.75}

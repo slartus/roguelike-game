@@ -59,11 +59,12 @@ func test_validate_all_returns_no_errors_on_empty_library() -> void:
 	assert_eq(errors.size(), 0,
 		"без карт validate возвращает пустой список: %s" % [errors])
 
-func test_get_all_upgrades_starts_empty_in_m1() -> void:
+func test_get_all_upgrades_returns_registered_cards() -> void:
+	# После M6 general карты уже в UPGRADE_PATHS.
 	PlayerUpgradeLibrary.clear_cache_for_testing()
 	var all_upgrades := PlayerUpgradeLibrary.get_all_upgrades()
-	assert_eq(all_upgrades.size(), 0,
-		"M1: конкретные карты приходят в M6/M7")
+	assert_gte(all_upgrades.size(), 6,
+		"M6 добавил 6 general cards минимум")
 
 func test_get_eligible_excludes_maxed_stacks() -> void:
 	# Симулируем: карта max_stacks=2, current_stacks={"foo": 2} → выпадает.

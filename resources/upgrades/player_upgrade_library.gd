@@ -7,7 +7,16 @@ extends RefCounted
 # Библиотека stateless и загружается лениво — при первом обращении.
 # GameState держит собственный run-state; library только справочник.
 
-const UPGRADE_PATHS := []  # Заполнится в M6/M7 при добавлении карт.
+const UPGRADE_PATHS := [
+	# General (M6)
+	"res://resources/upgrades/general/thick_skin.tres",
+	"res://resources/upgrades/general/light_boots.tres",
+	"res://resources/upgrades/general/potion_mastery.tres",
+	"res://resources/upgrades/general/sure_footing.tres",
+	"res://resources/upgrades/general/antidote_blood.tres",
+	"res://resources/upgrades/general/second_wind.tres",
+	# Style (M7) — добавятся при реализации.
+]
 
 const VALID_RARITIES := ["common", "uncommon", "rare"]
 const VALID_STYLES := ["", "warrior", "archer", "mage"]
@@ -32,16 +41,33 @@ const KNOWN_EFFECT_TYPES := [
 ]
 
 static var _cache: Array = []
+# Флаг: кеш явно установлен (напрямую или set_cache_for_testing). Пустой
+# кеш всё равно возвращается, а не перегружается из UPGRADE_PATHS —
+# иначе тесты не могут протестировать empty-случай.
+static var _cache_loaded: bool = false
 
 # Возвращает все загруженные upgrade resources. Кеш заполняется один раз.
+# Если тест явно установил кеш через set_cache_for_testing (даже пустой),
+# UPGRADE_PATHS не перечитывается. Direct `._cache = [X]` тоже работает —
+# непустой кеш считается достаточным.
 static func get_all_upgrades() -> Array:
-	if _cache.is_empty():
-		_cache = _load_all()
+	if _cache_loaded:
+		return _cache
+	if not _cache.is_empty():
+		return _cache
+	_cache = _load_all()
+	_cache_loaded = true
 	return _cache
+
+# Устанавливает конкретный набор для тестов (обходит UPGRADE_PATHS).
+static func set_cache_for_testing(cards: Array) -> void:
+	_cache = cards
+	_cache_loaded = true
 
 # Только для тестов: сбрасывает кеш, чтобы можно было проверить fresh load.
 static func clear_cache_for_testing() -> void:
 	_cache = []
+	_cache_loaded = false
 
 static func get_upgrade_by_id(upgrade_id: String) -> PlayerUpgradeResource:
 	for upgrade in get_all_upgrades():
