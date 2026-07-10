@@ -1,6 +1,6 @@
 extends GutTest
 
-const DAGGER := preload("res://resources/weapons/dagger.tres")
+const SHORT_SWORD := preload("res://resources/weapons/short_sword.tres")
 const PISTOL := preload("res://resources/weapons/pistol.tres")
 
 var _snapshot: Dictionary
@@ -76,7 +76,7 @@ func test_reset_run_clears_run_state_but_keeps_gold() -> void:
 	assert_eq(GameState.player_xp, 0)
 	assert_eq(GameState.player_max_health, GameState.DEFAULT_MAX_HEALTH)
 	assert_eq(GameState.player_health, GameState.DEFAULT_MAX_HEALTH)
-	assert_eq(GameState.equipped_weapon, DAGGER, "weapon resets to default")
+	assert_eq(GameState.equipped_weapon, SHORT_SWORD, "weapon resets to default (fantasy start)")
 	assert_eq(GameState.total_gold, 100, "gold survives run reset")
 
 func test_reset_run_generates_new_tower_seed() -> void:

@@ -11,7 +11,7 @@
 | `current_floor_number` | 1 |
 | `player_max_health` | 5 (`DEFAULT_MAX_HEALTH`) |
 | `player_health` | 5 |
-| `equipped_weapon` | Dagger (`DEFAULT_WEAPON`) |
+| `equipped_weapon` | Short Sword (`DEFAULT_WEAPON`, fantasy start) |
 | `player_level` | 1 |
 | `player_xp` | 0 |
 | `run_gold` | 0 (счётчик золота **за забег**, растёт вместе с `award_gold`) |
@@ -103,7 +103,7 @@ Base statы монстров — D&D 5e Monster Manual (SRD), нормализо
 
 ## Игровой цикл
 
-1. Старт: floor 1, HP 5/5, LVL 1, XP 0/7 (Balance.xp_to_next_level(1) = 3·1² + 3·1 + 1 = 7), Dagger. Этаж — процедурно сгенерированное подземелье из 4–9 комнат, соединённых коридорами (см. `dungeon.md`).
+1. Старт: floor 1, HP 5/5, LVL 1, XP 0/7 (Balance.xp_to_next_level(1) = 3·1² + 3·1 + 1 = 7), Short Sword. Этаж — процедурно сгенерированное подземелье из 4–9 комнат, соединённых коридорами (см. `dungeon.md`).
 2. Убил всех врагов на этаже → появляется дверь в комнате-выходе → следующий этаж.
 3. Каждые 3 этажа: сундук со случайным оружием (генератор ставит одну точку в средней комнате).
 4. Каждые 5 этажей: специальный boss-этаж — одна большая арена с одним боссом; обычные враги и сундук пропускаются.

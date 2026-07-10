@@ -3,7 +3,7 @@ extends Node
 const SAVE_PATH: String = "user://save.cfg"
 
 const DEFAULT_MAX_HEALTH: int = 5
-const DEFAULT_WEAPON: WeaponResource = preload("res://resources/weapons/dagger.tres")
+const DEFAULT_WEAPON: WeaponResource = preload("res://resources/weapons/short_sword.tres")
 const HEALTH_PER_LEVEL: int = 1
 
 signal xp_changed(current: int, max_for_level: int)
