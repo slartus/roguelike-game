@@ -15,7 +15,21 @@ const UPGRADE_PATHS := [
 	"res://resources/upgrades/general/sure_footing.tres",
 	"res://resources/upgrades/general/antidote_blood.tres",
 	"res://resources/upgrades/general/second_wind.tres",
-	# Style (M7) — добавятся при реализации.
+	# Warrior (M7)
+	"res://resources/upgrades/warrior/heavy_strike.tres",
+	"res://resources/upgrades/warrior/long_reach.tres",
+	"res://resources/upgrades/warrior/sweeping_blade.tres",
+	"res://resources/upgrades/warrior/pushback.tres",
+	# Archer (M7)
+	"res://resources/upgrades/archer/quick_draw.tres",
+	"res://resources/upgrades/archer/piercing_arrows.tres",
+	"res://resources/upgrades/archer/steady_aim.tres",
+	"res://resources/upgrades/archer/strong_bowstrings.tres",
+	# Mage (M7). Wide Magic пока не подключён — area spell weapon type
+	# ещё не реализован, карта была бы бездействующей.
+	"res://resources/upgrades/mage/arcane_power.tres",
+	"res://resources/upgrades/mage/spell_haste.tres",
+	"res://resources/upgrades/mage/arcane_reach.tres",
 ]
 
 const VALID_RARITIES := ["common", "uncommon", "rare"]

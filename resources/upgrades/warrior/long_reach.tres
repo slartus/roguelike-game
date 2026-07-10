@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="PlayerUpgradeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/upgrades/player_upgrade_resource.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "long_reach"
+display_name = "UPGRADE_LONG_REACH"
+description = "UPGRADE_LONG_REACH_DESC"
+rarity = "uncommon"
+max_stacks = 2
+style = "warrior"
+effect_type = "melee_range_multiplier"
+parameters = {"multiplier": 1.10}

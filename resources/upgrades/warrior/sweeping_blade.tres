@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="PlayerUpgradeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/upgrades/player_upgrade_resource.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "sweeping_blade"
+display_name = "UPGRADE_SWEEPING_BLADE"
+description = "UPGRADE_SWEEPING_BLADE_DESC"
+rarity = "uncommon"
+max_stacks = 2
+style = "warrior"
+effect_type = "melee_arc_multiplier"
+parameters = {"multiplier": 1.15}

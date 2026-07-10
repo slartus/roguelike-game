@@ -55,7 +55,10 @@ func try_attack(weapon: WeaponResource, target_global_position: Vector2) -> bool
 		# (например, оружие с забытым projectile_scene): visually ничего не
 		# происходит, но cooldown идёт, и мы не понимаем почему.
 		return false
-	_cooldown = weapon.get_attack_interval()
+	# Cooldown берём из stats (учитывает archer/mage attack_interval_multiplier).
+	var mods := GameState.get_player_upgrade_modifiers()
+	var stats := WeaponStats.compute(weapon, mods)
+	_cooldown = stats.attack_interval
 	# Визуал взмаха у игрока — короткий выпад тела + свинг оружия для
 	# melee. Метод опционален: контроллер работает и без него (тесты
 	# инстансируют fake player без сцены).
@@ -74,8 +77,10 @@ func _attack_projectile(weapon: WeaponResource, direction: Vector2) -> bool:
 		# fail; use push_warning вместо этого для видимости при отладке.
 		push_warning("WeaponController: у оружия '%s' нет projectile_scene и default_projectile_scene пуст" % weapon.id)
 		return false
-	var count := maxi(1, weapon.get_projectiles_per_attack())
-	var spread := deg_to_rad(weapon.spread_angle_deg)
+	var mods := GameState.get_player_upgrade_modifiers()
+	var stats := WeaponStats.compute(weapon, mods)
+	var count := maxi(1, stats.projectiles_per_attack)
+	var spread := deg_to_rad(stats.spread_angle_deg)
 	var scene_root := get_tree().current_scene
 	for i in count:
 		var offset := 0.0
@@ -86,7 +91,12 @@ func _attack_projectile(weapon: WeaponResource, direction: Vector2) -> bool:
 		var bullet := scene.instantiate()
 		bullet.global_position = _owner_player.global_position
 		bullet.direction = direction.rotated(offset)
-		bullet.apply_weapon(weapon)
+		# apply_weapon_stats — новый метод, читает из stats. Fallback на
+		# apply_weapon если сцена ещё старого контракта.
+		if bullet.has_method("apply_weapon_stats"):
+			bullet.apply_weapon_stats(stats)
+		else:
+			bullet.apply_weapon(weapon)
 		if scene_root != null:
 			scene_root.add_child(bullet)
 		else:
@@ -99,17 +109,19 @@ func _attack_melee(weapon: WeaponResource, direction: Vector2) -> bool:
 	if melee_hitbox_scene == null:
 		push_warning("WeaponController: melee_hitbox_scene не задан — melee-оружие '%s' не работает" % weapon.id)
 		return false
+	var mods := GameState.get_player_upgrade_modifiers()
+	var stats := WeaponStats.compute(weapon, mods)
 	var hitbox := melee_hitbox_scene.instantiate()
 	# configure ДО add_child: он создаёт CollisionShape2D и позиционирует
 	# hitbox. _ready родного узла увидит уже готовое состояние.
 	hitbox.configure(
 		_owner_player,
 		direction,
-		weapon.damage,
-		weapon.hitbox_length,
-		weapon.hitbox_width,
-		weapon.active_time,
-		weapon.knockback,
+		stats.damage,
+		stats.hitbox_length,
+		stats.hitbox_width,
+		stats.active_time,
+		stats.knockback,
 	)
 	var scene_root := get_tree().current_scene
 	if scene_root != null:

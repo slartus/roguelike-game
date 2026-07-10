@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="PlayerUpgradeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/upgrades/player_upgrade_resource.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "pushback"
+display_name = "UPGRADE_PUSHBACK"
+description = "UPGRADE_PUSHBACK_DESC"
+rarity = "common"
+max_stacks = 2
+style = "warrior"
+effect_type = "knockback_bonus"
+parameters = {"amount": 20.0}

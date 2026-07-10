@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="PlayerUpgradeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/upgrades/player_upgrade_resource.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "arcane_reach"
+display_name = "UPGRADE_ARCANE_REACH"
+description = "UPGRADE_ARCANE_REACH_DESC"
+rarity = "uncommon"
+max_stacks = 2
+style = "mage"
+effect_type = "projectile_lifetime_multiplier"
+parameters = {"style": "mage", "multiplier": 1.15}

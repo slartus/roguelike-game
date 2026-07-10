@@ -35,6 +35,19 @@ func apply_weapon(weapon: WeaponResource) -> void:
 	if _visual != null:
 		_visual.modulate = weapon.get_projectile_color()
 
+# Новый путь через WeaponStats — учитывает upgrade modifiers.
+# WeaponController предпочитает его над apply_weapon, если метод есть.
+func apply_weapon_stats(stats: WeaponStats) -> void:
+	if stats == null:
+		return
+	damage = stats.damage
+	speed = stats.projectile_speed
+	lifetime = stats.projectile_lifetime
+	pierce = stats.pierce
+	_pierce_remaining = pierce
+	if _visual != null:
+		_visual.modulate = stats.projectile_color
+
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("player"):
 		return

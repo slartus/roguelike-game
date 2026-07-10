@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="PlayerUpgradeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/upgrades/player_upgrade_resource.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "piercing_arrows"
+display_name = "UPGRADE_PIERCING_ARROWS"
+description = "UPGRADE_PIERCING_ARROWS_DESC"
+rarity = "uncommon"
+max_stacks = 2
+style = "archer"
+effect_type = "pierce_bonus"
+parameters = {"amount": 1}

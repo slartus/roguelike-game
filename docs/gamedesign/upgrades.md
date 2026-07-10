@@ -104,4 +104,38 @@ Style (Warrior/Archer/Mage):
 
 Second Wind сбрасывается в `next_floor()` и `reset_run()`. Это единственная карта с conditional immediate эффектом внутри `Player.take_damage`; остальные общаются через `get_player_upgrade_modifiers`.
 
-- **M7** — Style-specific cards (Warrior/Archer/Mage) + интеграция с WeaponStats layer.
+- **M7** — Style-specific cards + WeaponStats layer.
+
+**WeaponStats** (`scenes/player/weapon_stats.gd`) — runtime-снимок фактических параметров атаки: `WeaponStats.compute(weapon, mods)`. Копирует base из weapon через helper'ы (учитывают legacy fallback), затем применяет style modifiers только если `weapon.style` совпадает с целью карты. Клампы: `MIN_ATTACK_INTERVAL = 0.05` (защита от zero cooldown) и `MAX_ARCHER_PIERCE_BONUS = 2` (не даём бесконечный pierce). Base `.tres` не мутируется — регресс покрыт `test_base_weapon_resource_is_not_mutated`.
+
+`WeaponController` теперь читает `stats.damage / attack_interval / pierce / hitbox_*` вместо raw `weapon.*`. `bullet.gd::apply_weapon_stats(stats)` — новый путь, но старый `apply_weapon(weapon)` сохранён как fallback для сцен старого контракта.
+
+### Warrior (`resources/upgrades/warrior/`)
+
+| ID | Rarity | Max | Effect |
+|---|---|---:|---|
+| `heavy_strike` | common | 3 | damage +1 |
+| `long_reach` | uncommon | 2 | hitbox_length × 1.10 |
+| `sweeping_blade` | uncommon | 2 | hitbox_width × 1.15 (только `melee_arc`) |
+| `pushback` | common | 2 | knockback +20 |
+
+### Archer (`resources/upgrades/archer/`)
+
+| ID | Rarity | Max | Effect |
+|---|---|---:|---|
+| `quick_draw` | common | 3 | attack_interval × 0.90 |
+| `piercing_arrows` | uncommon | 2 | pierce +1 (cap +2) |
+| `steady_aim` | common | 2 | spread × 0.80 |
+| `strong_bowstrings` | common | 2 | projectile_speed × 1.12 |
+
+### Mage (`resources/upgrades/mage/`)
+
+| ID | Rarity | Max | Effect |
+|---|---|---:|---|
+| `arcane_power` | common | 3 | damage +1 |
+| `spell_haste` | uncommon | 2 | attack_interval × 0.90 |
+| `arcane_reach` | uncommon | 2 | projectile_lifetime × 1.15 |
+
+**Wide Magic** из плана не подключён — area spell weapon type ещё не реализован (v1 magic только spell_projectile). Карта была бы бездействующей до появления `spell_area`.
+
+Off-style cards остаются в run state, но `WeaponStats.compute` фильтрует их через `match weapon.style` — при смене оружия warrior-стеки автоматически становятся неактивными. Ничего не удаляется, только `reset_run()` очищает всё.
