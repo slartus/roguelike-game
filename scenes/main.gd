@@ -44,6 +44,11 @@ func _ready() -> void:
 	_spawn_enemies()
 	print("[main] enemies spawned: %d" % _alive_enemies)
 	_spawn_chests()
+	Analytics.start_floor({
+		"floor": GameState.current_floor_number,
+		"layout_archetype": "unknown",
+		"zone": "unknown",
+	})
 	print("[main] _ready done")
 
 func _spawn_floor() -> void:
@@ -140,6 +145,7 @@ func _open_door() -> void:
 	_door.open()
 
 func _on_door_entered() -> void:
+	Analytics.finish_floor({})
 	GameState.next_floor()
 
 func _on_leveled_up(new_level: int, _new_max_health: int) -> void:

@@ -362,6 +362,7 @@ func equip(weapon: WeaponResource) -> void:
 	weapon_changed.emit(weapon)
 
 func take_damage(amount: int) -> void:
+	Analytics.record_damage_taken(mini(health, amount))
 	var new_health: int = max(0, health - amount)
 	# Second Wind: если этот удар был бы летальным и карта взята и её заряд
 	# ещё не потрачен на этом этаже — переживаем удар и восстанавливаем HP
@@ -473,6 +474,11 @@ func _die() -> void:
 	# золото) и обнуляет run state — title screen прочитает его и покажет
 	# окно «Итоги забега». Если бы мы звали reset_run напрямую, snapshot
 	# потерялся бы.
+	Analytics.finish_run({
+		"reason": Analytics.RUN_END_DEATH,
+		"floor_reached": GameState.current_floor_number,
+		"player_level": GameState.player_level,
+	})
 	GameState.finish_run()
 	# После смерти всегда уходим на title screen (стартовый экран).
 	# call_deferred: change_scene_to_file из physics callback
