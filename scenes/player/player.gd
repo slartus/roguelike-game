@@ -116,13 +116,19 @@ func _apply_weapon_visual(weapon: WeaponResource) -> void:
 	_weapon_sprite.texture = texture
 	_weapon_sprite.modulate = weapon.icon_modulate
 	_weapon_sprite.scale = weapon.held_scale
-	# По умолчанию pivot держим на handle (нижний край PNG). Явный
-	# held_sprite_offset в ресурсе позволяет сдвинуть pivot (aim-aligned
-	# оружия типа копья/лука хотят pivot на середине древка).
-	if weapon.held_sprite_offset == Vector2.ZERO:
-		_weapon_sprite.offset = Vector2(0, -texture.get_height() * 0.5)
-	else:
+	# Pivot policy:
+	# - Явный held_sprite_offset (!= ZERO) → используем как есть. Позволяет
+	#   точно указать handle (например, тетиву лука в колонке 5 из 16).
+	# - aim-aligned → center pivot (offset=ZERO). Оружие вращается вокруг
+	#   центра PNG, тетива/наконечник примерно у руки игрока.
+	# - side-rest (sword, dagger) → bottom pivot. Sprite convention: handle
+	#   внизу PNG, при вращении handle остаётся в руке.
+	if weapon.held_sprite_offset != Vector2.ZERO:
 		_weapon_sprite.offset = weapon.held_sprite_offset
+	elif weapon.held_aim_aligned:
+		_weapon_sprite.offset = Vector2.ZERO
+	else:
+		_weapon_sprite.offset = Vector2(0, -texture.get_height() * 0.5)
 	_weapon_sprite.visible = true
 	_apply_facing_visuals()
 
