@@ -28,8 +28,15 @@ const MOLD_TEXTURE: Texture2D = preload("res://assets/sprites/environment/mold.p
 const CANDLE_SCENE: PackedScene = preload("res://scenes/dungeon/candle.tscn")
 const FLOOR_CRACK_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor_crack.png")
 const FLOOR_BLOOD_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor_blood.png")
+const RoomDecorationPlannerClass = preload("res://scenes/dungeon/room_decoration_planner.gd")
 
 const TILE_SIZE: int = 20
+# Клетки, зарезервированные вокруг critical anchor'ов (player start,
+# exit, chest) — блокирующие props в этот радиус не ставятся.
+const ENTRANCE_CLEAR_RADIUS_CELLS: int = 2
+const EXIT_CLEAR_RADIUS_CELLS: int = 2
+const CHEST_CLEAR_RADIUS_CELLS: int = 1
+const ENEMY_SPAWN_CLEAR_RADIUS_CELLS: int = 1
 
 # Шансы декора — те же, что в предыдущей версии; профили меняют только
 # материал пола/стен, не влияют на декор-логику.
@@ -59,10 +66,15 @@ var _wall_cap_texture: Texture2D
 var _room_floor_textures: Array[Texture2D] = []
 var _corridor_floor_texture: Texture2D
 var _doorway_threshold_texture: Texture2D
+# Итог планировщика пропов — array of Placement и blocked_cells для
+# AStar. Заполняется в _plan_and_place_props, читается тестами и
+# instantiate-логикой.
+var floor_plan: RoomDecorationPlannerClass.FloorPlan
 
 @onready var _floors_root: Node2D = $FloorsRoot
 @onready var _walls_root: Node2D = $WallsRoot
 @onready var _decor_root: Node2D = $DecorRoot
+@onready var _props_root: Node2D = $PropsRoot
 @onready var _markers_root: Node2D = $MarkersRoot
 
 func _ready() -> void:
@@ -80,6 +92,12 @@ func _ready() -> void:
 	_draw_floor_tiles()
 	_draw_doorway_thresholds()
 	_build_walls()
+	# Порядок важен: planner собирает reservations из layout (player start,
+	# exit, chest, enemy spawns) и определяет какие клетки заняты пропами.
+	# _build_astar_grid должен видеть blocked_cells — иначе AI пойдёт через
+	# мебель. _place_decor (legacy настенные candles/mold) ставится после,
+	# чтобы cave-crack не рисовался поверх blocking prop'а.
+	_plan_and_place_props()
 	_place_decor(seed_value)
 	_build_astar_grid()
 	_place_door()
@@ -310,6 +328,80 @@ func _create_wall_span(col_start: int, col_end: int, row: int, kind: String) -> 
 	body.add_child(visual)
 	_walls_root.add_child(body)
 
+func _plan_and_place_props() -> void:
+	# Собираем reservations — клетки, где planner не должен ставить
+	# блокирующий prop: doorways, точка входа/выхода, сундуки, спавны
+	# врагов, обязательный корридор внутри стартовой/выходной комнаты.
+	# Seed — та же комбинация (tower_seed, floor_number), что использует
+	# gameplay-путь; RoomDecorationPlanner делает из неё собственный
+	# room-level поток через `_seed_for_room` (см. planner) и не сдвигает
+	# gameplay RNG.
+	var reservations := _collect_reservations()
+	floor_plan = RoomDecorationPlannerClass.plan_floor(
+		layout,
+		reservations,
+		GameState.tower_seed,
+		GameState.current_floor_number,
+	)
+	for placement in floor_plan.placements:
+		_instantiate_placement(placement)
+
+func _collect_reservations() -> Dictionary:
+	# Возвращает Dictionary Vector2i(col, row) → true. Все критичные
+	# anchor'ы + clear radius. Corridor cells тоже помечаем, чтобы
+	# planner уважал границы doorway-корридора между комнатами.
+	var reserved: Dictionary = {}
+	_reserve_around(reserved, layout.player_start, ENTRANCE_CLEAR_RADIUS_CELLS)
+	_reserve_around(reserved, layout.exit_position, EXIT_CLEAR_RADIUS_CELLS)
+	for chest_pos in layout.chest_positions:
+		_reserve_around(reserved, chest_pos, CHEST_CLEAR_RADIUS_CELLS)
+	for spawn_pos in layout.enemy_spawns:
+		_reserve_around(reserved, spawn_pos, ENEMY_SPAWN_CLEAR_RADIUS_CELLS)
+	# Corridor cells сами по себе — planner не заходит в corridor rects
+	# (они не входят в room_cells), но door_cells внутри room берутся из
+	# смежных corridor. Резервировать corridor cells не нужно.
+	return reserved
+
+func _reserve_around(reserved: Dictionary, pixel_pos: Vector2i, radius_cells: int) -> void:
+	var center := Vector2i(pixel_pos.x / TILE_SIZE, pixel_pos.y / TILE_SIZE)
+	for dy in range(-radius_cells, radius_cells + 1):
+		for dx in range(-radius_cells, radius_cells + 1):
+			reserved[center + Vector2i(dx, dy)] = true
+
+func _instantiate_placement(placement: RoomDecorationPlannerClass.Placement) -> void:
+	var def: EnvironmentPropDefinition = placement.def
+	# Если у definition задана PackedScene — инстанцируем её (для сложных
+	# пропов с собственной иерархией: анимация, интерактивность). Иначе —
+	# fallback на простой Sprite2D с texture. В M2 все каталожные пропы
+	# используют texture; scene зарезервировано под PR4.
+	if def.scene != null:
+		var node: Node2D = def.scene.instantiate()
+		node.position = placement.center_pixel()
+		_props_root.add_child(node)
+		return
+	if def.texture == null:
+		return
+	var sprite := Sprite2D.new()
+	sprite.texture = def.texture
+	# Спрайт центрируется в bbox'е: floor.gd берёт center_pixel() из
+	# Placement, который учитывает footprint. Origin спрайта — левый
+	# верх текстуры, поэтому Sprite2D.centered=true работает как есть.
+	sprite.centered = true
+	sprite.position = placement.center_pixel()
+	if def.blocks_movement:
+		var body := StaticBody2D.new()
+		body.position = sprite.position
+		sprite.position = Vector2.ZERO
+		var collision := CollisionShape2D.new()
+		var rect_shape := RectangleShape2D.new()
+		rect_shape.size = Vector2(def.footprint_cells * TILE_SIZE)
+		collision.shape = rect_shape
+		body.add_child(collision)
+		body.add_child(sprite)
+		_props_root.add_child(body)
+	else:
+		_props_root.add_child(sprite)
+
 func _place_decor(seed_value: int) -> void:
 	# Декор — чисто визуальные Sprite2D без коллизии. Раскладывается
 	# детерминированно по seed этажа: тот же tower_seed → тот же декор
@@ -323,6 +415,10 @@ func _place_decor(seed_value: int) -> void:
 	for row in rows:
 		for col in cols:
 			var tile_center := Vector2i(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
+			# Пропускаем клетки, где planner уже поставил блокирующий prop —
+			# иначе legacy floor_crack рисуется поверх мебели.
+			if _is_cell_blocked_by_prop(col, row):
+				continue
 			var profile := _decor_profile_at(tile_center)
 			var wall_types: Array = profile.get("wall", [])
 			var floor_types: Array = profile.get("floor", [])
@@ -342,6 +438,9 @@ func _place_decor(seed_value: int) -> void:
 					_spawn_decor(FLOOR_CRACK_TEXTURE, Vector2(tile_center))
 				elif floor_types.has(DecorProfiles.DECOR_BLOOD) and roll < CRACK_CHANCE + BLOOD_CHANCE:
 					_spawn_decor(FLOOR_BLOOD_TEXTURE, Vector2(tile_center))
+
+func _is_cell_blocked_by_prop(col: int, row: int) -> bool:
+	return floor_plan != null and floor_plan.blocked_cells.has(Vector2i(col, row))
 
 func _decor_profile_at(tile_center: Vector2i) -> Dictionary:
 	if layout.room_infos.is_empty():
@@ -378,6 +477,16 @@ func _build_astar_grid() -> void:
 		for col in cols:
 			if _wall_kind_at(col, row) == "solid":
 				astar_grid.set_point_solid(Vector2i(col, row), true)
+	# Пропы, помеченные blocks_movement, тоже solid — иначе AI (и pathing
+	# summon fallback) уйдёт сквозь мебель. Список приходит от planner'а;
+	# gameplay совместим — floor.gd раньше блокировал только стены.
+	if floor_plan != null:
+		for cell in floor_plan.blocked_cells.keys():
+			var col: int = cell.x
+			var row: int = cell.y
+			if col < 0 or row < 0 or col >= cols or row >= rows:
+				continue
+			astar_grid.set_point_solid(cell, true)
 
 func _place_door() -> void:
 	door = DOOR_SCENE.instantiate()
