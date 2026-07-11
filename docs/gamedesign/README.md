@@ -18,6 +18,7 @@
 | [ui.md](ui.md) | HUD, Combat Log, EventLog autoload |
 | [i18n.md](i18n.md) | Локализация, CSV/tr(), ключи |
 | [armor.md](armor.md) | Броня (пока не реализована — placeholder + план) |
+| [upgrades.md](upgrades.md) | Апгрейды: карты выбора при level up, стили, эффекты |
 
 ## Гайд игрока
 
