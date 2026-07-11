@@ -58,16 +58,15 @@ func test_regular_floor_generation_fills_zone_and_archetype() -> void:
 	assert_eq(layout.floor_archetype, "residential_spine",
 		"M4: residential zone использует spine архетип")
 
-func test_lower_zones_use_bsp_variants() -> void:
-	# M6: нижние зоны идут через BSP-код, но с разным archetype-тэгом
-	# для читаемости. lower_tower → ruined_bsp, basement → basement_bsp,
-	# caves → caves_bsp. Legacy_bsp остаётся как fallback (не должен
-	# возникать в нормальной генерации нижних зон).
+func test_lower_zones_use_expected_archetypes() -> void:
+	# PR3: нижние зоны идут через разные генераторы.
+	# lower_tower / basement → BSP-варианты (ruined_bsp / basement_bsp);
+	# caves → NaturalCaveGenerator (caves_natural).
 	var gen := DungeonGeneratorScript.new()
 	var expected := {
-		12: "ruined_bsp",   # lower_tower
-		16: "basement_bsp", # basement
-		20: "caves_bsp",    # caves
+		12: "ruined_bsp",     # lower_tower
+		16: "basement_bsp",   # basement
+		20: "caves_natural",  # caves — новый генератор в PR3
 	}
 	for floor_num in expected.keys():
 		var layout: DungeonLayout = gen.generate(2020, floor_num, false)

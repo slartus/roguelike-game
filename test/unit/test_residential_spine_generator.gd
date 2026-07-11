@@ -52,12 +52,21 @@ func test_player_start_and_exit_are_distinct() -> void:
 	assert_ne(layout.player_start, layout.exit_position,
 		"start и exit не должны совпадать")
 
-func test_player_start_and_exit_are_at_corridor_ends() -> void:
-	# Инвариант: start слева, exit справа (по X). Это делает движение
-	# через этаж читаемым: игрок идёт слева направо.
+func test_player_start_and_exit_are_far_by_graph_distance() -> void:
+	# PR3: entrance/exit выбираются по BFS-фарвест паре, не по X-концам
+	# коридора. Это может уводить их в wing-комнаты или разные ряды.
+	# Инвариант: entrance и exit находятся в разных комнатах и на
+	# графовой дистанции >= 3 hops (2 viewport widths для residential).
 	var layout := _generate(203, 3)
-	assert_lt(layout.player_start.x, layout.exit_position.x,
-		"start слева, exit справа")
+	assert_ne(layout.entrance_room_index, layout.exit_room_index,
+		"entrance и exit — разные комнаты")
+	assert_ne(layout.player_start, layout.exit_position,
+		"start и exit не совпадают")
+	var hops: int = layout.room_graph.shortest_path_length(
+		layout.entrance_room_index, layout.exit_room_index,
+	)
+	assert_gte(hops, 3,
+		"entrance/exit должны быть на графовой дистанции >= 3 hops")
 
 func test_room_infos_populated_and_include_entrance() -> void:
 	var layout := _generate(204, 3)
@@ -135,24 +144,16 @@ func test_rooms_are_separated_from_main_corridor_by_wall() -> void:
 				assert_gte(gap, 20,
 					"gap ниже коридора должен быть >=1 tile (got=%d, seed=%d)" % [gap, seed_val])
 
-func test_every_side_room_has_doorway_to_corridor() -> void:
-	# Инвариант: у каждой боковой комнаты есть doorway-corridor rect,
-	# соединяющий её с main corridor. Иначе комната недостижима.
+func test_every_room_is_graph_connected() -> void:
+	# PR3: в spine v2 не все комнаты сидят напрямую на main corridor
+	# (wing rooms живут на своём под-коридоре). Инвариант связности
+	# проверяем через room_graph — каждый узел достижим из entrance.
 	for seed_val in [7101, 7102, 7103, 7104]:
 		var layout := _generate(seed_val, 3)
-		var main_corridor: Rect2i = layout.corridors[0]
-		var doorways: Array = []
-		for i in range(1, layout.corridors.size()):
-			doorways.append(layout.corridors[i])
-		for room in layout.rooms:
-			var connected := false
-			for door: Rect2i in doorways:
-				var touches_room := door.position.y == room.end.y or door.end.y == room.position.y
-				var touches_corridor := door.end.y == main_corridor.position.y or door.position.y == main_corridor.end.y
-				var x_overlap := door.position.x >= room.position.x and door.end.x <= room.end.x
-				if touches_room and touches_corridor and x_overlap:
-					connected = true
-					break
-			assert_true(connected,
-				"у комнаты %s должен быть doorway в main corridor (seed=%d)" % [room, seed_val])
+		assert_not_null(layout.room_graph, "room_graph заполнен генератором")
+		assert_true(layout.room_graph.is_graph_connected(),
+			"все комнаты должны быть достижимы из entrance (seed=%d)" % seed_val)
+		for i in layout.rooms.size():
+			assert_gte(layout.room_graph.adjacency[i].size(), 1,
+				"комната %d не должна быть изолирована (seed=%d)" % [i, seed_val])
 

@@ -25,7 +25,9 @@ extends RefCounted
 
 const TILE: int = 20
 const MIN_ROOM_TILES: int = 4                        # 80 px — минимум (кладовочка)
-const MAX_ROOM_TILES: int = 10                       # 200 px — максимум (гостиная)
+# Bumped: BSP v2 разрешает большие залы (large halls). Планово 12-14 tiles;
+# берём 14 как реалистичный кап после инсета.
+const MAX_ROOM_TILES: int = 14                       # 280 px — большой зал
 const MIN_REGION_TILES: int = MIN_ROOM_TILES + 2     # +1 tile wall с каждой стороны
 const MAX_BSP_DEPTH: int = 6
 const SPLIT_MIN_RATIO: float = 0.30
@@ -37,23 +39,22 @@ const WALL_THICKNESS: int = 20
 const DOORWAY_WIDTH: int = 40
 const DOORWAY_MARGIN: int = 20
 const MIN_SHARED_WALL: int = DOORWAY_WIDTH + 2 * DOORWAY_MARGIN  # 80
-const EXTRA_EDGE_RATIO: float = 0.25
-const SKIP_DOORWAY_RATIO: float = 0.35  # доля doorway'ев, которые пробуем убрать
+# BSP v2: чуть больше циклов (0.30 → 0.35) — для basement/caves с большими
+# footprint это дают 1-2 дополнительных loop на этаж, чтобы не было ощущения
+# «дерева комнат». Верхние зоны (residential/technical) идут своим путём.
+const EXTRA_EDGE_RATIO: float = 0.35
+const SKIP_DOORWAY_RATIO: float = 0.30  # чуть меньше «глухих» стен
 
 const FLOOR_PADDING: int = 60
 const ENEMY_SPAWN_MARGIN: int = 22
 const CHEST_FLOOR_INTERVAL: int = 3
 const BOSS_ROOM_SIZE: Vector2i = Vector2i(600, 400)
-
-# --- Footprint scaling (заменяет grid_dim_for_floor) ---------------------
-
-func footprint_tiles_for_floor(floor_number: int) -> Vector2i:
-	# floor 1: 20x14 → 4 (при полном сплите → до ~8 leaves)
-	# floor 4: 23x16
-	# floor 10: 29x20
-	# cap 40x28 (~15-20 leaves).
-	var step: int = (floor_number - 1) / 3
-	return Vector2i(mini(20 + step * 3, 40), mini(14 + step * 2, 28))
+const _FALLBACK_MAX_RETRIES: int = 3
+# Golden-ratio prime — используется для derivation'а seed при retry,
+# чтобы новая попытка получила заметно другой random stream. Не влияет
+# на legacy tower_seed contract (первая попытка использует seed_value
+# как есть).
+const _SEED_SALT: int = 0x9E3779B1
 
 # --- BSP node (inner class) ---------------------------------------------
 
@@ -80,60 +81,300 @@ class BSPNode extends RefCounted:
 # --- Entry point --------------------------------------------------------
 
 func generate(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayout:
+	# Retry pipeline: если попытка вернула невалидный (disconnected, пустой)
+	# layout — деривируем seed и пытаемся снова. Никогда не отгружаем
+	# disconnected floor. См. `_is_layout_valid` для критериев.
+	for attempt in _FALLBACK_MAX_RETRIES:
+		var derived_seed: int = seed_value if attempt == 0 else seed_value ^ (_SEED_SALT * (attempt + 1))
+		var candidate := _generate_once(derived_seed, floor_number, is_boss)
+		if _is_layout_valid(candidate):
+			return candidate
+		push_warning("dungeon.generate: attempt %d for seed=%d floor=%d rejected, retrying" % [
+			attempt, seed_value, floor_number,
+		])
+	# Все retries провалились — возвращаем последний candidate; логируем.
+	# Гарантированный минимально валидный fallback выдаёт single-room layout.
+	push_warning("dungeon.generate: all retries failed for seed=%d floor=%d, using minimal fallback" % [seed_value, floor_number])
+	return _generate_minimal_fallback(seed_value, floor_number, is_boss)
+
+# --- Один проход генерации (может дать invalid layout) --------------------
+
+func _generate_once(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayout:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var layout := DungeonLayout.new()
 	layout.is_boss_floor = is_boss
-	# Zone/archetype заполняем первыми — чтобы будущие sub-генераторы могли
-	# смотреть на layout.zone.
 	layout.zone = TowerZone.get_tower_zone(floor_number)
 	if is_boss:
 		layout.floor_archetype = "boss_arena"
 		_generate_boss_floor(layout)
 	else:
-		# Верхние зоны — spine (residential-план здания);
-		# technical — grid со служебным коридором и большими машинными;
-		# остальные (lower_tower / basement / caves) — legacy BSP.
+		# Router по зоне. Caves теперь идут через NaturalCaveGenerator —
+		# уходят от BSP-rectangular feel.
 		if layout.zone == TowerZone.ZONE_TOWER_TOP or layout.zone == TowerZone.ZONE_RESIDENTIAL:
 			layout.floor_archetype = "residential_spine"
 			ResidentialSpineGenerator.generate(
 				layout, rng, floor_number,
-				footprint_tiles_for_floor(floor_number),
+				DungeonFootprint.footprint_tiles_for_zone(layout.zone, floor_number),
 			)
 		elif layout.zone == TowerZone.ZONE_TECHNICAL:
 			layout.floor_archetype = "technical_grid"
 			TechnicalGridGenerator.generate(
 				layout, rng, floor_number,
-				footprint_tiles_for_floor(floor_number),
+				DungeonFootprint.footprint_tiles_for_zone(layout.zone, floor_number),
+			)
+		elif layout.zone == TowerZone.ZONE_CAVES:
+			layout.floor_archetype = "caves_natural"
+			NaturalCaveGenerator.generate(
+				layout, rng, floor_number,
+				DungeonFootprint.footprint_tiles_for_zone(layout.zone, floor_number),
 			)
 		else:
-			# Нижние зоны идут по одному и тому же BSP-коду, но с разным
-			# archetype-тэгом — это позволяет тестам и spawn table отличать
-			# «руины нижней башни» от «пещеры» без изменения геометрии.
-			# Декор и роли уже расходятся через ZONE_FALLBACK_PROFILES /
-			# ZONE_ROLE_POOL — здесь только явное имя.
 			match layout.zone:
 				TowerZone.ZONE_LOWER_TOWER:
 					layout.floor_archetype = "ruined_bsp"
 				TowerZone.ZONE_BASEMENT:
 					layout.floor_archetype = "basement_bsp"
-				TowerZone.ZONE_CAVES:
-					layout.floor_archetype = "caves_bsp"
 				_:
 					layout.floor_archetype = "legacy_bsp"
 			_generate_tower_floor(layout, rng, floor_number)
 	_compute_bounds(layout)
 	_normalize(layout)
-	# Roles назначаем ПОСЛЕ normalize — координаты rooms уже финальные,
-	# _find_room_containing по player_start/exit_position/chest_positions
-	# находит правильные комнаты.
+	# Строим граф после нормализации — координаты финальные.
+	if not is_boss:
+		if layout.room_graph == null:
+			layout.room_graph = RoomGraph.build_from_doorways(layout.rooms, layout.corridors)
+		# Выбираем entrance/exit по графу (заменяет legacy top-left/bottom-right)
+		# для всех non-boss zone. Все sub-генераторы должны иметь smart
+		# «hint»-выбор внутри себя, но graph-distance даёт финальный ответ.
+		_apply_graph_distance_entrance_exit(layout)
+		# Critical path.
+		if layout.entrance_room_index >= 0 and layout.exit_room_index >= 0:
+			layout.critical_path_indices = layout.room_graph.shortest_path(
+				layout.entrance_room_index, layout.exit_room_index,
+			)
+		# Reward placement идёт ДО assign_roles — иначе chest room не
+		# получит роль treasure_room (RoomRoles смотрит chest_positions).
+		# Выбор кандидатов не требует ролей — только графовые dead-ends
+		# и entrance/exit_room_index.
+		_apply_reward_placement(layout, rng, floor_number)
+	# Roles — читают chest_positions и помечают эти rooms как treasure.
+	layout.room_infos = RoomRoles.assign_roles(layout, rng)
+	# Optional / dead-end tagging — читает граф и critical_path, добавляет
+	# tags. Не меняет role.
+	_annotate_optional_and_dead_end(layout)
+	# Encounter budget — пересчитываем enemy_spawns с учётом role/danger.
+	if not is_boss:
+		_apply_encounter_budget(layout, rng, floor_number)
+	return layout
+
+# --- Footprint compat: existing tests обращаются к footprint_tiles_for_floor,
+# внутри — просто zone-based lookup. Оставляем как public API.
+
+func footprint_tiles_for_floor(floor_number: int) -> Vector2i:
+	var zone := TowerZone.get_tower_zone(floor_number)
+	return DungeonFootprint.footprint_tiles_for_zone(zone, floor_number)
+
+# --- Validation & fallback --------------------------------------------------
+
+func _is_layout_valid(layout: DungeonLayout) -> bool:
+	if layout.is_boss_floor:
+		return not layout.rooms.is_empty()
+	if layout.rooms.size() < 2:
+		return false
+	# Player start и exit — не совпадают, обе внутри какой-то комнаты.
+	if layout.player_start == layout.exit_position:
+		return false
+	# Проверяем связность на самом графе, если генератор его положил.
+	if layout.room_graph != null:
+		return layout.room_graph.is_graph_connected()
+	# Иначе — быстро строим граф и проверяем.
+	var graph := RoomGraph.build_from_doorways(layout.rooms, layout.corridors)
+	return graph.is_graph_connected()
+
+# Простейший минимально-валидный fallback — одна большая rectangular room
+# с start/exit по краям. Никогда не крешит, гарантирует reachability.
+func _generate_minimal_fallback(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayout:
+	var layout := DungeonLayout.new()
+	layout.is_boss_floor = is_boss
+	layout.zone = TowerZone.get_tower_zone(floor_number)
+	layout.floor_archetype = "fallback_room"
+	# Один rect ~ 12×8 tiles = 240×160 px.
+	var room := Rect2i(Vector2i(TILE, TILE), Vector2i(12 * TILE, 8 * TILE))
+	layout.rooms.append(room)
+	layout.player_start = Vector2i(room.position.x + 40, room.get_center().y)
+	layout.exit_position = Vector2i(room.end.x - 40, room.get_center().y)
+	_compute_bounds(layout)
+	_normalize(layout)
+	if not is_boss:
+		layout.room_graph = RoomGraph.new(1)
+		layout.entrance_room_index = 0
+		layout.exit_room_index = 0
+		layout.critical_path_indices = [0]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
 	layout.room_infos = RoomRoles.assign_roles(layout, rng)
 	return layout
+
+# --- Graph-distance entrance/exit --------------------------------------------
+
+func _apply_graph_distance_entrance_exit(layout: DungeonLayout) -> void:
+	if layout.rooms.is_empty() or layout.room_graph == null:
+		return
+	# Одна комната — start/exit в её пределах, оставляем sub-генератор как есть.
+	if layout.rooms.size() == 1:
+		layout.entrance_room_index = 0
+		layout.exit_room_index = 0
+		return
+	var pair := EntranceExitSelector.choose(layout.rooms, layout.room_graph, layout.zone)
+	layout.entrance_room_index = pair.x
+	layout.exit_room_index = pair.y
+	# Обновляем player_start / exit_position — если sub-генератор уже
+	# поставил их вручную (residential, cave), graph-based выбор может
+	# сместить точки в другие комнаты.
+	layout.player_start = EntranceExitSelector.room_center(layout.rooms, pair.x)
+	layout.exit_position = EntranceExitSelector.room_center(layout.rooms, pair.y)
+
+# --- Optional / dead-end tagging --------------------------------------------
+
+func _annotate_optional_and_dead_end(layout: DungeonLayout) -> void:
+	if layout.room_graph == null:
+		return
+	var dead_ends := layout.room_graph.dead_end_indices()
+	var critical_set: Dictionary = {}
+	for idx in layout.critical_path_indices:
+		critical_set[idx] = true
+	for info in layout.room_infos:
+		var idx := int(info.room_index)
+		var tags = info.get("tags", [])
+		if not tags is Array:
+			continue
+		if dead_ends.has(idx) and not critical_set.has(idx):
+			if not tags.has("dead_end"):
+				tags.append("dead_end")
+			# Помечаем как optional_reward, если это не entrance/exit.
+			var role: String = info.get("role", "")
+			if role != RoomRoles.ROLE_ENTRANCE and role != RoomRoles.ROLE_EXIT_CORE:
+				if not tags.has("optional_reward"):
+					tags.append("optional_reward")
+		if critical_set.has(idx) and not tags.has("critical_path"):
+			tags.append("critical_path")
+
+# --- Encounter budget → enemy_spawns ----------------------------------------
+
+func _apply_encounter_budget(
+	layout: DungeonLayout,
+	rng: RandomNumberGenerator,
+	floor_number: int,
+) -> void:
+	layout.enemy_spawns.clear()
+	if layout.rooms.is_empty() or layout.room_graph == null:
+		return
+	# Индекс room_index → info. assign_roles гарантирует, что для
+	# каждой rooms[i] есть ровно одна info, поэтому просто мапим.
+	var info_by_index: Dictionary = {}
+	for info in layout.room_infos:
+		info_by_index[int(info.room_index)] = info
+	var entrance_idx: int = layout.entrance_room_index
+	var dist_from_entrance: Dictionary = layout.room_graph.bfs_distances(entrance_idx)
+	var critical_set: Dictionary = {}
+	for idx in layout.critical_path_indices:
+		critical_set[idx] = true
+	var floor_cap: int = FloorEncounterBudget.floor_cap(layout.zone, floor_number)
+	# Проходим комнаты в порядке возрастания index → детерминизм.
+	# Сначала считаем per-room список spawn'ов, потом обрезаем по floor_cap.
+	var buckets: Array = []
+	for i in layout.rooms.size():
+		var info: Dictionary = info_by_index.get(i, {})
+		if info.is_empty():
+			continue
+		var d: int = int(dist_from_entrance.get(i, -1))
+		var budget := FloorEncounterBudget.room_budget(
+			layout.rooms[i],
+			info,
+			floor_number,
+			critical_set.has(i),
+			d,
+		)
+		if budget <= 0:
+			continue
+		# rng внутри budget — выбираем сколько реально спавнить (min 1, max budget).
+		var count: int = rng.randi_range(1, budget)
+		var picks: Array = _pick_spawn_points(layout.rooms[i], rng, count)
+		buckets.append({"room_index": i, "spawns": picks})
+	# Собираем итоговый список и обрезаем по floor_cap.
+	var total := 0
+	for bucket in buckets:
+		for spawn in bucket.spawns:
+			if total >= floor_cap:
+				return
+			layout.enemy_spawns.append(spawn)
+			total += 1
+
+func _pick_spawn_points(room: Rect2i, rng: RandomNumberGenerator, count: int) -> Array:
+	var inner_w: int = maxi(1, room.size.x - ENEMY_SPAWN_MARGIN * 2)
+	var inner_h: int = maxi(1, room.size.y - ENEMY_SPAWN_MARGIN * 2)
+	var out: Array = []
+	for i in count:
+		var x: int = room.position.x + ENEMY_SPAWN_MARGIN + rng.randi_range(0, inner_w)
+		var y: int = room.position.y + ENEMY_SPAWN_MARGIN + rng.randi_range(0, inner_h)
+		out.append(Vector2i(x, y))
+	return out
+
+# --- Rewards: chests с bias на dead-end / optional_reward -------------------
+
+func _apply_reward_placement(
+	layout: DungeonLayout,
+	rng: RandomNumberGenerator,
+	floor_number: int,
+) -> void:
+	# Сохраняем legacy contract: chests на этажах, кратных 3. Количество
+	# — 1..2 в зависимости от глубины. Работает по чистой графовой
+	# топологии — role assignment запустится ПОСЛЕ этой функции и
+	# пометит chest room как treasure.
+	layout.chest_positions.clear()
+	if floor_number % CHEST_FLOOR_INTERVAL != 0:
+		return
+	if layout.rooms.is_empty():
+		return
+	if layout.room_graph == null:
+		return
+	# Отбрасываем entrance/exit — они не должны получать награду.
+	var exclude: Dictionary = {}
+	if layout.entrance_room_index >= 0:
+		exclude[layout.entrance_room_index] = true
+	if layout.exit_room_index >= 0:
+		exclude[layout.exit_room_index] = true
+	# Приоритет dead_end > остальные. dead_end берётся напрямую из графа.
+	var dead_end_rooms: Array = []
+	var other_rooms: Array = []
+	for idx in layout.room_graph.dead_end_indices():
+		if not exclude.has(idx):
+			dead_end_rooms.append(idx)
+	for i in layout.rooms.size():
+		if exclude.has(i):
+			continue
+		if dead_end_rooms.has(i):
+			continue
+		other_rooms.append(i)
+	var candidates: Array = dead_end_rooms
+	if candidates.is_empty():
+		candidates = other_rooms
+	if candidates.is_empty():
+		return
+	var count: int = 1 if floor_number < 12 else 2
+	count = mini(count, candidates.size())
+	_shuffle_with_rng(candidates, rng)
+	for i in count:
+		var room_idx: int = candidates[i]
+		var room: Rect2i = layout.rooms[room_idx]
+		var offset := Vector2i(rng.randi_range(-20, 20), rng.randi_range(-20, 20))
+		layout.chest_positions.append(room.get_center() + offset)
 
 # --- Regular floor: BSP + MST + extra edges ------------------------------
 
 func _generate_tower_floor(layout: DungeonLayout, rng: RandomNumberGenerator, floor_number: int) -> void:
-	var footprint := footprint_tiles_for_floor(floor_number)
+	var footprint := DungeonFootprint.footprint_tiles_for_zone(layout.zone, floor_number)
 	var root := BSPNode.new()
 	root.region = Rect2i(Vector2i.ZERO, footprint)
 
@@ -181,32 +422,14 @@ func _generate_tower_floor(layout: DungeonLayout, rng: RandomNumberGenerator, fl
 		var corridor := _carve_doorway(e.wall, rng)
 		layout.corridors.append(corridor)
 
-	# Player start = argmin(room.position.x + room.position.y)
-	# Exit = argmax(room.end.x + room.end.y)
+	# Hints для player_start / exit_position — перезаписываются
+	# _apply_graph_distance_entrance_exit после строительства графа.
+	# Enemy spawns и chest positions заполняются пост-процессингом
+	# (encounter budget + reward placement по dead_end / optional_reward).
 	var start_idx := _pick_extreme_room(layout.rooms, false)
 	var exit_idx := _pick_extreme_room(layout.rooms, true)
-	var start_room: Rect2i = layout.rooms[start_idx]
-	var exit_room: Rect2i = layout.rooms[exit_idx]
-	layout.player_start = start_room.get_center()
-	layout.exit_position = exit_room.get_center()
-
-	# Enemy spawns во всех комнатах кроме start/exit
-	for i in layout.rooms.size():
-		if i == start_idx or i == exit_idx:
-			continue
-		_add_enemy_spawns(layout, layout.rooms[i], rng, 2, 3)
-
-	# Chest на этажах кратных 3 — одна точка в случайной middle-комнате
-	if floor_number % CHEST_FLOOR_INTERVAL == 0:
-		var middle_indices: Array[int] = []
-		for i in layout.rooms.size():
-			if i != start_idx and i != exit_idx:
-				middle_indices.append(i)
-		if middle_indices.size() > 0:
-			var chest_idx := middle_indices[rng.randi_range(0, middle_indices.size() - 1)]
-			var chest_room: Rect2i = layout.rooms[chest_idx]
-			var offset := Vector2i(rng.randi_range(-20, 20), rng.randi_range(-20, 20))
-			layout.chest_positions.append(chest_room.get_center() + offset)
+	layout.player_start = layout.rooms[start_idx].get_center()
+	layout.exit_position = layout.rooms[exit_idx].get_center()
 
 # --- BSP split ----------------------------------------------------------
 
@@ -548,18 +771,6 @@ func _generate_boss_floor(layout: DungeonLayout) -> void:
 	layout.exit_position = Vector2i(BOSS_ROOM_SIZE.x * 5 / 6, BOSS_ROOM_SIZE.y / 2)
 
 # --- Общие helper'ы (сохранены) ----------------------------------------
-
-func _add_enemy_spawns(layout: DungeonLayout, room: Rect2i, rng: RandomNumberGenerator, min_count: int, max_count: int) -> void:
-	# Небольшие комнаты не тянут 3 спавна — clamp по площади.
-	var margin: int = ENEMY_SPAWN_MARGIN
-	var inner_w: int = maxi(1, room.size.x - margin * 2)
-	var inner_h: int = maxi(1, room.size.y - margin * 2)
-	var area_slots: int = maxi(1, (inner_w * inner_h) / 3600)  # ~60x60 px на слот
-	var count: int = mini(rng.randi_range(min_count, max_count), area_slots)
-	for i in count:
-		var x: int = room.position.x + margin + rng.randi_range(0, inner_w)
-		var y: int = room.position.y + margin + rng.randi_range(0, inner_h)
-		layout.enemy_spawns.append(Vector2i(x, y))
 
 func _compute_bounds(layout: DungeonLayout) -> void:
 	if layout.rooms.is_empty():

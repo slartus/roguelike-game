@@ -4,11 +4,13 @@
 
 Терминология:
 - **Этаж** (`floor`) = один сегмент забега (`GameState.current_floor_number`).
-- **Комната** (`room`) = один прямоугольник в footprint'е, размер 80–200 px по стороне.
-- **Дверной проём** (`doorway`, тип `corridor` в структуре) = проход шириной 40 px в общей стене между соседями.
+- **Комната** (`room`) = один прямоугольник в footprint'е, размер 80–280 px по стороне.
+- **Дверной проём** (`doorway`, тип `corridor` в структуре) = проход шириной 40 px в общей стене между соседями. Для нижних зон (caves) тем же типом обозначаются tunnel'ы.
 - **Выход** (`Door`) = `Area2D`, ведущий на следующий этаж.
 - **Зона** (`zone`) = вертикальный участок мира башни (`TowerZone.ZONE_*`).
-- **Архетип этажа** (`floor_archetype`) = конкретный тип генерации (`legacy_bsp`, `boss_arena`, позже `residential_spine`, `technical_grid`).
+- **Архетип этажа** (`floor_archetype`) = конкретный тип генерации (`residential_spine`, `technical_grid`, `ruined_bsp`, `basement_bsp`, `caves_natural`, `boss_arena`, `fallback_room`).
+- **Room graph** (`layout.room_graph`) = ненаправленный граф смежности комнат по проходам. Строится генератором явно (spine/technical/caves) или через `RoomGraph.build_from_doorways` (BSP). Используется для выбора entrance/exit, critical path и encounter budget.
+- **Critical path** (`layout.critical_path_indices`) = комнаты на shortest entrance→exit пути в графе.
 
 ## Вертикальные зоны мира башни
 
@@ -25,9 +27,24 @@
 
 Логика в `scenes/dungeon/tower_zone.gd::TowerZone.get_tower_zone(floor_number)`. Каждая `DungeonLayout` при генерации получает `layout.zone` и `layout.floor_archetype`.
 
-Пещерный стиль намеренно уходит в поздние этажи — верхние должны ощущаться архитектурно (жильё, служебные помещения), а не как пещеры. Legacy BSP генератор в M1 всё ещё обрабатывает все non-boss этажи (`floor_archetype = "legacy_bsp"`), но zone metadata уже помечена — это позволит следующим milestone'ам постепенно переключать верхние зоны на archetype'ы `residential_spine` / `technical_grid`.
+Пещерный стиль намеренно уходит в поздние этажи — верхние должны ощущаться архитектурно (жильё, служебные помещения), а не как пещеры. С PR 3 верхние зоны генерируются собственными генераторами (`ResidentialSpineGenerator`, `TechnicalGridGenerator`), нижние `lower_tower`/`basement` используют BSP-код с v2-параметрами, а `caves` уходит в новый `NaturalCaveGenerator`.
 
 Boss floors (`floor % 5 == 0`) сохраняют старую логику: `floor_archetype = "boss_arena"`, `zone` тоже заполняется (тот же расчёт по этажу) — для будущего thematic-декора boss-арен.
+
+### Целевые размеры footprint (PR 3)
+
+Envelope в пикселях по зонам — `DungeonFootprint.footprint_tiles_for_zone(zone, floor_number)` линейно интерполирует min→max по прогрессии этажа внутри зоны:
+
+| Zone | Min | Max |
+|---|---|---|
+| `tower_top` | 600×400 | 680×460 |
+| `residential` | 680×440 | 760×520 |
+| `technical` | 720×480 | 840×560 |
+| `lower_tower` | 760×520 | 920×640 |
+| `basement` | 820×560 | 960×680 |
+| `caves` | 840×600 | 1000×720 |
+
+Первый этаж (tower_top floor 1) заметно шире viewport (640 px) — с PR 3 больше нет «этаж влезает в один экран».
 
 ## Роли комнат (`room_infos`)
 
@@ -107,62 +124,126 @@ Boss floors (`floor % 5 == 0`) сохраняют старую логику: `fl
 
 **Реальные спрайты пока есть только для cave-декора** (`mold.png`, `candle.tscn`, `floor_crack.png`, `floor_blood.png`). Профили верхних зон существуют как контракт — `floor.gd` пока их не рисует (нет ассетов), но rooms с этими профилями не получают cave-декор из-за фильтрации. Спрайты residential/technical декора — задача под следующие milestone'ы или отдельные фичи.
 
-## Residential Spine floors
+## Residential Spine floors (v2)
 
-Для зон `tower_top` (floor 1-2) и `residential` (floor 3-6) генератор выбирает архетип `residential_spine` — план здания с центральным коридором и комнатами по обе стороны. Реализация в `scenes/dungeon/residential_spine_generator.gd::ResidentialSpineGenerator.generate(layout, rng, floor_number, footprint_tiles)`.
+Для зон `tower_top` (floor 1-2) и `residential` (floor 3-6) генератор выбирает архетип `residential_spine`. Реализация в `scenes/dungeon/residential_spine_generator.gd::ResidentialSpineGenerator.generate(layout, rng, floor_number, footprint_tiles)`.
+
+С PR 3 topology расширена: помимо основного коридора добавлены (по возможности) wing-комнаты в перпендикулярном под-коридоре и room-to-room shortcut. Граф явно моделируется как ladder-топология (top-row chain + bottom-row chain + cross-links через main corridor), что даёт множество loop'ов и минимум одну branch на большинстве seeds.
 
 Схема:
 ```
-+---------------------------------------+
-| room1 | room2 | room3 | room4 | room5 |
-|--D------D-------D-------D-------D-----|
-|                                       |
-|            main corridor              |
-|                                       |
-|--D------D-------D-------D-------D-----|
-| room6 | room7 | room8 | room9 |room10 |
-+---------------------------------------+
+                wing corridor
+                     │
+             ┌───────┼───────┐
+             │ w0    │ w1    │
+             └───┬───┴───┬───┘
+                 │       │           ↑ wing rooms (branch)
++------+---------+-------+------+---------+
+| room1| room2   | host  | room4| room5   |
+|--D-----D---------D-------D-------D------|
+|                                          |
+|            main corridor                 |
+|                                          |
+|--D-----D---------D-------D-------D------|
+| room6| room7   | room8 | room9 |room10   |
++------+-----+---+-------+------+---------+
+             ↑ shortcut между room7↔room8 создаёт loop.
 ```
 
-Ключевые параметры (в тайлах, TILE = 20 px):
-- `CORRIDOR_WIDTH_TILES = 3` (60 px) — комфортная ширина для игрока.
-- `ROOM_MIN_WIDTH_TILES = 4`, `ROOM_MAX_WIDTH_TILES = 8` — 80..160 px по X.
-- `ROOM_MIN/MAX_DEPTH_TILES = 4..6` — 80..120 px по Y.
-- `DOORWAY_WIDTH_TILES = 2` (40 px) — совместимо с legacy контрактом.
+Ключевые параметры (TILE = 20 px):
+- `CORRIDOR_WIDTH_TILES = 3` (60 px) — комфортная ширина.
+- `ROOM_MIN/MAX_WIDTH_TILES = 4..8`, `ROOM_MIN/MAX_DEPTH_TILES = 4..6`.
+- `WING_MIN/MAX_WIDTH_TILES = 4..6`, `WING_DEPTH_TILES = 4`, `WING_CORRIDOR_WIDTH_TILES = 2`.
+- `DOORWAY_WIDTH_TILES = 2` (40 px).
 
 Алгоритм:
-1. Горизонтальный main corridor в вертикальной середине — `Rect2i` по всей ширине этажа.
-2. Верхний ряд комнат: cursor слева, шаг = случайная ширина комнаты + 1 tile стена между. Между низом комнат и верхом коридора зарезервирован ещё 1 tile — стена, в которую пробивается doorway.
-3. Каждая комната получает doorway — узкий corridor rect 40×20 px через эту 1-tile стену.
-4. Симметрично снизу от коридора.
-5. `player_start` = центр левого конца corridor, `exit_position` = центр правого.
-6. Enemy spawns добавляются в каждую комнату (2-3 на комнату), кроме entrance / exit.
-7. Chest — в случайной комнате на этажах кратных `CHEST_FLOOR_INTERVAL = 3`.
+1. Main corridor в вертикальной середине.
+2. Верхний ряд: cursor слева, шаг = случайная ширина комнаты + 1 tile стены. Между низом комнат и верхом коридора — 1 tile под doorway.
+3. Каждая комната получает 40×20 px doorway.
+4. Нижний ряд симметрично.
+5. **Wing** (если помещается — top band должен вместить wing rooms над host):
+   - host выбирается как средняя top-комната;
+   - wing corridor (тонкий, 40 px) уходит вверх от host;
+   - две wing-комнаты (left и right от wing corridor) с собственными doorway'ями.
+6. **Shortcut** (если найдётся пара смежных side rooms в одном ряду) — вертикальный 20×40 px doorway между двумя соседними комнатами; в графе появляется прямое ребро мимо основной цепочки.
+7. `player_start`/`exit_position` — временные (концы коридора), финальные выставляются `EntranceExitSelector` по BFS-фарвест паре в графе (см. секцию «Entrance/exit selection»).
 
-Room roles применяются как обычно: комната содержащая chest → `treasure_room`. Player_start и exit_position лежат в коридоре, а не в комнате — `RoomRoles._find_room_containing` через fallback находит ближайшую по центру, ей ставится `entrance` / `exit_core`.
+Room graph модель:
+- Top-chain: `top_row[i]` ↔ `top_row[i+1]`.
+- Bottom-chain: `bottom_row[i]` ↔ `bottom_row[i+1]`.
+- Ladder cross-links: `top_row[i]` ↔ ближайший по X `bottom_row[j]` через main corridor.
+- Host ↔ wing rooms, wing left ↔ wing right через wing corridor.
+- Explicit shortcut → прямое ребро.
+
+Chest и enemy_spawns — по общему pipeline (см. «Encounter budget» и «Rewards»).
 
 Boss floors (`floor % 5 == 0`) в residential zone всё ещё получают `boss_arena`, а не spine — boss логика имеет приоритет.
 
-## Technical Grid floors
+## Technical Grid floors (v2)
 
-Для зоны `technical` (floor 7-10) генератор выбирает архетип `technical_grid`. Реализация — `scenes/dungeon/technical_grid_generator.gd`. Внешне схема остаётся spine-подобной (main corridor + rooms сверху/снизу), но параметры отличают служебный этаж от жилого:
+Для зоны `technical` (floor 7-10) генератор выбирает архетип `technical_grid`. Реализация — `scenes/dungeon/technical_grid_generator.gd`. С PR 3 это настоящий двух-рельсовый служебный этаж.
 
-| Параметр | Residential Spine | Technical Grid |
-|---|---|---|
-| `CORRIDOR_WIDTH_TILES` | 3 (60 px, комфорт) | 2 (40 px, узкий служебный) |
-| Room width | 4-8 tiles (жилая) | 3 tiles (closet) или 8-12 (машинная) |
-| Room depth | 4-6 tiles | 5-7 tiles (глубже) |
-| Mix | равномерные bedroom/study/kitchen | случайные small closet (35%) + большие машинные |
+Схема:
+```
++--------------------------------------------------+
+| maint0 | maint1 | maint2 | maint3 | maint4       |  ← верхняя maint-band
++--D--------D-------D--------D--------D------------+
+════════════════════════════════════════════════════   ← top rail
++-----------+-----------+-----------+
+| machine 0 | machine 1 | machine 2 |                ← middle band (крупные)
++-----------+-----------+-----------+
+════════════════════════════════════════════════════   ← bottom rail
++--D--------D-------D--------D--------D------------+
+| maint5 | maint6 | maint7 | maint8 | maint9       |  ← нижняя maint-band
++--------------------------------------------------+
+```
 
-Small closets между большими машинными дают классический служебный feel: пара крупных генераторов + пара маленьких щитков. Room roles приходят из `ZONE_ROLE_POOL["technical"]` (`machine_room`, `boiler_room`, `switch_room`, `storage`, `corridor`).
+Cross-connectors (не показаны) — 2-3 вертикальных corridor rects, соединяют top rail с bottom rail напрямую в промежутках между machine rooms. Дают дополнительные loops.
 
-Контракт стен и дверных проёмов — тот же, что у residential_spine: между низом верхних комнат и верхом служебного коридора (симметрично снизу) зарезервирован 1 tile стены, в который пробивается doorway 40×20 px. Без этой прослойки комнаты сливались бы с коридором в открытый альков.
+Ключевые параметры:
+- `RAIL_WIDTH_TILES = 2` (40 px) — узкий служебный.
+- `MAINT_MIN/MAX_WIDTH_TILES = 4..6`, `MAINT_MIN/MAX_DEPTH_TILES = 4..5`.
+- `MACHINE_MIN/MAX_WIDTH_TILES = 8..12`, `MACHINE_MIN_DEPTH_TILES = 5`.
+- Cross-connectors — до 3 штук, ширина `RAIL_WIDTH_TILES * TILE`.
+
+Алгоритм:
+1. Вертикальный layout: `TILE + maint_depth + TILE + rail + middle_band + rail + TILE + maint_depth + TILE`.
+2. Два main corridor rect (top rail, bottom rail) на всю ширину.
+3. Middle band — machine rooms с doorway'ями к ОБОИМ rails.
+4. Top maint band — рядом с top rail, doorway'и вниз.
+5. Bottom maint band — рядом с bottom rail, doorway'и вверх.
+6. Cross-connectors выбираются рандомно из «свободных промежутков» между machine rooms.
+7. Fallback single-rail при слишком узком footprint — просто один rail + maint по обе стороны (тот же паттерн, что residential).
+
+Room graph модель:
+- Top-chain, middle-chain, bottom-chain (все по X).
+- Middle machine → ближайший по X top / bottom room.
+- Ladder-графом → много loops + degree-3+ вершин.
 
 Boss floor 10 остаётся `boss_arena` независимо от zone — boss логика имеет приоритет.
 
-## Нижняя башня, подвалы и пещеры
+## Natural caves (PR 3)
 
-Zone → archetype диспетчер в `DungeonGenerator.generate`:
+Для зоны `caves` (floor 19+) генератор выбирает архетип `caves_natural`. Реализация — `scenes/dungeon/natural_cave_generator.gd`.
+
+Отличие от BSP: chambers с randomised size/position + MST tunnels — нет grid-feel'а, но всё ещё rect-based (полное irregular boundary остаётся будущим улучшением, требует переработки wall-rendering в `floor.gd`).
+
+Алгоритм:
+1. Footprint делится на 3×3 grid slots (~9 регионов).
+2. Из slots случайно (без замены) выбираются 5-9 → в каждом ставится chamber рандомного размера (4-9 tiles по стороне) с jitter внутри slot'а.
+3. MST по расстоянию между центрами chambers (Kruskal + Union-Find).
+4. Extra edges: 2 самые короткие non-MST → loops.
+5. Для каждой edge вырезается L-shape tunnel (horizontal + vertical, порядок рандомен). Ширина tunnel — 40 px.
+6. `layout.room_graph` строится по факту рёбер (без walk через doorway detection).
+
+Инварианты:
+- Каждый chamber доступен через MST → граф всегда связен.
+- Минимум одна alternate connection на большинстве средних+ этажей (см. baseline metrics).
+- Fallback: если placement провалился (< 2 chambers), кладём одну большую центральную; retry pipeline подхватит.
+
+## Нижняя башня, подвалы, пещеры и boss
+
+Zone → archetype диспетчер в `DungeonGenerator._generate_once`:
 
 | Zone | Floor | Archetype |
 |---|---|---|
@@ -171,18 +252,20 @@ Zone → archetype диспетчер в `DungeonGenerator.generate`:
 | `technical` | 7-10 (кроме boss 10) | `technical_grid` |
 | `lower_tower` | 11-14 | `ruined_bsp` |
 | `basement` | 15-18 (кроме boss 15) | `basement_bsp` |
-| `caves` | 19+ | `caves_bsp` |
+| `caves` | 19+ (кроме boss) | `caves_natural` |
+| — | boss (`floor % 5 == 0`) | `boss_arena` |
+| — | fallback после retry | `fallback_room` |
 
-**Ruined / basement / caves BSP** — это тот же самый BSP-код что и оригинальный legacy_bsp. Физически `_generate_tower_floor` не переписан: разница между тремя archetype-именами — только явный tag в metadata, который позволяет тестам, spawn tables и будущим генераторам отличать «руины нижней башни» от «подвал» и «пещеры» без изменения геометрии.
+**Ruined / basement BSP** — тот же BSP-код с v2-параметрами: `MAX_ROOM_TILES` подняли до 14 (большие залы), `EXTRA_EDGE_RATIO` до 0.35, `SKIP_DOORWAY_RATIO` снизили до 0.30. Физически `_generate_tower_floor` не переписан, только параметры.
+
+**Caves теперь идут через `NaturalCaveGenerator`** (см. выше) — уходят от BSP grid-feel'а.
 
 Тематическое различие достигается через:
-- **`ZONE_ROLE_POOL`** — разные роли комнат (см. таблицу в разделе Room roles).
+- **`ZONE_ROLE_POOL`** — разные роли комнат.
 - **`ZONE_FALLBACK_PROFILES`** — разный декор коридоров.
-- **cave-декор разрешён только в этих трёх зонах** — верхние (`tower_top`, `residential`, `technical`) фильтруются `_strip_cave_only` (см. секцию «Декор по зонам»).
+- **cave-декор разрешён только в нижних зонах** — верхние (`tower_top`, `residential`, `technical`) фильтруются `_strip_cave_only`.
 
-**Пещерный стиль намеренно является поздней зоной мира башни, а не основным стилем всех этажей.** Игрок, спустившийся до floor 19+, должен ощущать что он уже не в здании — вот теперь это пещеры под фундаментом башни. Верхние этажи с floor 1 — жилые/технические уровни, где cave-визуал был бы неуместен.
-
-Легаси `_generate_tower_floor` (BSP+MST+extra edges) остаётся неизменным — его алгоритм ниже. В M6 он **не удалён и не переписан**, только явно закреплён за нижними зонами.
+Пещерный стиль намеренно является поздней зоной мира башни, а не основным стилем всех этажей.
 
 ## World abstraction (заготовка)
 
@@ -202,22 +285,91 @@ static func get_zone_for_world(world_id: String, floor_number: int) -> String
 
 Реальные генераторы для этих миров, их зон, ролей и декора — отдельные фичи. Сейчас в проекте есть только tower, и `GameState`/`DungeonGenerator` опираются на `TowerZone` напрямую. Переключение на `WorldZones` — будущая задача, когда появится второй мир.
 
-## Генератор — `DungeonGenerator` (BSP + MST + extra edges)
+## Генератор — `DungeonGenerator` (pipeline)
 
-`scenes/dungeon/dungeon_generator.gd` (`class_name DungeonGenerator`). Метод `generate(seed, floor_number, is_boss) → DungeonLayout`.
+`scenes/dungeon/dungeon_generator.gd` (`class_name DungeonGenerator`). Метод `generate(seed, floor_number, is_boss) → DungeonLayout` — с PR 3 обёрнут в retry-pipeline с fallback.
 
-Классический BSP dungeon algorithm (Rogue / NetHack / RogueSharp) с MST-связностью и небольшой долей случайных дополнительных дверей для циклов.
+### Retry + fallback
 
-### Алгоритм tower-этажа
+```
+for attempt in _FALLBACK_MAX_RETRIES (3):
+    derived_seed = seed_value ^ (0x9E3779B1 * (attempt + 1)) if attempt > 0 else seed_value
+    candidate = _generate_once(derived_seed, floor_number, is_boss)
+    if _is_layout_valid(candidate):
+        return candidate
+return _generate_minimal_fallback(seed_value, floor_number, is_boss)
+```
 
-1. **Footprint.** `footprint_tiles_for_floor(floor_number) → Vector2i` (в tile-координатах, тайл = 20 px).
+Валидность (`_is_layout_valid`):
+- boss: rooms.size() > 0;
+- иначе: rooms.size() >= 2, player_start != exit_position, graph connected.
 
-   | Этажи | Footprint (tiles) | Footprint (px) |
-   |-------|-------------------|----------------|
-   | 1–3 | 20×14 | 400×280 |
-   | 4–6 | 23×16 | 460×320 |
-   | 7–9 | 26×18 | 520×360 |
-   | 10+ | 29×20 → cap 40×28 | 580×400 → 800×560 |
+Fallback (`_generate_minimal_fallback`) — одна большая rectangular room 12×8 tiles с start/exit по краям. Гарантированно валидная, никогда не крешит игру. Всегда должен быть на карте `EventLog` при появлении.
+
+### Pipeline `_generate_once`
+
+1. **Router по zone** → делегирует одному из под-генераторов (Residential Spine / Technical Grid / BSP / NaturalCave) или `_generate_boss_floor`.
+2. **`_compute_bounds` + `_normalize`** → floor_bounds на (0, 0).
+3. **RoomGraph.** Non-boss: если под-генератор не выставил `layout.room_graph`, строится через `RoomGraph.build_from_doorways(rooms, corridors)` (используется BSP-путём).
+4. **`_apply_graph_distance_entrance_exit`** — `EntranceExitSelector.choose(rooms, graph, zone)` выбирает пару по BFS-фарвест внутри eligible rooms (площадь ≥ 1600 px²). `player_start` и `exit_position` перезаписываются центрами выбранных комнат.
+5. **Critical path** — `graph.shortest_path(entrance_room_index, exit_room_index)`.
+6. **`_apply_reward_placement`** (до assign_roles!) — chests на `floor % 3 == 0`; кандидаты по приоритету dead-end → остальные; entrance/exit исключены; 1 chest на floor < 12, 2 на deeper.
+7. **`RoomRoles.assign_roles`** — назначает `entrance`, `exit_core`, `treasure_room` (по chest_positions), остальные — из `ZONE_ROLE_POOL[zone]`.
+8. **`_annotate_optional_and_dead_end`** — добавляет tags `dead_end`, `optional_reward`, `critical_path` в `room_infos[i].tags` на основе графа.
+9. **`_apply_encounter_budget`** (non-boss) — для каждой комнаты `FloorEncounterBudget.room_budget(...)` считает max spawn count, генератор берёт `rng.randi_range(1, budget)` реальных точек. Итог обрезается по `FloorEncounterBudget.floor_cap(zone, floor_number)`.
+
+### Footprint scaling
+
+`footprint_tiles_for_floor(floor_number)` (legacy public API для тестов) → `DungeonFootprint.footprint_tiles_for_zone(zone, floor_number)`. Envelope растёт по зонам:
+
+| Zone | Min tiles | Max tiles |
+|---|---|---|
+| `tower_top` | 30×20 | 34×23 |
+| `residential` | 34×22 | 38×26 |
+| `technical` | 36×24 | 42×28 |
+| `lower_tower` | 38×26 | 46×32 |
+| `basement` | 41×28 | 48×34 |
+| `caves` | 42×30 | 50×36 |
+
+Прогрессия внутри зоны линейно интерполирует min → max по `(floor - zone_start) / (zone_end - zone_start)`.
+
+### Entrance / exit selection
+
+`EntranceExitSelector.choose(rooms, graph, zone)` — новая логика с PR 3.
+
+1. Отбирает eligible rooms (площадь ≥ 1600 px² — не альковы).
+2. Ищет пару максимальной BFS-дистанции (2× BFS approximation диаметра).
+3. Fallback: если пара свернулась в одну комнату, берёт любую другую из eligible.
+
+Zone-specific hint `_ZONE_MIN_HOPS` (3–5) документирует ожидаемый минимальный critical path; фактическое значение подтверждает статистика (тесты `test_dungeon_layout_metrics`).
+
+### Encounter budget
+
+`FloorEncounterBudget.room_budget(room, room_info, floor_number, is_critical_path, distance_from_entrance)` возвращает max spawn count для одной комнаты:
+
+- 0 для entrance / exit_core / boss_arena / tiny (< 3200 px²).
+- Base = `area / 3600 slots`, clamped 1..3.
+- + danger (macho +1..+2).
+- - 1 для optional_reward / dead_end.
+- - 1 для treasure_room.
+- + 1 за каждые 3 хопа от entrance.
+- clamped ≤ 3 на critical path.
+- clamped ≤ 5 глобально.
+
+`floor_cap(zone, floor)` — верхний хард-лимит суммарного количества врагов на этаже (18–26 в зависимости от zone + `floor / 3`). Пересечение суммарно drops наиболее глубокие спавны.
+
+### Rewards
+
+- Chests на этажах `floor % 3 == 0`.
+- Кандидаты: сначала dead-end rooms (degree ≤ 1 в графе, не entrance/exit), затем остальные (не entrance/exit).
+- Количество: 1 на `floor < 12`, 2 на deeper.
+- Chest room затем помечается `treasure_room` role через RoomRoles.
+
+### Boss-этаж
+
+`floor_number % 5 == 0` → одна большая арена `BOSS_ROOM_SIZE = 600×400`. Пропускает всю ветвь room_graph / encounter budget / rewards — boss спавнится напрямую в `main.gd::_spawn_boss`.
+
+### BSP алгоритм (для lower_tower / basement)
 
 2. **BSP split.** Recursive splitting региона:
    - Направление split'а — по длинной стороне (с 20% шансом flip'а для variety).
@@ -225,66 +377,68 @@ static func get_zone_for_world(world_id: String, floor_number: int) -> String
    - На линии разреза резервируется **1 tile для стены** (даёт точное `a.end.x + WALL_THICKNESS == b.position.x` соседство).
    - Стоп: `depth >= MAX_BSP_DEPTH`, обе половины `< MIN_REGION_TILES`, или (после depth 3) `rng.randf() < 0.15` — сохраняет большие залы.
 
-3. **Комнаты в leaves.** В каждом leaf-регионе комната сжимается на `0..2` тайла с каждой стороны, дополнительно клампится до `MAX_ROOM_TILES = 10` (200 px). Минимум — `MIN_ROOM_TILES = 4` (80 px, кладовочка).
+3. **Комнаты в leaves.** В каждом leaf-регионе комната сжимается на `0..2` тайла с каждой стороны, дополнительно клампится до `MAX_ROOM_TILES = 14` (280 px, PR 3 v2 — большие залы). Минимум — `MIN_ROOM_TILES = 4` (80 px).
 
-4. **Adjacency graph.** Для каждой пары комнат вычисляется `_shared_wall`. Стена засчитывается как «пригодная для двери» только если overlap ≥ `MIN_SHARED_WALL = 80` (иначе комнаты просто соприкасаются углами / малой частью стены — прохода нет).
+4. **Adjacency graph.** Для каждой пары комнат вычисляется `_shared_wall`. Стена засчитывается как «пригодная для двери» только если overlap ≥ `MIN_SHARED_WALL = 80`.
 
-5. **MST (Kruskal + Union-Find).** Edge weight = отрицательная длина shared-wall (широкие стены приоритетнее для основных проходов). Tiebreak — `(min(a, b), max(a, b))` для детерминизма при одинаковом seed. Гарантирует связность всех комнат.
+5. **MST (Kruskal + Union-Find).** Edge weight = отрицательная длина shared-wall. Tiebreak — `(min(a, b), max(a, b))` для детерминизма.
 
-6. **Extra edges.** `ceili(remaining_edges * 0.25)` дополнительных ребер из non-MST adjacencies выбираются случайно (Fisher-Yates prefix с `rng`). Создают циклы → игрок может обойти комнату двумя маршрутами.
+6. **Extra edges.** `ceili(remaining_edges * 0.35)` (v2, повышено с 0.25). Больше циклов на глубоких этажах.
 
-7. **Прунинг лишних дверей.** До `SKIP_DOORWAY_RATIO = 0.35` доли уже выбранных дверей пытаются удалиться. Каждый кандидат — если после удаления BFS-от-нуля покрывает все комнаты (граф остался связным) → удаляем. Так остаётся часть смежных пар с общей стеной, но **без прохода** — residential feel.
+7. **Прунинг лишних дверей.** До `SKIP_DOORWAY_RATIO = 0.30` (v2, снижено с 0.35) — меньше «глухих стен», больше проходов.
 
-8. **Doorway carving.** Для каждого оставшегося ребра пробивается 40-px проход в общей стене со случайной позицией `[wall_lo + DOORWAY_MARGIN, wall_hi - DOORWAY_MARGIN - DOORWAY_WIDTH]`.
+8. **Doorway carving.** Для каждого оставшегося ребра пробивается 40-px проход.
 
-8. **Player start / exit.** `player_start` = центр комнаты, минимизирующей `position.x + position.y` (верхний-левый угол). `exit_position` = центр комнаты, максимизирующей `end.x + end.y` (нижний-правый).
+9. **Hint player_start / exit_position.** Legacy top-left / bottom-right — но эти значения перезаписываются `_apply_graph_distance_entrance_exit` в основном pipeline.
 
-9. **Enemy spawns.** 2–3 точки в каждой комнате, кроме start и exit. Число слотов ограничивается площадью комнаты (маленькие комнаты — 1–2 врага).
-
-10. **Chest.** Логика без изменений: `floor % 3 == 0` → одна точка в случайной middle-комнате.
+10. **Enemy spawns и chest** не выполняются в самом BSP-подгенераторе — post-processing (`_apply_encounter_budget`, `_apply_reward_placement`) владеет ими.
 
 11. **Нормализация.** `floor_bounds.position = (0, 0)`, все координаты неотрицательны.
 
-### Boss-этаж
-
-`floor_number % 5 == 0` → одна большая арена `BOSS_ROOM_SIZE = 600×400`. Без изменений.
-
-### Константы
+### Константы (BSP v2)
 
 | Константа | Значение | Смысл |
 |-----------|----------|-------|
-| `TILE` | 20 | Размер тайла (совпадает с `TILE_SIZE` в `floor.gd`) |
-| `MIN_ROOM_TILES` / `MAX_ROOM_TILES` | 4 / 10 | Размер комнаты 80–200 px по стороне |
-| `MIN_REGION_TILES` | 6 | Минимальный регион для дальнейшего сплита |
+| `TILE` | 20 | Размер тайла |
+| `MIN_ROOM_TILES` / `MAX_ROOM_TILES` | 4 / **14** | Размер комнаты 80–280 px по стороне (PR 3: max ↑) |
+| `MIN_REGION_TILES` | 6 | Минимальный регион для сплита |
 | `MAX_BSP_DEPTH` | 6 | Ограничение глубины дерева |
 | `SPLIT_MIN_RATIO` / `SPLIT_MAX_RATIO` | 0.30 / 0.70 | Диапазон точки сплита |
 | `ROOM_INSET_MAX_TILES` | 2 | Random shrink комнаты внутри leaf |
-| `EARLY_STOP_CHANCE` | 0.15 | Шанс не сплитить после depth 3 (большие залы) |
-| `WALL_THICKNESS` | 20 | Толщина общей стены (1 tile) |
-| `DOORWAY_WIDTH` | 40 | Ширина прохода (2 tiles) |
+| `EARLY_STOP_CHANCE` | 0.15 | Шанс не сплитить после depth 3 |
+| `WALL_THICKNESS` | 20 | Толщина общей стены |
+| `DOORWAY_WIDTH` | 40 | Ширина прохода |
 | `DOORWAY_MARGIN` | 20 | Отступ прохода от углов комнаты |
-| `MIN_SHARED_WALL` | 80 | Мин. overlap двух комнат чтобы считать их «adjacent для двери» |
-| `EXTRA_EDGE_RATIO` | 0.25 | +25% случайных дверей сверх MST |
-| `SKIP_DOORWAY_RATIO` | 0.35 | Доля дверей, которые пробуем удалить (только если reachability сохраняется) |
+| `MIN_SHARED_WALL` | 80 | Мин. overlap для двери |
+| `EXTRA_EDGE_RATIO` | **0.35** | +35% случайных дверей сверх MST (PR 3: ↑) |
+| `SKIP_DOORWAY_RATIO` | **0.30** | Доля дверей, которые пробуем удалить (PR 3: ↓) |
 | `FLOOR_PADDING` | 60 | Отступ от края bounds |
-| `ENEMY_SPAWN_MARGIN` | 22 | Отступ спавна от стены комнаты |
+| `ENEMY_SPAWN_MARGIN` | 22 | Отступ спавна от стены |
 | `CHEST_FLOOR_INTERVAL` | 3 | Каждый N-й этаж — сундук |
 | `BOSS_ROOM_SIZE` | 600×400 | Арена босса |
+| `_FALLBACK_MAX_RETRIES` | 3 | Максимум retries для валидной геометрии |
 
 ## Данные — `DungeonLayout`
 
-`scenes/dungeon/dungeon_layout.gd` (`class_name DungeonLayout`). Чистая структура данных, контракт не меняется:
+`scenes/dungeon/dungeon_layout.gd` (`class_name DungeonLayout`).
 
 | Поле | Тип | Смысл |
 |------|-----|-------|
-| `rooms` | `Array[Rect2i]` | Комнаты (BSP DFS-порядок) |
-| `corridors` | `Array[Rect2i]` | Дверные проёмы в общих стенах |
-| `player_start` | `Vector2i` | Центр верхней левой комнаты |
-| `exit_position` | `Vector2i` | Центр нижней правой |
-| `enemy_spawns` | `Array[Vector2i]` | Позиции врагов |
-| `chest_positions` | `Array[Vector2i]` | Позиции сундуков |
+| `rooms` | `Array[Rect2i]` | Комнаты (порядок = order of addition в генераторе) |
+| `corridors` | `Array[Rect2i]` | Проходы, main rails, tunnels (per-generator семантика) |
+| `player_start` | `Vector2i` | Центр entrance-комнаты (после EntranceExitSelector) |
+| `exit_position` | `Vector2i` | Центр exit-комнаты |
+| `enemy_spawns` | `Array[Vector2i]` | Позиции врагов после FloorEncounterBudget |
+| `chest_positions` | `Array[Vector2i]` | Позиции сундуков после reward placement |
 | `floor_bounds` | `Rect2i` | Границы этажа, `position = (0, 0)` |
 | `is_boss_floor` | `bool` | Флаг boss-этажа |
+| `zone` | `String` | TowerZone.ZONE_* |
+| `floor_archetype` | `String` | Тип генерации (`residential_spine` / `technical_grid` / `ruined_bsp` / `basement_bsp` / `caves_natural` / `boss_arena` / `fallback_room`) |
+| `room_infos` | `Array[Dictionary]` | По одному info на комнату (role/zone/tags/danger) |
+| `room_graph` | `RoomGraph` | Граф смежности комнат по проходам (PR 3) |
+| `entrance_room_index` | `int` | Индекс entrance-комнаты в `rooms` (PR 3) |
+| `exit_room_index` | `int` | Индекс exit-комнаты (PR 3) |
+| `critical_path_indices` | `Array[int]` | Комнаты на shortest entrance→exit пути (PR 3) |
 
 ## Рендер — `scenes/dungeon/floor.tscn` + `floor.gd`
 
@@ -651,8 +805,7 @@ absi(tower_seed * 2654435761
 
 **Общие инварианты** (сохранены при переходе с grid → BSP):
 - Boss floor: 1 room, 0 corridors, 0 enemies, 0 chests.
-- Player start в top-left комнате, exit в bottom-right.
-- Все enemy spawns внутри какой-то комнаты, ни один в start/exit.
+- Все enemy spawns внутри какой-то комнаты.
 - Chest только на этажах кратных 3.
 - Same seed → identical layout.
 - Different seeds → different layouts.
@@ -661,23 +814,48 @@ absi(tower_seed * 2654435761
 - Более глубокие этажи имеют больше комнат.
 
 **BSP-specific**:
-- `test_footprint_scales_with_floor` — footprint растёт с этажом, кап 40×28.
-- `test_rooms_vary_in_size` — `max_area >= 2 * min_area` (разные размеры).
-- `test_all_rooms_reachable_via_doorways` — BFS через doorways посещает все комнаты (MST guarantees).
+- `test_footprint_scales_with_floor` — footprint растёт с этажом.
+- `test_rooms_vary_in_size` — `max_area >= 2 * min_area`.
+- `test_all_rooms_reachable_via_doorways` — BFS через doorways посещает все комнаты.
 - `test_start_reaches_exit_via_doorways` — start достигает exit.
-- `test_has_cycles_on_floor_4_plus` — `corridors.size() > rooms.size() - 1` (25% extra edges создают циклы).
+- `test_has_cycles_on_floor_4_plus` — extra edges создают циклы.
 - `test_some_adjacent_rooms_have_no_doorway_on_floor_7` — часть смежных пар без doorway.
+
+**PR 3 — новые тестовые файлы:**
+- `test_room_graph.gd` — базовые графовые примитивы (BFS, dead ends, branches, cycles, shortest path, build_from_doorways).
+- `test_dungeon_footprint.gd` — envelope монотонно растёт по зонам, footprint растёт внутри зоны, первый этаж заметно шире viewport, unknown zone fallback.
+- `test_floor_encounter_budget.gd` — entrance/exit → 0 budget, tiny room → 0, dangerous role boosts, optional_reward уменьшает, floor_cap растёт с zone и floor.
+- `test_natural_cave_generator.gd` — archetype `caves_natural`, chambers ≥ 3, graph connected, tunnels ≥ 1, loops на большинстве seeds, вариация размеров, детерминизм.
+- `test_dungeon_layout_metrics.gd` — статистические инварианты (connected, entrance→exit reachable, first residential > viewport, deeper floor > walkable, residential имеет branches, technical имеет loops, chest room получает treasure role, детерминизм).
 
 **Пропы и planner** (PR 2):
 - `test_environment_prop_definition.gd` — уникальность prop ID, валидные категории/textures, filter по зоне/роли, fits_in_room.
-- `test_room_decoration_planner.gd` — signature prop для bedroom/study/machine_room/boiler_room/cave_chamber, детерминизм по seed, отсутствие сдвига gameplay RNG, blocking props уважают reservations, props внутри room rect, wall_adjacent касается стены, маленькая комната остаётся sparse.
-- `test_prop_occupancy.gd` — doorway anchors не заняты, chest/enemy_spawn/entrance clear zones уважаются, blocking props не пересекаются, density не превышает role limit, decals не блокируют движение.
-- `test_prop_navigation_integration.gd` — Floor.gd интегрирует plan → AStar solid, decal cells остаются walkable, все двери одной комнаты связаны после placement (через реальный BSP layout).
-- `test_room_compositions.gd` — residential зоны никогда без cave props, tower_top без technical, caves без residential, композиции детерминированы между запусками.
+- `test_room_decoration_planner.gd` — signature prop, детерминизм по seed, отсутствие сдвига gameplay RNG.
+- `test_prop_occupancy.gd` — doorway anchors, clear zones, blocking overlap, density.
+- `test_prop_navigation_integration.gd` — plan → AStar solid, connectivity после placement.
+- `test_room_compositions.gd` — фильтрация по zone.
+
+## Baseline metrics (PR 3, average over 5 seeds)
+
+| Floor | Zone | Rooms | Hops (E→X) | Branches | Cycles | Walkable px² |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | tower_top | 8.4 | 4.0 | 4.2 | 3.2 | 157,280 |
+| 3 | residential | 9.4 | 4.4 | 5.2 | 3.8 | 180,160 |
+| 7 | technical | 14.4 | 5.0 | 7.0 | 4.0 | 252,720 |
+| 12 | lower_tower | 12.4 | 8.8 | 2.0 | 0.0 | 349,520 |
+| 16 | basement | 12.4 | 7.6 | 2.6 | 0.0 | 385,520 |
+| 21 | caves | 7.4 | 3.8 | 3.0 | 2.0 | 209,840 |
+
+Замечания:
+- Residential/technical → богатая ladder-топология (много branches и cycles).
+- Lower/basement BSP → длинные hops (~8), но малое количество cycles на 5 seeds. Кандидат под дальнейшую настройку `EXTRA_EDGE_RATIO`.
+- Caves → компактный, но связный, с loops на большинстве seeds.
 
 ## Планы
 
-- **Подвалы** — глубокие этажи (например 15+) должны стать «пещерными»: длинные извилистые коридоры, cellular automata caves, ветвления и тупики. Заготовка на будущее — переключение по `floor_number > BASEMENT_THRESHOLD` на другой алгоритм.
-- **Специальные комнаты** — trap rooms, altar rooms, treasure rooms с уникальной планировкой внутри leaf'а.
-- **Секретные проходы** — скрытые doorways, видимые только после активации триггера.
-- **Комнаты необычной формы** (L, T) — пока все прямоугольные; можно комбинировать несколько соседних leaf'ов через shape merge.
+- **Irregular cave boundaries** — переход от rect chambers к настоящим blob'ам с polygonal wall rendering в `floor.gd`.
+- **Cellular automata caves** как вариант B для caves-зоны — альтернативный алгоритм под тот же archetype.
+- **Специальные комнаты** — trap rooms, altar rooms.
+- **Секретные проходы** — скрытые doorways, видимые только после активации.
+- **Комнаты необычной формы** (L, T) — комбинирование соседних leaf'ов через shape merge.
+- **Camera hint** — не показывать exit marker до захода в exit room (fog-of-war сокращённый).
