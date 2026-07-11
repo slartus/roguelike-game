@@ -120,9 +120,12 @@ func clear_last_run_stats() -> void:
 	# больше не нужно, следующий finish_run заполнит его заново.
 	has_last_run_stats = false
 
-func award_enemy_kill() -> void:
+func award_enemy_kill(context: DamageContext = null) -> void:
+	# context (optional) — DamageContext финального удара, содержит source
+	# weapon_id / target enemy_id. Analytics использует его для attribution
+	# «какое оружие делает больше kills» и floor_enemy_summary.
 	run_enemies_killed += 1
-	Analytics.record_enemy_killed()
+	Analytics.record_enemy_killed(context)
 
 func add_health_potion() -> void:
 	health_potions += 1
@@ -170,12 +173,14 @@ func is_hp_reward_level(level: int) -> bool:
 func is_upgrade_reward_level(level: int) -> bool:
 	return level >= 3 and level % 2 == 1
 
-func award_gold(amount: int) -> void:
+func award_gold(amount: int, source: StringName = &"enemy") -> void:
+	# source ∈ {"enemy", "chest", "prop", "boss"}. Определяет разбивку
+	# gold_source в floor_economy_summary — критично для баланса экономики.
 	if amount <= 0:
 		return
 	total_gold += amount
 	run_gold += amount
-	Analytics.record_gold_earned(amount)
+	Analytics.record_gold_earned(amount, source)
 	gold_changed.emit(total_gold)
 	_save()
 

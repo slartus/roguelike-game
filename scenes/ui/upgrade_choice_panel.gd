@@ -60,6 +60,33 @@ func _show_next_pending_offer() -> void:
 		_show_next_pending_offer()
 		return
 	_open_panel(offer)
+	_record_offer_analytics(level, offer)
+
+func _record_offer_analytics(level: int, offer: Array) -> void:
+	# Собираем payload для upgrade_offer_shown: список offered_ids,
+	# позиции, текущие стеки, current weapon state, HP.
+	var offered_ids: Array = []
+	var offered_positions: Dictionary = {}
+	var current_stacks: Dictionary = {}
+	for i in offer.size():
+		var upgrade: PlayerUpgradeResource = offer[i]
+		offered_ids.append(upgrade.id)
+		offered_positions[upgrade.id] = i
+		current_stacks[upgrade.id] = GameState.get_upgrade_stack(upgrade.id)
+	var current_weapon_id := "unknown"
+	if GameState.equipped_weapon != null:
+		current_weapon_id = GameState.equipped_weapon.resource_path.get_file().get_basename()
+	Analytics.record_upgrade_offer_shown({
+		"choice_level": level,
+		"current_weapon_id": current_weapon_id,
+		"current_weapon_style": _current_weapon_style(),
+		"current_attack_type": _current_weapon_attack_type(),
+		"offered_ids": offered_ids,
+		"offered_positions": offered_positions,
+		"current_stacks": current_stacks,
+		"player_health": GameState.player_health,
+		"player_max_health": GameState.player_max_health,
+	})
 
 func _open_panel(offer: Array) -> void:
 	_current_offer = offer
@@ -116,7 +143,21 @@ func _unhandled_input(event: InputEvent) -> void:
 func _select(upgrade: PlayerUpgradeResource) -> void:
 	if upgrade == null:
 		return
+	# Analytics до add_player_upgrade — stack_before/after корректно
+	# читаются из GameState.
+	var stack_before := GameState.get_upgrade_stack(upgrade.id)
+	var offer_position := -1
+	for i in _current_offer.size():
+		if _current_offer[i] == upgrade:
+			offer_position = i
+			break
 	GameState.add_player_upgrade(upgrade)
+	Analytics.record_upgrade_selected({
+		"selected_id": upgrade.id,
+		"offer_position": offer_position,
+		"stack_before": stack_before,
+		"stack_after": GameState.get_upgrade_stack(upgrade.id),
+	})
 	EventLog.log_upgrade_selected(tr(upgrade.display_name))
 	upgrade_selected.emit(upgrade.id)
 	_current_offer = []

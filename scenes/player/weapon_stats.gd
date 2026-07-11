@@ -16,6 +16,9 @@ const MAX_ARCHER_PIERCE_BONUS := 2
 const MAX_ARC_DEGREES := 179.0
 
 var attack_type: String = ""
+# Attribution: weapon_id (path-basename .tres) для аналитики (weapon damage_dealt,
+# kills, projectile_hit). Пустая StringName → "unknown" в аналитике.
+var source_weapon_id: StringName = &""
 var damage: int = 1
 var attack_interval: float = 0.25
 var projectile_speed: float = 220.0
@@ -38,6 +41,7 @@ static func compute(weapon: WeaponResource, mods: Dictionary) -> WeaponStats:
 		return s
 	# Скопировали base из weapon через helper'ы (учитывают legacy fallback).
 	s.attack_type = weapon.attack_type
+	s.source_weapon_id = StringName(weapon.resource_path.get_file().get_basename())
 	s.damage = weapon.damage
 	s.attack_interval = weapon.get_attack_interval()
 	s.projectile_speed = weapon.get_projectile_speed()

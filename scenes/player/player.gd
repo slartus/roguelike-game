@@ -353,20 +353,31 @@ func _update_facing_from_aim() -> void:
 		return
 	face(1 if dx > 0.0 else -1)
 
-func equip(weapon: WeaponResource) -> void:
+func equip(weapon: WeaponResource, source: StringName = &"other") -> void:
 	if weapon == null:
 		return
+	# Аналитика: смена оружия — важный балансовый сигнал (когда игрок
+	# выбирает подобрать новое, какой exposure у старого до этого момента).
+	# record_weapon_equipped внутри Analytics закрывает equipped_seconds
+	# предыдущего оружия и стартует таймер для нового.
+	var previous_id: StringName = &""
+	if equipped_weapon != null:
+		previous_id = StringName(equipped_weapon.resource_path.get_file().get_basename())
+	var new_id := StringName(weapon.resource_path.get_file().get_basename())
 	equipped_weapon = weapon
 	GameState.equipped_weapon = weapon
 	_apply_weapon_visual(weapon)
 	weapon_changed.emit(weapon)
+	Analytics.record_weapon_equipped(new_id, previous_id, source)
 
-func take_damage(amount: int) -> void:
-	Analytics.record_damage_taken(mini(health, amount))
+func take_damage(amount: int, context: DamageContext = null) -> void:
+	# context — опционально; legacy callers передают null, тогда
+	# attribution="unknown" и damage_history потеряет source info.
 	var new_health: int = max(0, health - amount)
 	# Second Wind: если этот удар был бы летальным и карта взята и её заряд
 	# ещё не потрачен на этом этаже — переживаем удар и восстанавливаем HP
-	# до параметра "heal".
+	# до параметра "heal". Damage_taken не считаем — Second Wind «отменил»
+	# урон, аналитика не должна overcount'ить нанесённый урон.
 	if new_health == 0 and _try_trigger_second_wind():
 		health_changed.emit(health, max_health)
 		modulate = Color(1, 0.5, 0.5)
@@ -374,6 +385,8 @@ func take_damage(amount: int) -> void:
 		if is_inside_tree():
 			modulate = Color.WHITE
 		return
+	# После Second Wind check — учитываем реально нанесённый damage.
+	Analytics.record_damage_taken(health - new_health, context)
 	health = new_health
 	GameState.player_health = health
 	health_changed.emit(health, max_health)
@@ -445,7 +458,17 @@ func _tick_poison(delta: float) -> void:
 		return
 	_poison_tick_timer = POISON_TICK_INTERVAL
 	if health > 0:
-		take_damage(POISON_DAMAGE_PER_TICK)
+		# Poison tick — source_id="poison_cloud", attack_id="poison_tick",
+		# damage_type="poison". Не знаем конкретного зомби (могло быть
+		# несколько облаков), поэтому temperament не заполняем.
+		var ctx := DamageContext.new()
+		ctx.source_type = &"enemy_ability"
+		ctx.source_id = &"poison_cloud"
+		ctx.attack_id = &"poison_tick"
+		ctx.damage_type = &"poison"
+		ctx.target_type = &"player"
+		ctx.target_id = &"player"
+		take_damage(POISON_DAMAGE_PER_TICK, ctx)
 
 func heal(amount: int) -> void:
 	health = min(max_health, health + amount)
@@ -466,6 +489,8 @@ func _try_use_health_potion() -> void:
 	# Potion Mastery увеличивает heal.
 	var mods := GameState.get_player_upgrade_modifiers()
 	var heal_amount: int = 1 + int(mods.potion_heal_bonus)
+	# Analytics до heal(): нужны исходные health/max для overheal-расчёта.
+	Analytics.record_potion_used(health, max_health, heal_amount)
 	heal(heal_amount)
 	EventLog.log_heal(heal_amount)
 
@@ -478,6 +503,8 @@ func _die() -> void:
 		"reason": Analytics.RUN_END_DEATH,
 		"floor_reached": GameState.current_floor_number,
 		"player_level": GameState.player_level,
+		"potions_remaining": GameState.health_potions,
+		"upgrade_stacks": GameState.player_upgrade_stacks.duplicate(),
 	})
 	GameState.finish_run()
 	# После смерти всегда уходим на title screen (стартовый экран).

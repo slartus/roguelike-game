@@ -25,7 +25,7 @@ class FakeEnemy:
 		var cs := CollisionShape2D.new()
 		cs.shape = shape
 		add_child(cs)
-	func take_damage(amount: int) -> void:
+	func take_damage(amount: int, _context: DamageContext = null) -> void:
 		hp -= amount
 		hits_received += 1
 

@@ -17,7 +17,7 @@ class FakePlayer:
 	extends Node2D
 	var last_damage: int = 0
 	var hit_count: int = 0
-	func take_damage(amount: int) -> void:
+	func take_damage(amount: int, _context: DamageContext = null) -> void:
 		last_damage = amount
 		hit_count += 1
 

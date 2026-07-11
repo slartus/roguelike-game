@@ -139,16 +139,27 @@ func end_session(reason: StringName = SESSION_END_UNKNOWN) -> void:
 func start_run(context: Dictionary = {}) -> String:
 	var run_id := AnalyticsIds.new_uuid()
 	_run_state.start_run(run_id, _now_ticks_ms())
+	var starting_weapon_id := String(context.get("starting_weapon_id", "unknown"))
 	_emit_event(&"run_started", {
-		"starting_weapon_id": String(context.get("starting_weapon_id", "unknown")),
+		"starting_weapon_id": starting_weapon_id,
 		"starting_max_health": int(context.get("starting_max_health", 0)),
 		"starting_level": int(context.get("starting_level", 1)),
 	})
+	# Starting weapon трактуем как первое эквип-событие: без этого
+	# equipped_seconds / damage_taken_while_equipped / attribution kill'ов
+	# стартовым оружием не пишутся пока игрок не подберёт второе.
+	if starting_weapon_id != "" and starting_weapon_id != "unknown":
+		record_weapon_equipped(
+			StringName(starting_weapon_id), &"", WEAPON_SOURCE_STARTING
+		)
 	return run_id
 
 func finish_run(summary: Dictionary = {}) -> void:
 	if _run_state.run_id == "":
 		return
+	# Финализируем equipped_seconds текущего оружия и коммитим последний
+	# floor_weapon_summary (иначе последний этаж не попадёт в run-агрегат).
+	_run_state.finalize_floor_weapon_time(_now_ticks_ms())
 	var payload := {
 		"reason": String(summary.get("reason", RUN_END_UNKNOWN)),
 		"duration_seconds": _run_state.run_duration_seconds(_now_ticks_ms()),
@@ -157,7 +168,23 @@ func finish_run(summary: Dictionary = {}) -> void:
 		"gold_earned": _run_state.gold_earned_total,
 		"enemies_killed": _run_state.enemies_killed_total,
 		"damage_taken": _run_state.damage_taken_total,
+		"damage_dealt": _run_state.damage_dealt_total,
+		"equipped_weapon_id": String(_run_state.current_weapon_id),
+		"potions_remaining": int(summary.get("potions_remaining", 0)),
+		"upgrade_stacks": summary.get("upgrade_stacks", {}),
+		"damage_history": _run_state.damage_history,
+		"weapon_totals": _run_state.run_weapon_summaries(),
 	}
+	# Death attribution: для reason=player_death добавляем разбор источника
+	# смертельного удара из last_damage_context.
+	var reason := String(summary.get("reason", RUN_END_UNKNOWN))
+	if reason == String(RUN_END_DEATH) and _run_state.last_damage_context != null:
+		var ctx := _run_state.last_damage_context
+		payload["death_source_type"] = String(ctx.source_type)
+		payload["death_source_id"] = String(ctx.source_id)
+		payload["death_attack_id"] = String(ctx.attack_id)
+		payload["death_source_temperament"] = String(ctx.temperament_id)
+		payload["death_source_elite_rank"] = ctx.elite_rank
 	_emit_event(&"run_finished", payload)
 	_run_state.reset()
 	flush()
@@ -170,26 +197,49 @@ func start_floor(context: Dictionary = {}) -> void:
 		return
 	var floor_num := int(context.get("floor", 0))
 	_run_state.start_floor(floor_num, _now_ticks_ms())
-	_emit_event(&"floor_started", {
+	# floor_started payload расширен layout/room метриками — поля
+	# опциональные, main.gd передаёт то, что знает.
+	var payload := {
 		"layout_archetype": String(context.get("layout_archetype", "unknown")),
 		"zone": String(context.get("zone", "unknown")),
-	})
+	}
+	for key in ["room_count", "corridor_count", "enemy_count", "chest_count",
+			"prop_count", "walkable_area_cells", "critical_path_length_cells",
+			"branch_count", "dead_end_count", "loop_count",
+			"total_enemy_threat", "blocking_prop_cells", "interactive_prop_count",
+			"floor_width", "floor_height"]:
+		if context.has(key):
+			payload[key] = context[key]
+	_emit_event(&"floor_started", payload)
 
 func finish_floor(summary: Dictionary = {}) -> void:
 	if _run_state.run_id == "":
 		return
 	if _run_state.current_floor == 0:
 		return
+	# Финализация equipped_seconds для текущего оружия перед сбором
+	# floor_weapon_summary — иначе последний segment этажа потеряется.
+	_run_state.finalize_floor_weapon_time(_now_ticks_ms())
+	# Один суммарный floor_completed event.
 	var payload := {
 		"duration_seconds": _run_state.floor_duration_seconds(_now_ticks_ms()),
 		"kills": _run_state.floor_kills,
 		"gold_earned": _run_state.floor_gold_earned,
 		"damage_taken": _run_state.floor_damage_taken,
+		"damage_dealt": _run_state.floor_damage_dealt,
+		"rooms_visited": _run_state.rooms_visited_count,
 	}
-	# Overrides из summary (например, cause=exit_door).
 	for key in summary.keys():
 		payload[key] = summary[key]
 	_emit_event(&"floor_completed", payload)
+	# Затем — отдельные summary events на weapon/enemy/economy этажа,
+	# каждый с payload от counters. Разделяем чтобы pipeline PR 3 мог
+	# fanout'ить в отдельные CSV без парсинга nested arrays.
+	for weapon_summary in _run_state.floor_weapon_summaries():
+		_emit_event(&"floor_weapon_summary", weapon_summary)
+	for enemy_summary in _run_state.floor_enemy_summaries():
+		_emit_event(&"floor_enemy_summary", enemy_summary)
+	_emit_event(&"floor_economy_summary", _run_state.economy.to_dictionary())
 	flush()
 
 func flush() -> void:
@@ -200,20 +250,193 @@ func flush() -> void:
 
 # Инкременторы counters. Вызываются gameplay-хуками (award_gold,
 # award_enemy_kill, take_damage). Все no-op когда run не активен.
-func record_enemy_killed() -> void:
+func record_enemy_killed(context: DamageContext = null) -> void:
+	# context — опциональный. Если задан, дополнительно инкрементим
+	# enemy killed counter (иначе только общий kill counter).
 	if _run_state.run_id == "":
 		return
 	_run_state.add_kill()
+	if context != null:
+		# target_id для kill = enemy id (kill эмитится когда enemy умирает,
+		# в этом event enemy — это target damage, а source — weapon).
+		# Если у нас есть attribution weapon → enemy, то weapon.kills++.
+		var weapon_id: StringName = &""
+		if context.source_type == &"player_weapon":
+			weapon_id = context.source_id
+		# overkill_damage = |context.amount| - remaining_hp_before. У нас
+		# нет доступа к remaining_hp здесь — считаем 0 в PR 2 (можно
+		# уточнить в PR 3 через explicit call сайт).
+		_run_state.record_kill(weapon_id, 0)
+		# Enemy attribution: killed++ для (enemy_id, temperament, rank).
+		if context.target_type == &"enemy":
+			_run_state.record_enemy_killed(
+				context.target_id, context.temperament_id, context.elite_rank
+			)
 
-func record_gold_earned(amount: int) -> void:
+func record_enemy_spawned(enemy_id: StringName, temperament: StringName, elite_rank: int) -> void:
+	if _run_state.run_id == "":
+		return
+	_run_state.record_enemy_spawned(enemy_id, temperament, elite_rank)
+
+func record_gold_earned(amount: int, source: StringName = &"enemy") -> void:
+	# source ∈ {"enemy", "chest", "prop", "boss"} — определяет экономику.
 	if _run_state.run_id == "":
 		return
 	_run_state.add_gold(amount)
+	match source:
+		&"enemy":
+			_run_state.economy.gold_from_enemies += amount
+		&"chest":
+			_run_state.economy.gold_from_chests += amount
+		&"prop":
+			_run_state.economy.gold_from_props += amount
+		&"boss":
+			_run_state.economy.gold_from_bosses += amount
+		_:
+			# Неизвестный source (typo вроде "enemies") тихо попадает
+			# в enemy bucket — но warning помогает поймать опечатку в diff'е.
+			push_warning("[analytics] unknown gold source '%s', defaulting to enemy" % source)
+			_run_state.economy.gold_from_enemies += amount
 
-func record_damage_taken(amount: int) -> void:
+func record_damage_taken(amount: int, context: DamageContext = null) -> void:
 	if _run_state.run_id == "":
 		return
-	_run_state.add_damage_taken(amount)
+	_run_state.add_damage_taken(amount, context, _now_ticks_ms())
+
+func record_damage_dealt(amount: int, context: DamageContext) -> void:
+	# Вызывается когда player weapon наносит damage enemy. Обновляет
+	# floor_damage_dealt + weapon damage_dealt + enemy damage_received.
+	if _run_state.run_id == "":
+		return
+	var weapon_id: StringName = &""
+	if context != null and context.source_type == &"player_weapon":
+		weapon_id = context.source_id
+	_run_state.add_damage_dealt(amount, weapon_id, context)
+
+func record_player_attack(weapon_id: StringName) -> void:
+	# Один вызов на одну активацию attack (для melee — swing; для ranged —
+	# нажатие кнопки). Bullet.gd НЕ вызывает это — projectile_fired вызовет.
+	if _run_state.run_id == "":
+		return
+	_run_state.record_attack(weapon_id)
+
+func record_player_attack_hit(weapon_id: StringName) -> void:
+	if _run_state.run_id == "":
+		return
+	_run_state.record_attack_hit(weapon_id)
+
+func record_projectile_fired(weapon_id: StringName) -> void:
+	if _run_state.run_id == "":
+		return
+	_run_state.record_projectile_fired(weapon_id)
+
+func record_projectile_hit(weapon_id: StringName) -> void:
+	if _run_state.run_id == "":
+		return
+	_run_state.record_projectile_hit(weapon_id)
+
+# --- Weapon equip ------------------------------------------------------------
+
+func record_weapon_equipped(weapon_id: StringName, previous_weapon_id: StringName,
+		source: StringName = WEAPON_SOURCE_OTHER) -> void:
+	if _run_state.run_id == "":
+		return
+	_run_state.switch_current_weapon(weapon_id, _now_ticks_ms())
+	_emit_event(&"weapon_equipped", {
+		"weapon_id": String(weapon_id),
+		"previous_weapon_id": String(previous_weapon_id),
+		"source": String(source),
+	})
+
+# --- Upgrade offers ----------------------------------------------------------
+
+func record_upgrade_offer_shown(context: Dictionary) -> void:
+	# context: {choice_level, current_weapon_id, current_weapon_style,
+	#           current_attack_type, offered_ids, offered_positions,
+	#           current_stacks, player_health, player_max_health}.
+	if _run_state.run_id == "":
+		return
+	_run_state.current_upgrade_offer_shown_ticks_ms = _now_ticks_ms()
+	_emit_event(&"upgrade_offer_shown", {
+		"choice_level": int(context.get("choice_level", 0)),
+		"current_weapon_id": String(context.get("current_weapon_id", "unknown")),
+		"current_weapon_style": String(context.get("current_weapon_style", "")),
+		"current_attack_type": String(context.get("current_attack_type", "")),
+		"offered_ids": context.get("offered_ids", []),
+		"offered_positions": context.get("offered_positions", {}),
+		"current_stacks": context.get("current_stacks", {}),
+		"player_health": int(context.get("player_health", 0)),
+		"player_max_health": int(context.get("player_max_health", 0)),
+	})
+
+func record_upgrade_selected(context: Dictionary) -> void:
+	# context: {selected_id, offer_position, stack_before, stack_after}.
+	if _run_state.run_id == "":
+		return
+	var choice_time := 0.0
+	if _run_state.current_upgrade_offer_shown_ticks_ms > 0:
+		choice_time = maxf(0.0,
+			(_now_ticks_ms() - _run_state.current_upgrade_offer_shown_ticks_ms) / 1000.0)
+	_run_state.current_upgrade_offer_shown_ticks_ms = 0
+	_emit_event(&"upgrade_selected", {
+		"selected_id": String(context.get("selected_id", "unknown")),
+		"offer_position": int(context.get("offer_position", -1)),
+		"choice_time_seconds": choice_time,
+		"stack_before": int(context.get("stack_before", 0)),
+		"stack_after": int(context.get("stack_after", 0)),
+	})
+
+# --- Rooms -------------------------------------------------------------------
+
+func record_room_entered(room_id: StringName, context: Dictionary = {}) -> void:
+	# Эмитим room_first_entered ТОЛЬКО при первом визите в комнату
+	# на текущем этаже — повторные visits не логируются, floor summary
+	# показывает суммарное количество visited rooms.
+	if _run_state.run_id == "":
+		return
+	if not _run_state.record_room_visit(room_id):
+		return
+	var payload := {
+		"room_id": String(room_id),
+		"role": String(context.get("role", "unknown")),
+		"critical_path": bool(context.get("critical_path", false)),
+		"optional": bool(context.get("optional", false)),
+		"seconds_since_floor_start": _run_state.floor_duration_seconds(_now_ticks_ms()),
+		"player_health": int(context.get("player_health", 0)),
+		"alive_enemies": int(context.get("alive_enemies", 0)),
+		"reward_present": bool(context.get("reward_present", false)),
+	}
+	_emit_event(&"room_first_entered", payload)
+
+# --- Potions -----------------------------------------------------------------
+
+func record_potion_received() -> void:
+	if _run_state.run_id == "":
+		return
+	_run_state.economy.potions_received += 1
+
+func record_potion_used(health_before: int, max_health: int, heal_amount: int) -> void:
+	if _run_state.run_id == "":
+		return
+	var actual_healed := clampi(max_health - health_before, 0, heal_amount)
+	var overheal := maxi(0, heal_amount - actual_healed)
+	_run_state.economy.potions_used += 1
+	_run_state.economy.healing_received += actual_healed
+	_run_state.economy.overheal += overheal
+	_emit_event(&"potion_used", {
+		"health_before": health_before,
+		"max_health": max_health,
+		"heal_amount": heal_amount,
+		"actual_healed": actual_healed,
+		"overheal": overheal,
+	})
+
+# --- Chests ------------------------------------------------------------------
+
+func record_chest_opened() -> void:
+	if _run_state.run_id == "":
+		return
+	_run_state.economy.chests_opened += 1
 
 # --- Тестовые хуки (только для тестов) --------------------------------------
 #

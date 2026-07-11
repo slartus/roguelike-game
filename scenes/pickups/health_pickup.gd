@@ -12,5 +12,6 @@ func _on_body_entered(body: Node) -> void:
 	if not body.is_in_group("player"):
 		return
 	GameState.add_health_potion()
+	Analytics.record_potion_received()
 	EventLog.log_potion_pickup()
 	queue_free()

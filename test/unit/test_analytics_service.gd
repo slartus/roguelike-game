@@ -91,9 +91,14 @@ func test_start_run_emits_event_and_returns_run_id() -> void:
 		"starting_level": 1,
 	})
 	assert_ne(run_id, "")
-	assert_eq(_sink.events.size(), 1)
+	# PR 2: start_run со starting_weapon_id эмитит 2 события — run_started
+	# и weapon_equipped(source=starting). Проверяем оба явно.
+	assert_eq(_sink.events.size(), 2)
 	assert_eq(_sink.events[0]["event_name"], "run_started")
 	assert_eq(_sink.events[0]["payload"]["starting_weapon_id"], "dagger")
+	assert_eq(_sink.events[1]["event_name"], "weapon_equipped")
+	assert_eq(_sink.events[1]["payload"]["weapon_id"], "dagger")
+	assert_eq(_sink.events[1]["payload"]["source"], "starting")
 
 func test_run_id_changes_between_runs() -> void:
 	var run1 := Analytics.start_run({})
@@ -118,10 +123,20 @@ func test_finish_floor_emits_summary_with_counters() -> void:
 	Analytics.record_gold_earned(5)
 	Analytics.record_damage_taken(2)
 	Analytics.finish_floor({})
-	var payload: Dictionary = _sink.events.back()["payload"]
+	# PR 2: finish_floor эмитит floor_completed + floor_weapon_summary +
+	# floor_enemy_summary + floor_economy_summary. Ищем именно floor_completed.
+	var event := _find_event(_sink.events, "floor_completed")
+	assert_false(event.is_empty())
+	var payload: Dictionary = event["payload"]
 	assert_eq(payload["kills"], 2)
 	assert_eq(payload["gold_earned"], 5)
 	assert_eq(payload["damage_taken"], 2)
+
+func _find_event(events: Array, name: String) -> Dictionary:
+	for e in events:
+		if e["event_name"] == name:
+			return e
+	return {}
 
 func test_counters_reset_between_floors() -> void:
 	Analytics.start_run({})
