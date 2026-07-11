@@ -11,6 +11,7 @@ radius = 7.0
 z_index = 1
 script = ExtResource("1_enemy")
 display_name = "ENEMY_SLIME"
+creature_type_id = &"adult_slime"
 max_health = 3
 speed = 35.0
 contact_damage = 1

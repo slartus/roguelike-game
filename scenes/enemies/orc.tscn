@@ -10,6 +10,7 @@ radius = 8.0
 z_index = 1
 script = ExtResource("1_enemy")
 display_name = "ENEMY_ORC"
+creature_type_id = &"orc"
 max_health = 8
 speed = 28.0
 contact_damage = 3

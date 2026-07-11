@@ -12,6 +12,7 @@ z_index = 1
 script = ExtResource("1_ranged")
 bullet_scene = ExtResource("2_ebullet")
 display_name = "ENEMY_LICH"
+creature_type_id = &"lich"
 max_health = 3
 fire_interval = 1.0
 xp_reward = 12

@@ -39,8 +39,23 @@ enum State { WATCH, WAITING, CHARGING }
 # атака. Направление меняется по таймеру или при упоре в стену.
 @export var wander_speed: float = 25.0
 @export var wander_change_interval: float = 2.5
+# Темпераменты: ID семейства и явный override (пусто = catalog rolls).
+@export var creature_type_id: StringName = &""
+@export var temperament_id: StringName = &""
+
+# Множители темпераментов для charger-семейства (spider). Собраны
+# в const'ы — правки чисел одной точкой.
+const TEMPERAMENT_AGGRESSIVE_WAIT_MULT: float = 0.80
+const TEMPERAMENT_AGGRESSIVE_CHARGE_SPEED_MULT: float = 1.10
+const TEMPERAMENT_RESTLESS_WANDER_SPEED_MULT: float = 1.35
+const TEMPERAMENT_RESTLESS_WANDER_INTERVAL_MULT: float = 0.60
+const TEMPERAMENT_WATCHFUL_PERCEPTION_MULT: float = 1.30
+const TEMPERAMENT_WATCHFUL_WANDER_SPEED_MULT: float = 0.80
 
 var health: int
+var temperament_seed: int = 0
+var _has_explicit_seed: bool = false
+var _temperament_applied: bool = false
 var _state: int = State.WATCH
 var _state_timer: float = 0.0
 var _charge_direction: Vector2 = Vector2.ZERO
@@ -51,6 +66,7 @@ var _wander_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
+	_apply_temperament()
 	var level := get_effective_monster_level()
 	max_health = Balance.scaled_hp(max_health, level)
 	contact_damage = Balance.scaled_damage(contact_damage, level)
@@ -62,9 +78,42 @@ func _ready() -> void:
 func get_effective_monster_level() -> int:
 	return MonsterLevelUtil.effective_level(monster_level, elite_rank)
 
-func configure_spawn(level: int, elite: int = 0) -> void:
+func configure_spawn(level: int, elite: int = 0, creature_seed: int = 0) -> void:
 	monster_level = maxi(1, level)
 	elite_rank = maxi(0, elite)
+	temperament_seed = creature_seed
+	_has_explicit_seed = true
+
+func _apply_temperament() -> void:
+	if _temperament_applied:
+		return
+	_temperament_applied = true
+	var seed_value: int
+	if _has_explicit_seed:
+		seed_value = temperament_seed
+	else:
+		seed_value = CreatureTemperament.compute_fallback_seed(
+			creature_type_id, global_position)
+	temperament_id = CreatureTemperament.resolve_id(
+		temperament_id, creature_type_id, seed_value)
+	if temperament_id == &"":
+		return
+	_apply_temperament_modifiers()
+
+func _apply_temperament_modifiers() -> void:
+	match temperament_id:
+		CreatureTemperament.AGGRESSIVE:
+			wait_duration *= TEMPERAMENT_AGGRESSIVE_WAIT_MULT
+			charge_speed *= TEMPERAMENT_AGGRESSIVE_CHARGE_SPEED_MULT
+		CreatureTemperament.RESTLESS:
+			wander_speed *= TEMPERAMENT_RESTLESS_WANDER_SPEED_MULT
+			wander_change_interval *= TEMPERAMENT_RESTLESS_WANDER_INTERVAL_MULT
+		CreatureTemperament.WATCHFUL:
+			perception_radius *= TEMPERAMENT_WATCHFUL_PERCEPTION_MULT
+			wander_speed *= TEMPERAMENT_WATCHFUL_WANDER_SPEED_MULT
+		# CAUTIOUS, PERSISTENT — spider их не получает.
+		_:
+			pass
 
 func _physics_process(delta: float) -> void:
 	_contact_timer = maxf(0.0, _contact_timer - delta)

@@ -12,6 +12,7 @@ z_index = 1
 script = ExtResource("1_ranged")
 bullet_scene = ExtResource("2_ebullet")
 display_name = "ENEMY_SKELETON_ARCHER"
+creature_type_id = &"skeleton_archer"
 
 [node name="Visual" type="Sprite2D" parent="."]
 texture = ExtResource("3_tex")

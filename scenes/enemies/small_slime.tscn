@@ -11,6 +11,7 @@ z_index = 1
 scale = Vector2(0.5, 0.5)
 script = ExtResource("1_small_slime")
 display_name = "ENEMY_SMALL_SLIME"
+creature_type_id = &"small_slime"
 speed = 36.0
 max_health = 1
 contact_damage = 1

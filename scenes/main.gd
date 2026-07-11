@@ -67,11 +67,18 @@ func _spawn_enemies() -> void:
 		_spawn_boss()
 		return
 	# Детерминированный RNG на основе tower_seed × floor. Одинаковый seed
-	# и floor → одинаковый набор spawn'ов (важно для «поделиться башней»).
-	# Не используем глобальный randi/randf — они несовместимы с shared RNG
-	# из других мест (`randomize()` в _ready сдвигает глобальный state).
+	# и floor → одинаковый набор spawn'ов и темпераментов (важно для
+	# «поделиться башней»). Не используем глобальный randi/randf — они
+	# несовместимы с shared RNG из других мест (`randomize()` в _ready
+	# сдвигает глобальный state).
 	var rng := RandomNumberGenerator.new()
 	rng.seed = GameState.tower_seed * 100003 + GameState.current_floor_number * 9176 + 1337
+	# Отдельный RNG для темперамента: смешан с основным seed, но
+	# развивается независимо. Иначе первый randi для темперамента сдвинул
+	# бы стрим основного `rng`, и **все** последующие spawn'ы на этаже
+	# получили бы другие def/level/elite — регрессия старым tower_seed'ам.
+	var temperament_rng := RandomNumberGenerator.new()
+	temperament_rng.seed = rng.seed ^ 0xC0FFEEEE
 	var floor_num := GameState.current_floor_number
 	for spawn_pos in _floor.enemy_spawn_positions:
 		var defs := MonsterSpawnTable.get_eligible_defs(floor_num, ["generic"])
@@ -80,9 +87,10 @@ func _spawn_enemies() -> void:
 			continue
 		var level := MonsterSpawnTable.roll_monster_level(floor_num, def, 0, rng)
 		var elite := MonsterSpawnTable.roll_elite_rank(floor_num, def, 0, rng)
+		var creature_seed := int(temperament_rng.randi())
 		var enemy: Node = def.scene.instantiate()
 		if enemy.has_method("configure_spawn"):
-			enemy.configure_spawn(level, elite)
+			enemy.configure_spawn(level, elite, creature_seed)
 		enemy.global_position = spawn_pos
 		if "pickup_scene" in enemy:
 			enemy.pickup_scene = PICKUP_SCENE

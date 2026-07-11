@@ -135,6 +135,100 @@ Melee-враги используют **Godot AStarGrid2D** для обхода 
 
 Для ranged-врагов stuck-детектор триггерится **только** когда враг сам хотел двигаться (`intended_dir != 0` — kiting-фаза close-in / retreat). На ideal-range ranged штатно стоит на месте, ложных срабатываний быть не должно.
 
+## Темпераменты
+
+Каждый обычный монстр при `_ready()` получает ровно один **темперамент** — индивидуальность, которая заметно, но умеренно меняет его AI. Босс из системы исключён и остаётся «эталонным».
+
+Каталог темпераментов и пулов живёт в `scenes/enemies/creature_temperament.gd`. Каждая AI-база (`enemy.gd` melee, `ranged_enemy.gd` ranged, `charger.gd` spider) сама применяет модификаторы к своим полям — общая функция «применить всё сразу» не используется, чтобы не смешивать поля разных семейств.
+
+### Пять темпераментов
+
+| ID | Смысл |
+|----|-------|
+| `aggressive` | Быстрее переходит к опасным действиям (короче cooldown / короче wait / выше скорость) |
+| `cautious` | Осторожничает: melee-гоблин убегает на низком HP, ranged держит дистанцию больше |
+| `persistent` | Дольше помнит игрока (только melee) |
+| `restless` | Активнее бродит вне боя |
+| `watchful` | Замечает игрока с большей дистанции, но медленнее бродит |
+
+Не-нейтральный список: обычный монстр всегда получает один из этих пяти, никакого «пустого» варианта нет.
+
+### Пулы и веса
+
+Каждый монстр имеет собственный пул тематически подходящих темпераментов. Сумма весов в каждом пуле = 100. Веса — целые положительные.
+
+| Монстр | Допустимые темпераменты (weight) |
+|--------|----------------------------------|
+| `small_slime` | `restless: 45`, `aggressive: 35`, `watchful: 20` |
+| `adult_slime` | `aggressive: 40`, `persistent: 35`, `restless: 25` |
+| `goblin` | `aggressive: 30`, `cautious: 30`, `restless: 25`, `watchful: 15` |
+| `orc` | `persistent: 45`, `aggressive: 35`, `watchful: 20` |
+| `skeleton` | `persistent: 35`, `aggressive: 30`, `watchful: 20`, `restless: 15` |
+| `zombie` | `persistent: 55`, `watchful: 25`, `aggressive: 20` |
+| `spider` | `watchful: 40`, `aggressive: 35`, `restless: 25` |
+| `skeleton_archer` | `cautious: 45`, `watchful: 30`, `aggressive: 15`, `restless: 10` |
+| `lich` | `cautious: 45`, `watchful: 35`, `aggressive: 20` |
+
+Пул хранится в `CreatureTemperament.POOLS[creature_type_id]`.
+
+### Эффекты по AI-семействам
+
+Модификатор применяется один раз, в `_ready()`, **после** чтения `.tscn`-значений и **до** `Balance.scaled_*`.
+
+#### `aggressive`
+
+| Семейство | Изменения |
+|-----------|-----------|
+| Melee | `speed × 1.12`, `contact_cooldown × 0.85` |
+| Ranged | `fire_interval × 0.85`, `speed × 1.08`, `preferred_range × 0.90`, `min_range × 0.90` |
+| Spider | `wait_duration × 0.80`, `charge_speed × 1.10` |
+
+#### `cautious`
+
+| Семейство | Изменения |
+|-----------|-----------|
+| Melee (гоблин) | При `HP ≤ 35% max_health` включается flee — гоблин убегает от игрока со `speed × 1.20`, не наносит контактного урона, приоритет над WANDER/CHASE. Триггер необратимый (лечения врагов нет) |
+| Ranged | `preferred_range × 1.15`, `min_range × 1.20`, `retreat_speed_multiplier = 1.20` (множитель применяется только при отступлении `dist < min_range`; приближение и wander — базовая скорость) |
+| Spider | Не получает `cautious` |
+
+#### `persistent`
+
+| Семейство | Изменения |
+|-----------|-----------|
+| Melee | `memory = max(memory, 0.95)`, `memory_check_interval × 1.25` |
+| Ranged, Spider | Не используется в этой фиче (память не реализована для ranged/spider) |
+
+#### `restless`
+
+| Семейство | Изменения |
+|-----------|-----------|
+| Melee / Ranged | `wander_speed_ratio = min(1.0, wander_speed_ratio × 1.35)`, `wander_change_interval × 0.60` |
+| Spider | `wander_speed × 1.35`, `wander_change_interval × 0.60`. Активная атака (charge) не ускоряется |
+
+#### `watchful`
+
+| Семейство | Изменения |
+|-----------|-----------|
+| Melee / Ranged | `perception_radius × 1.30`, `wander_speed_ratio × 0.80` |
+| Spider | `perception_radius × 1.30`, `wander_speed × 0.80` |
+
+Боевые cooldown этим темпераментом не меняются — только «видит дальше, бродит медленнее».
+
+### Детерминизм spawn'а
+
+Основные spawn-точки этажа детерминированы. `Main._spawn_enemies()` тянет `creature_seed := rng.randi()` из того же floor RNG, что и выбор монстра/уровня/elite (сид формулой `tower_seed × 100003 + floor × 9176 + 1337`). Затем передаёт его через `configure_spawn(level, elite, creature_seed)` в enemy. При одинаковых `tower_seed`, номере этажа, порядке spawn-позиций и таблице монстров получается ровно тот же набор темпераментов.
+
+### Runtime fallback
+
+Существа, созданные не через `Main._spawn_enemies()` — почка / осколок слайма, скелет призванный личом, автономный тест — не получают явный seed. Тогда `_apply_temperament()` вычисляет сид из `GameState.tower_seed`, текущего этажа, `creature_type_id` и округлённой `global_position`. Результат стабилен в пределах одного контекста, тесты не флапают.
+
+### Что НЕ входит в эту версию
+
+- Визуальные маркеры темперамента (иконки, цветной tint, частицы) не реализованы — используется общий спрайт монстра. Модификация `modulate` намеренно исключена: он уже задействован для damage flash, паука, лича и вариантов оружия.
+- Изменение `display_name`, i18n-ключей, наград, threat, elite rank, вероятностей появления видов — не входит.
+- Полноценный `CreatureProfile`, affix / champion-способности, система элементов, глубокая компонентная архитектура — не входят.
+- Босс темперамент не получает.
+
 ## Melee (`enemy.gd`)
 
 Все ближники используют один скрипт `enemy.gd`. Разные типы — это разные `.tscn` с разными `@export` параметрами и спрайтами. Поведение общее: идти к игроку, наносить контактный урон с cooldown.
