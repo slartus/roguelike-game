@@ -1,6 +1,6 @@
 ---
 name: feature-close
-description: Полный pipeline для одной фичи — branch → docs → tests → run tests → self-review → commit → push → PR. Использовать когда фича готова и пользователь хочет её закрыть, либо когда сам достиг состояния "готово, пора закрывать".
+description: Полный pipeline для одной фичи — branch+worktree → docs → tests → run tests → self-review → commit → push → PR → cleanup после merge. Использовать когда фича готова и пользователь хочет её закрыть, либо когда сам достиг состояния "готово, пора закрывать".
 ---
 
 # Skill: feature-close
@@ -9,30 +9,31 @@ description: Полный pipeline для одной фичи — branch → doc
 
 ## Preconditions
 
-- Есть локальные изменения (`git status` не пустой).
+- Есть локальные изменения (`git status` не пустой) внутри worktree-папки фичи.
 - Пользователь **не** сказал «доработай текущую» / «amend» / «в текущий PR» — иначе это правка к предыдущему коммиту в уже открытой ветке, а не новая фича.
 
 ## Порядок шагов
 
-### 1. Branch
+### 1. Branch + worktree
 
-Проверить текущую ветку: `git branch --show-current`.
+Проверить текущий каталог и ветку: `pwd && git branch --show-current`.
 
-- Уже на фиче-ветке (`feat/*`, `fix/*`, ...) → пропускаем создание, работаем в ней.
-- На `main` → создаём новую ветку от актуального `main`:
+- Уже внутри worktree-папки фичи (`../roguelike-<slug>`) на фиче-ветке (`feat/*`, `fix/*`, ...) → пропускаем создание, работаем здесь.
+- Оказался в основном клоне (`/Users/artemslinkin/projects/roguelike-game`) на `main` или чужой ветке → **не** делаем `git checkout` в этом каталоге (сломает параллельные сессии). Создаём отдельную папку через worktree:
 
 ```bash
-git fetch origin
-git checkout main
-git pull --ff-only
-git checkout -b <type>/<slug>
+MAIN_REPO=/Users/artemslinkin/projects/roguelike-game
+git -C $MAIN_REPO fetch origin
+git -C $MAIN_REPO worktree add ../roguelike-<slug> -b <type>/<slug> origin/main --no-track
+cd ../roguelike-<slug>
+git branch --unset-upstream
 ```
 
 где `type ∈ {feat, fix, refactor, docs, chore, test}`, `slug` — короткое английское описание фичи в kebab-case (`melee-arc-swing`, `hud-gold-key`, `weapon-controller-cooldown`).
 
-Если изменения уже есть в working tree — не теряем их: `git stash` перед `checkout main`, `git stash pop` после `checkout -b <branch>`.
+Если изменения фичи уже есть в working tree основного клона (не должно случаться при штатном flow, но возможно) — перед созданием worktree сделать `git stash push -u -m "wip: <slug>"` в основном клоне, потом в новой worktree-папке применить их обратно через `git stash apply --index stash@{0}`.
 
-**Никогда не коммитим в `main` напрямую.**
+**Никогда не коммитим в `main` напрямую и не работаем в основном клоне.**
 
 ### 2. Docs
 
@@ -124,13 +125,41 @@ EOF
 
 **Merge PR не делаю сам** — это делает пользователь через GitHub UI после ревью. Исключение: пользователь явно попросил «смерджи» / «замерджи PR». Тогда — `gh pr merge <number> --squash --delete-branch` (или `--merge`, если пользователь предпочитает merge-commit).
 
+### 8. Cleanup после merge PR
+
+**Обязательный шаг, не опциональный.** Как только PR смержен (через GitHub UI или `gh pr merge` по явной просьбе), удалить worktree-папку и локальную ветку:
+
+```bash
+cd $MAIN_REPO
+git fetch --prune origin                    # подтягиваем удаление remote ветки
+git worktree remove ../roguelike-<slug>
+git branch -d <type>/<slug>
+```
+
+Проверить: `git worktree list` показывает только `$MAIN_REPO`, `git branch --list '<type>/<slug>'` пустой.
+
+Если пользователь мержит PR молча (или сам смержил в UI до того, как я успел спросить) — при следующей активности проверить `gh pr list --state merged --limit 5`, найти свои смерженные PR'ы и почистить их worktree'ы. Оставленные worktree'ы копятся в `../roguelike-*` и путают следующие сессии.
+
 ## Отчёт пользователю
 
 После создания PR — одна-две строки:
 - Что сделано (одна строка).
 - Ссылка на PR из вывода `gh pr create`.
+- В какой worktree-папке идёт работа (`../roguelike-<slug>`) — чтобы пользователь понимал, где живёт ветка.
 - Если были follow-up'ы от reviewer'а — перечислить их.
 
 ## Что делать если пользователь оставил вопрос по ходу
 
-Не бросать текущую фичу. Добавить новую задачу через `TaskCreate`, довести текущую до PR, потом взяться за следующую — **со свежей веткой от актуального `main`** (`git fetch && git checkout main && git pull --ff-only && git checkout -b <next-branch>`).
+Сначала оценить: это продолжение текущей фичи (доработка, уточнение) или новая независимая задача?
+
+- Продолжение → работаем в той же ветке / той же worktree-папке. Новую ветку/папку не заводим.
+- Новая независимая задача → добавить в очередь через `TaskCreate`, довести текущую до PR, после merge (или как только пользователь дал зелёный свет на переключение) завести новую worktree-папку от свежего `origin/main`:
+
+```bash
+MAIN_REPO=/Users/artemslinkin/projects/roguelike-game
+git -C $MAIN_REPO fetch origin
+git -C $MAIN_REPO worktree add ../roguelike-<next-slug> -b <type>/<next-slug> origin/main --no-track
+cd ../roguelike-<next-slug>
+```
+
+Если не уверен, продолжение это или новая — уточни у пользователя перед созданием новой ветки/папки.
