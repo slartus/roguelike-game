@@ -44,6 +44,7 @@
 | `30-godot-artifacts.md` | Работа с `.tres` / `.import` / `.uid` / `.translation` / `.gitignore` |
 | `40-i18n-and-exports.md` | Добавляешь `@export display_name` или новый i18n-ключ |
 | `50-animations-gifs.md` | Меняешь `_draw` / tween-формулу процедурной анимации |
+| `60-player-weapon-showcase.md` | Меняешь спрайт игрока / оружия, hand-offset / rest-angle, добавляешь новое оружие |
 | `90-anti-patterns.md` | Быстрый список запретов — сверяйся перед commit'ом |
 
 ## Skills (`.claude/skills/`)
