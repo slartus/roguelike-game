@@ -466,6 +466,185 @@ DungeonGenerator даёт **позиции** (`enemy_spawn_positions`) — но 
 
 Boss floor (`current_floor_number % 5 == 0`) обрабатывается отдельно — MonsterSpawnTable в этот путь не заходит. Boss спавнится в центре первой комнаты, обычные монстры на boss-этаже не появляются.
 
+## Пропы комнат — `RoomDecorationPlanner`
+
+PR 2 добавил room-level планировщик пропов поверх `_place_decor` из PR 1. Legacy per-cell декали (mold/candle/crack/blood) остались — они по-прежнему украшают стены и полы нижних зон, но мебель, стеллажи, машины, кровати и cave-props теперь размещаются планировщиком **по одной комнате целиком**.
+
+### Категории пропов
+
+Каждый prop — `EnvironmentPropDefinition`, одна из шести категорий (`scenes/dungeon/environment_prop_definition.gd::ALL_CATEGORIES`):
+
+| Категория | Блокирует движение | Пример |
+|-----------|:---:|--------|
+| `floor_decal` | нет | ковёр, кости, щебень, floor-решётка, корни |
+| `wall_surface` | нет | картина, труба, вентиль, полка, цепи |
+| `wall_adjacent_prop` | да | кровать, шкаф, стеллаж, стол, верстак, койка |
+| `floor_prop` | да | малый столик, стул, ящик, бочка, гриб, кристалл |
+| `large_prop` | да | котёл, рунический двигатель, алхимическая колба, сталагмит |
+| `interactive` | резерв | зарезервировано для PR 4 (сундуки как props, ловушки) |
+
+Все ID пропов (`EnvironmentPropCatalog.PROP_*`) — стабильный контракт: имя `.png` в `assets/sprites/props/<id>.png` совпадает с константой каталога. Тесты `test_environment_prop_definition.gd::test_all_prop_ids_are_unique` фиксируют уникальность.
+
+### `EnvironmentPropDefinition` (data-driven)
+
+Одно определение хранит:
+
+| Поле | Что описывает |
+|------|---------------|
+| `id: StringName` | стабильный идентификатор |
+| `category: StringName` | одна из ALL_CATEGORIES |
+| `texture: Texture2D` | fallback-визуал (в PR 2 все пропы через texture, PackedScene — future) |
+| `scene: PackedScene` | опциональная сцена (резерв под сложные пропы) |
+| `footprint_cells: Vector2i` | занимаемое место в клетках TILE=20 px |
+| `blocks_movement: bool` | попадает ли в AStar как solid |
+| `blocks_projectiles: bool` | зарезервировано под PR 4 |
+| `allowed_zones: Array[StringName]` | пустой = везде |
+| `allowed_room_roles: Array[StringName]` | пустой = все роли |
+| `allowed_wall_sides: Array[StringName]` | зарезервировано |
+| `weight: int` | вес в weighted roll (детерминированный) |
+| `min_room_size_cells: Vector2i` | комнаты меньше — prop не ставится |
+| `clearance_cells: int` | зарезервировано |
+| `can_rotate`, `mirror_allowed` | зарезервировано |
+
+Каталог собирается в коде (`EnvironmentPropCatalog._build`), как и `EnvironmentVisualProfiles` — единый источник истины, без `.tres`, чтобы тесты видели опечатки на этапе компиляции.
+
+### Pipeline планировщика
+
+`RoomDecorationPlanner.plan_floor(layout, reservations, tower_seed, floor_number) -> FloorPlan` для каждой комнаты выполняет:
+
+1. Собирает `local grid` (Dictionary Vector2i→int) — свободные и зарезервированные клетки в пределах room rect.
+2. Резервирует **doorway anchors** — клетки внутри room, смежные с corridor'ом.
+3. Резервирует **клиренс** одной клетки вглубь room от каждого doorway anchor'а.
+4. Между всеми парами doorway anchors резервирует **L-путь** (Manhattan) — гарантированный маршрут.
+5. Уважает **внешние reservations** — player start, exit, chest, enemy spawns (см. ниже).
+6. Выбирает **signature prop** — характерный объект роли (`bed` для bedroom, `boiler` для boiler_room и т.п.).
+7. Заполняет **wall-adjacent → large → floor** до достижения `blocking budget` из таблицы плотности.
+8. Добавляет **wall surfaces** (картины, трубы) — non-blocking.
+9. Добавляет **floor decals** (ковры, кости, корни, floor-решётка) — non-blocking.
+10. Для каждого blocking placement делает **connectivity pre-check** — BFS от одного doorway anchor'а к остальным по free/reserved/decal клеткам. Если пропа ломает связность — placement отклоняется.
+
+Результат — `FloorPlan.placements: Array[Placement]` и `blocked_cells: Dictionary`. Floor.gd инстанциирует placements как Sprite2D + optional StaticBody2D и передаёт blocked_cells в AStar.
+
+### Reservations (что резервируется до planner'а)
+
+`Floor._collect_reservations()` собирает клетки, где planner не должен ставить блокирующий prop:
+
+| Anchor | Радиус в клетках |
+|--------|:---:|
+| `player_start` | 2 |
+| `exit_position` | 2 |
+| `chest_positions` | 1 |
+| `enemy_spawns` | 1 |
+
+Radius = размер квадратного клирнса вокруг anchor'а. Клетки corridor'ов planner не занимает по геометрии (они вне room rect). Doorway anchors резервируются самим planner'ом.
+
+### Connectivity guarantee
+
+Для комнаты с 2+ дверями planner обеспечивает: между **любой** парой doorway anchors существует путь по не-blocking клеткам (free / reserved / decal / wall-surface). Blocking placement, ломающий связность, откатывается на этапе _try_place_prop. Тест `test_prop_navigation_integration.gd::test_all_doors_of_room_remain_connected` проверяет инвариант через реальный layout.
+
+### Signature prop правило
+
+Каждая тематическая роль в достаточно большой комнате получает как минимум один характерный объект:
+
+| Роль | Signature |
+|------|-----------|
+| bedroom | bed |
+| study | desk / bookshelf |
+| kitchen | workbench / cabinet / barrel |
+| living_room | wardrobe / bookshelf |
+| storage | crate / barrel |
+| machine_room | rune_engine / alchemical_vat |
+| boiler_room | boiler |
+| basement_cell | cot / chains |
+| cave_chamber | stalagmite / mushroom |
+
+Исключения: комната слишком мала (< 4×4 клетки для big props), entrance/exit/boss_arena, placement нарушает связность.
+
+### Плотность (blocking footprint budget)
+
+`RoomDecorationPlanner.DENSITY_LIMIT_PER_ROLE` задаёт долю площади комнаты, которую можно занять блокирующими пропами:
+
+| Категория ролей | Лимит |
+|-----------------|:---:|
+| entrance / exit / boss_arena | 5–8% |
+| treasure_room / small_room | 12% |
+| bedroom / living_room / study | 20% |
+| kitchen | 18% |
+| storage / warehouse | 28% |
+| machine_room / boiler_room | 25% |
+| switch_room | 18% |
+| ruined_room / basement_cell | 15% |
+| cave_chamber | 18% |
+
+Fallback для незнакомых ролей — 15%. Planner копит `blocked_area_cells` и останавливается при превышении. Тест `test_prop_occupancy.gd::test_density_does_not_exceed_role_limit` фиксирует лимит с допуском ±5%.
+
+### Композиции по ролям
+
+Композиции определяются каталогом (`allowed_room_roles` в каждом `.gd`-определении):
+
+- **Bedroom** → bed (wall-adjacent), wardrobe, small_table, chair, rug, wall_picture.
+- **Living room** → wardrobe, bookshelf, cabinet, chair, small_table, rug, wall_picture.
+- **Kitchen** → cabinet, workbench, barrel, sack, crate, shelf.
+- **Study** → desk, bookshelf, chair, cabinet, rug, wall_picture.
+- **Storage/Warehouse** → crate, barrel, sack, shelf, broken_crate, rope_coil.
+- **Machine room** → rune_engine, alchemical_vat, pipe_straight, valve, floor_grate, workbench.
+- **Boiler room** → boiler, alchemical_vat, pipe_straight, valve, floor_grate, barrel.
+- **Basement cell** → cot, chains, bucket, bones, rubble, broken_crate.
+- **Cave chamber** → stalagmite, mushroom, crystal, bones, rubble, roots.
+
+Тесты `test_room_compositions.gd` фиксируют, что residential зоны никогда не получают cave/technical props, а cave-chamber никогда не получает residential пропы (кровать, шкаф, письменный стол).
+
+### Детерминизм пропов
+
+Seed каждой комнаты внутри planner'а:
+
+```
+absi(tower_seed * 2654435761
+     + floor_number * 40503
+     + room_index * 92821
+     + role_hash * 314159
+     + zone_hash * 27183) + 1
+```
+
+Это отдельный stream от gameplay RNG (`tower_seed * 100003 + floor_number` в DungeonGenerator) и от cosmetic decal RNG (`tower_seed * 31 + 7` в _place_decor). Тесты `test_room_decoration_planner.gd::test_deterministic_same_seed_same_plan` и `test_decor_rng_does_not_affect_gameplay_generator` проверяют оба свойства:
+
+1. Тот же (tower_seed, floor, room, role, zone) → тот же placement plan.
+2. Прогон planner'а не сдвигает generator RNG (rooms/enemy_spawns/exit не меняются между двумя `DungeonGenerator.generate()` с одним seed'ом).
+
+### AStar интеграция
+
+`Floor._build_astar_grid` сначала помечает solid стены (по геометрии), затем добавляет все `floor_plan.blocked_cells` через `astar_grid.set_point_solid(cell, true)`. Ключевые инварианты:
+
+- Blocking prop (footprint 2×1 или 2×2) полностью блокирует свои клетки — AI не идёт сквозь мебель.
+- Floor decal (ковёр, кости, корни) — passable, `blocks_movement=false`, клетки НЕ попадают в blocked_cells.
+- Wall surface (картина, труба) — passable, размещается в клетках у стены как маркер, но не в blocked_cells.
+- Summoned creature (lich/boss) вычисляет fallback позицию по AStar, значит не появится внутри пропа.
+
+Проверяется в `test_prop_navigation_integration.gd::test_astar_marks_blocking_prop_cells_as_solid` и `test_astar_leaves_decal_cells_walkable`.
+
+### Z-order
+
+Внутри Floor сцены порядок Node2D-детей (передний план внизу списка):
+
+1. `FloorsRoot` — background + floor tiles + doorway thresholds.
+2. `WallsRoot` — стены и cap-tiles.
+3. `DecorRoot` — legacy стенные decals (mold, candle, crack, blood).
+4. `PropsRoot` — все пропы planner'а (декали + мебель + стены).
+5. `MarkersRoot` — дверь-переход.
+
+Игрок и враги живут выше на уровне Main. Внутри `PropsRoot` порядок добавления соответствует порядку `FloorPlan.placements`.
+
+### Placeholder art
+
+Спрайты — процедурные PNG размером `footprint * TILE`, генерируются `tools/gen_prop_sprites.py` (31 prop). Каждый prop имеет отличительный силуэт (bed = длинный с подушкой, boiler = медный круг с трубой и пламенем, mushroom = ножка + шляпка с пятнами), чтобы placeholder сразу читался. При регенерации спрайта — обновляй именно генератор, не .png в редакторе.
+
+### Ограничение PR 2
+
+- Пропы не интерактивны — категория `interactive` зарезервирована под PR 4 (destructibles, containers, traps).
+- Wall-surface рендерится как обычный Sprite2D в клетке у стены, не как child StaticBody стены — визуально «прилипает» к стене, но геометрически лежит на floor cell.
+- `PackedScene` для пропов пока не используется — все пропы через `texture`. Сцены — под PR 4 (интерактивные пропы).
+- Размер этажа не увеличен — layout topology остаётся BSP из PR 1. Уровни глобально не растут (задача PR 3).
+
 ## Тесты
 
 `test/unit/test_dungeon_generator.gd`:
@@ -488,6 +667,13 @@ Boss floor (`current_floor_number % 5 == 0`) обрабатывается отд
 - `test_start_reaches_exit_via_doorways` — start достигает exit.
 - `test_has_cycles_on_floor_4_plus` — `corridors.size() > rooms.size() - 1` (25% extra edges создают циклы).
 - `test_some_adjacent_rooms_have_no_doorway_on_floor_7` — часть смежных пар без doorway.
+
+**Пропы и planner** (PR 2):
+- `test_environment_prop_definition.gd` — уникальность prop ID, валидные категории/textures, filter по зоне/роли, fits_in_room.
+- `test_room_decoration_planner.gd` — signature prop для bedroom/study/machine_room/boiler_room/cave_chamber, детерминизм по seed, отсутствие сдвига gameplay RNG, blocking props уважают reservations, props внутри room rect, wall_adjacent касается стены, маленькая комната остаётся sparse.
+- `test_prop_occupancy.gd` — doorway anchors не заняты, chest/enemy_spawn/entrance clear zones уважаются, blocking props не пересекаются, density не превышает role limit, decals не блокируют движение.
+- `test_prop_navigation_integration.gd` — Floor.gd интегрирует plan → AStar solid, decal cells остаются walkable, все двери одной комнаты связаны после placement (через реальный BSP layout).
+- `test_room_compositions.gd` — residential зоны никогда без cave props, tower_top без technical, caves без residential, композиции детерминированы между запусками.
 
 ## Планы
 
