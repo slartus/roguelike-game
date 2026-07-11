@@ -81,6 +81,13 @@ func _attack_projectile(weapon: WeaponResource, direction: Vector2) -> bool:
 	var stats := WeaponStats.compute(weapon, mods)
 	var count := maxi(1, stats.projectiles_per_attack)
 	var spread := deg_to_rad(stats.spread_angle_deg)
+	# Spawn origin — не в центре игрока, а у наконечника оружия. Для оружия
+	# без spawn distance (`= 0`) поведение идентично старому (центр игрока).
+	# lateral перпендикулярный сдвиг: `direction.orthogonal()` направлен на
+	# 90° влево от direction, положительный lateral сдвигает спавн влево.
+	var spawn_origin := _owner_player.global_position \
+		+ direction * weapon.projectile_spawn_distance \
+		+ direction.orthogonal() * weapon.projectile_spawn_lateral_offset
 	var scene_root := get_tree().current_scene
 	for i in count:
 		var offset := 0.0
@@ -89,7 +96,6 @@ func _attack_projectile(weapon: WeaponResource, direction: Vector2) -> bool:
 		elif spread > 0.0:
 			offset = randf_range(-spread * 0.5, spread * 0.5)
 		var bullet := scene.instantiate()
-		bullet.global_position = _owner_player.global_position
 		bullet.direction = direction.rotated(offset)
 		# apply_weapon_stats — новый метод, читает из stats. Fallback на
 		# apply_weapon если сцена ещё старого контракта.
@@ -103,6 +109,12 @@ func _attack_projectile(weapon: WeaponResource, direction: Vector2) -> bool:
 			# Fallback для тестов, когда current_scene == null: цепляем в
 			# сам Player, чтобы bullet попал в дерево и мог что-то делать.
 			_owner_player.add_child(bullet)
+		# global_position ставим ПОСЛЕ add_child — иначе Godot пересчитает
+		# его через parent transform: если у scene_root есть смещение, spawn
+		# сместится на это смещение. Для main-сцены в (0,0) поведение не
+		# меняется; для тестов с GUT runner в собственной позиции — теперь
+		# spawn действительно попадает в spawn_origin.
+		bullet.global_position = spawn_origin
 	return true
 
 func _attack_melee(weapon: WeaponResource, direction: Vector2) -> bool:

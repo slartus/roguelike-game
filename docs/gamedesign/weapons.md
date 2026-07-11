@@ -31,13 +31,15 @@ Data-driven через кастомный `Resource` — `WeaponResource` (class
 
 | Поле | Тип | Смысл |
 |------|-----|-------|
-| `projectile_scene` | `PackedScene` | Кастомная сцена снаряда. null → default `bullet.tscn` |
+| `projectile_scene` | `PackedScene` | Кастомная сцена снаряда. null → default `bullet.tscn` (fallback для тестов) |
 | `projectile_speed` | `float` | Скорость |
 | `projectile_lifetime` | `float` | Живучесть |
-| `projectile_color` | `Color` | Цвет визуала снаряда |
+| `projectile_color` | `Color` | `modulate` для visual. Обычно `WHITE` — у каждого снаряда свой цветной sprite |
 | `projectiles_per_attack` | `int` | Сколько снарядов за одну атаку |
 | `spread_angle_deg` | `float` | Полный угол разброса |
 | `pierce` | `int` | Через сколько врагов пробивает (0 — не пробивает) |
+| `projectile_spawn_distance` | `float` | Смещение точки спавна вдоль direction, чтобы снаряд выходил от наконечника оружия |
+| `projectile_spawn_lateral_offset` | `float` | Боковое смещение (перпендикулярно direction) |
 
 ### Melee stats (для `melee_arc`, `melee_thrust`)
 
@@ -137,7 +139,7 @@ Warrior-карты (см. `upgrades.md`):
 
 ## Archer — projectile
 
-Классические ranged-оружия используют текущий `bullet.tscn` через `WeaponController._attack_projectile`. Идентифицируются через `style = archer`, `attack_type = projectile` и v2-поля (`projectile_speed / lifetime / color / pierce`).
+Классические ranged-оружия используют собственные projectile scenes (см. «Player projectile identity» ниже) через `WeaponController._attack_projectile`. Идентифицируются через `style = archer`, `attack_type = projectile` и v2-поля (`projectile_speed / lifetime / color / pierce`).
 
 **Pierce.** Поле `pierce: int` в `WeaponResource`. Bullet `apply_weapon` копирует его в `_pierce_remaining`. При попадании во врага:
 1. если враг уже был в `_hit_bodies` (Area2D может слать `body_entered` повторно) — пропускаем;
@@ -173,11 +175,45 @@ i18n: `WEAPON_APPRENTICE_STAFF`.
 `style = mage`, `attack_type = spell_projectile`, `damage = 1`, `attack_interval = 0.24`, `projectile_speed = 230`, `projectile_lifetime = 1.0`, `spread_angle_deg = 4`. Пурпурный, лёгкий частый cast.
 i18n: `WEAPON_WAND`.
 
-## Пуля игрока (`bullet.tscn`)
+## Player projectile identity
 
-`Area2D` с `Polygon2D` радиуса 2. Метод `apply_weapon(weapon)` копирует `damage / speed / lifetime / projectile_color` из ресурса.
+Каждое ranged/magic оружие использует собственную projectile scene с узнаваемым sprite'ом и shape'ом. Общий `bullet.tscn` остаётся как safety-fallback для тестов и для оружия без явного `projectile_scene`.
 
-**Поведение:** движется `direction * speed`; при `body_entered` игнорит группу `player`, наносит `damage` через `take_damage` если у ноды есть метод, и уничтожается. Self-destroy через `lifetime`.
+| Оружие | Projectile scene | Sprite (px) | Shape | Rotation | Spawn distance |
+|--------|------------------|------------:|-------|----------|---------------:|
+| Short Bow | `scenes/bullets/player_arrow.tscn` | 12×5 деревянная стрела с оперением | `RectangleShape2D(12×4)` | вдоль direction | 8 |
+| Crossbow | `scenes/bullets/player_crossbow_bolt.tscn` | 9×5 короткий стальной bolt | `RectangleShape2D(9×4)` | вдоль direction | 10 |
+| Wand | `scenes/bullets/player_wand_orb.tscn` | 7×7 компактный пурпурный orb | `CircleShape2D(3.0)` | нет (круглый) | 7 |
+| Apprentice Staff | `scenes/bullets/player_staff_orb.tscn` | 11×11 крупный сине-голубой orb | `CircleShape2D(5.0)` | нет (круглый) | 9 |
+
+Все четыре сцены используют один скрипт `scenes/bullets/bullet.gd` — он наносит урон **врагам**, не игроку. Enemy-projectiles (`arrow_bullet.tscn`, `magic_bolt_bullet.tscn`, `dark_orb_bullet.tscn`) используют другой скрипт (`enemy_bullet.gd`) с обратной damage-логикой и не должны переиспользоваться для оружия игрока.
+
+### `bullet.gd` fields (v2)
+
+- `rotate_with_direction: bool` — вытянутые снаряды (стрела, болт) поворачиваются вдоль direction, чтобы наконечник смотрел в сторону полёта. Круглые orbs держат `rotation = 0`.
+- `rotation_offset: float` — смещение rotation (радианы) для случаев, когда исходный sprite нарисован не «вправо».
+- `_pending_visual_color: Color` — кешированный projectile color. `WeaponController` выставляет direction и `apply_weapon_stats(...)` **до** `add_child`, но `@onready _visual` в этот момент ещё `null` — тогда modulate падал в никуда. `_ready` читает кеш и применяет `modulate` уже при существующем `_visual`.
+
+### Spawn origin
+
+`WeaponController._attack_projectile` считает spawn point от игрока:
+
+```gdscript
+spawn_origin =
+    player.global_position
+    + direction * weapon.projectile_spawn_distance
+    + direction.orthogonal() * weapon.projectile_spawn_lateral_offset
+```
+
+Для оружия без явного `projectile_spawn_distance` (`= 0`) поведение идентично старому — снаряд рождается в центре игрока. Ненулевое значение сдвигает spawn на расстояние оружия — стрела выходит от лука, orb — от кончика жезла.
+
+`direction.orthogonal()` направлен на 90° влево от direction, поэтому положительный `projectile_spawn_lateral_offset` смещает spawn влево от аимом. По умолчанию 0 — все текущие оружия симметричные.
+
+## Общий bullet.tscn (fallback / тесты)
+
+`Area2D` с `Sprite2D` (радиус 2). Метод `apply_weapon(weapon)` копирует `damage / speed / lifetime / projectile_color` из ресурса. Используется как safety-fallback, если у оружия не задан `projectile_scene`, и как база для тестов, независимых от конкретной projectile identity.
+
+**Поведение:** движется `direction * speed`; при `body_entered` игнорит группу `player`, наносит `damage` через `take_damage` если у ноды есть метод, и уничтожается. Self-destroy через `lifetime`. Не-урон-цели (StaticBody2D стен) гасят пулю независимо от pierce.
 
 Скрипт: `scenes/bullets/bullet.gd`.
 
