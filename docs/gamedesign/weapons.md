@@ -282,7 +282,7 @@ show_behind_parent = aim_direction.y < WEAPON_BEHIND_Y_THRESHOLD  # -0.25
 ### Flip_h policy
 
 - **Side-rest**: `flip_h = _facing < 0` — при facing left sprite отражается. Ассиметричный клинок (blade вверху PNG, handle внизу) остаётся ориентирован правильно.
-- **Aim-aligned**: `flip_h = false` всегда. Оружие крутится через rotation по aim direction (полный 360°). Flip у ассиметричного sprite (например, тетива лука в колонке 6 из 16) сдвигает pivot между сторонами — тетива оказывается за краем при facing left.
+- **Aim-aligned**: `flip_h = false` всегда. Оружие крутится через rotation по aim direction (полный 360°). Flip у ассиметричного sprite сдвигает pivot между сторонами — handle оружия оказывается за краем при facing left.
 
 ### Icon vs held
 

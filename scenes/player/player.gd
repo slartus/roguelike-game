@@ -118,7 +118,7 @@ func _apply_weapon_visual(weapon: WeaponResource) -> void:
 	_weapon_sprite.scale = weapon.held_scale
 	# Pivot policy:
 	# - Явный held_sprite_offset (!= ZERO) → используем как есть. Позволяет
-	#   точно указать handle (например, тетиву лука в колонке 6 из 16).
+	#   точно указать handle оружия внутри PNG.
 	# - aim-aligned → center pivot (offset=ZERO). Оружие вращается вокруг
 	#   центра PNG, тетива/наконечник примерно у руки игрока.
 	# - side-rest (sword, dagger) → bottom pivot. Sprite convention: handle
