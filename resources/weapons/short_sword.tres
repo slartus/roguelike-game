@@ -20,3 +20,4 @@ hitbox_width = 42.0
 hitbox_length = 34.0
 active_time = 0.08
 knockback = 40.0
+held_rest_rotation = 0.35

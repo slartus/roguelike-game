@@ -59,6 +59,30 @@ extends Resource
 @export var status_effect: String = ""
 @export var area_radius: float = 0.0
 
+# --- Held visuals (в руке игрока) ---
+# Разделяем icon (мировой pickup + HUD) и held (Sprite2D "Weapon" у Player).
+# held_texture = null → fallback на icon_texture (совместимо с
+# короткими .tres без явной held-metadata).
+@export var held_texture: Texture2D
+@export var held_sprite_offset: Vector2 = Vector2.ZERO
+@export var held_scale: Vector2 = Vector2.ONE
+# Player рендерит оружие с пиксельным смещением от корпуса. Дефолт (5, 3)
+# совпадает с исходной константой HAND_X/Y_OFFSET в player.gd.
+@export var held_hand_offset: Vector2 = Vector2(5, 3)
+# Для side-rest оружия — угол наклона от вертикали в rest pose.
+# Знак умножается на _facing, чтобы клинок смотрел «наружу» от игрока.
+# 0.0 → без наклона (проекционные оружия по умолчанию).
+@export var held_rest_rotation: float = 0.0
+# true → в rest oружие следует aim direction (курсору) вместо side-rest.
+# Актуально для лука, арбалета, копья, жезла — они должны смотреть на цель.
+@export var held_aim_aligned: bool = false
+# Смещение rotation при aim-aligned. Используется если исходный sprite
+# нарисован «вверх» и нужно повернуть его на PI/2, чтобы «вправо».
+@export var held_aim_rotation_offset: float = 0.0
+
+func get_held_texture() -> Texture2D:
+	return held_texture if held_texture != null else icon_texture
+
 # --- Helpers для единого доступа к параметрам ---
 # Клиенты (bullet, WeaponStats, debug UI) читают всё через эти helper'ы —
 # фасад пережил legacy fallback fields и остаётся стабильным API.

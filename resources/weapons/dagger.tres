@@ -20,3 +20,5 @@ hitbox_width = 22.0
 hitbox_length = 24.0
 active_time = 0.06
 knockback = 10.0
+held_scale = Vector2(0.7, 0.7)
+held_rest_rotation = 0.35

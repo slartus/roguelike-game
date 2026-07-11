@@ -61,9 +61,9 @@ func test_weapon_sprite_modulate_matches_icon_modulate() -> void:
 
 func test_equip_updates_weapon_sprite_texture() -> void:
 	# Смена оружия в игре: pickup → equip → Weapon-нода перерисовывается
-	# с новой текстурой. Раньше проверяли modulate (для placeholder-эры
-	# когда все использовали dagger.png), теперь у каждого свой спрайт —
-	# сравниваем именно texture.
+	# с новой текстурой. Используем `get_held_texture()` — оно даёт
+	# held_texture если задан, иначе fallback на icon_texture (все текущие
+	# .tres используют fallback).
 	GameState.equipped_weapon = ShortSwordRes
 	var player := _make_player()
 	await get_tree().process_frame
@@ -72,7 +72,7 @@ func test_equip_updates_weapon_sprite_texture() -> void:
 	player.equip(ShortBowRes)
 	assert_ne(weapon_sprite.texture, before_texture,
 		"после equip другого оружия texture обновляется")
-	assert_eq(weapon_sprite.texture, ShortBowRes.icon_texture)
+	assert_eq(weapon_sprite.texture, ShortBowRes.get_held_texture())
 
 func test_play_attack_visual_does_not_crash_for_melee() -> void:
 	GameState.equipped_weapon = ShortSwordRes
@@ -85,16 +85,21 @@ func test_play_attack_visual_does_not_crash_for_melee() -> void:
 	assert_true(is_instance_valid(player), "player жив, tween не крешит")
 
 func test_play_attack_visual_does_not_swing_weapon_for_projectile() -> void:
-	# Для projectile-оружия свинг оружия не запускается — только выпад
-	# тела. Weapon-нода остаётся с rotation = 0.
+	# Для projectile-оружия свинг оружия не запускается — только recoil
+	# сдвиг корпуса и оружия назад. Rotation остаётся близкой к rest.
+	# Bow aim-aligned, поэтому вырубаем physics_process — иначе mouse-based
+	# aim крутит sprite фоном (get_global_mouse_position в тесте недетерминирована).
 	GameState.equipped_weapon = ShortBowRes
 	var player := _make_player()
 	await get_tree().process_frame
+	player.set_physics_process(false)
 	var weapon_sprite: Sprite2D = player.get_node("Weapon")
+	player.face(1)
+	var rest_rotation := weapon_sprite.rotation
 	player.play_attack_visual(Vector2(50, 0), ShortBowRes)
 	await get_tree().process_frame
-	assert_almost_eq(weapon_sprite.rotation, 0.0, 0.001,
-		"для лука Weapon-нода не вращается")
+	assert_almost_eq(weapon_sprite.rotation, rest_rotation, 0.001,
+		"для лука Weapon-нода не вращается (rotation ≈ rest)")
 
 func test_play_attack_visual_zero_direction_is_safe() -> void:
 	# Регресс: клик в текущую позицию игрока → direction Vector2.ZERO,
@@ -126,10 +131,15 @@ func test_melee_weapon_has_rest_tilt() -> void:
 		"melee weapon в rest должен быть наклонён (rotation != 0)")
 
 func test_projectile_weapon_has_no_rest_tilt() -> void:
-	# Лук/арбалет в rest — вертикально, наклон только у melee.
+	# Лук/арбалет в rest (facing-based, без aim-tracking) — вертикально,
+	# наклон только у melee. С включённой физикой aim-aligned bow крутится
+	# по курсору — отключаем physics для детерминизма, тестируем именно
+	# rest state через _apply_facing_visuals.
 	GameState.equipped_weapon = ShortBowRes
 	var player := _make_player()
 	await get_tree().process_frame
+	player.set_physics_process(false)
+	player.face(1)
 	var weapon_sprite: Sprite2D = player.get_node("Weapon")
 	assert_almost_eq(weapon_sprite.rotation, 0.0, 0.001,
 		"projectile weapon в rest не наклоняется")

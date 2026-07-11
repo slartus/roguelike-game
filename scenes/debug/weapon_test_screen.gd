@@ -169,6 +169,11 @@ func _process(_delta: float) -> void:
 	_preview_weapon.position = _player_weapon.position
 	_preview_weapon.rotation = _player_weapon.rotation
 	_preview_weapon.flip_h = _player_weapon.flip_h
+	# scale — критично для Dagger (held_scale = (0.7, 0.7)); без него preview
+	# показывал бы кинжал full-size. show_behind_parent — z-order при aim
+	# вверх, чтобы preview отражал реальный layering.
+	_preview_weapon.scale = _player_weapon.scale
+	_preview_weapon.show_behind_parent = _player_weapon.show_behind_parent
 
 # Обновляет панель справа-снизу под текущее оружие игрока. weapon == null →
 # скрываем 5 stat-строк, показываем placeholder «оружие не взято». Иначе —
