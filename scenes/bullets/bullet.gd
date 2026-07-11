@@ -25,8 +25,8 @@ func _physics_process(delta: float) -> void:
 func apply_weapon(weapon: WeaponResource) -> void:
 	if weapon == null:
 		return
-	# Читаем через get_* helper'ы — так пуля одинаково работает и с legacy
-	# оружием (Dagger/Pistol), и с новыми v2 ресурсами (short_bow, wand).
+	# Читаем через get_* helper'ы — они остаются стабильным API после удаления
+	# legacy fallback fields, чтобы не менять callsite'ы разом со схемой.
 	damage = weapon.damage
 	speed = weapon.get_projectile_speed()
 	lifetime = weapon.get_projectile_lifetime()

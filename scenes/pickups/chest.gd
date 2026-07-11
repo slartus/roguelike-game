@@ -1,9 +1,9 @@
 extends Area2D
 
-# Классический fantasy-пул. Dagger/Pistol/Shotgun (legacy shooter-стиль)
-# остаются в проекте как ресурсы, но выведены из активного chest pool —
-# они не должны выпадать в новой RPG-игре.
+# Полный fantasy-пул. Dagger теперь — melee_arc warrior-оружие, а не
+# legacy shooter, поэтому входит в общий сундук вместе с остальными.
 const WEAPON_POOL: Array[WeaponResource] = [
+	preload("res://resources/weapons/dagger.tres"),
 	preload("res://resources/weapons/short_sword.tres"),
 	preload("res://resources/weapons/spear.tres"),
 	preload("res://resources/weapons/short_bow.tres"),

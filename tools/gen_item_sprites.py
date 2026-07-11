@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Генератор pixel-art спрайтов предметов: оружие, сундуки, портал.
+Генератор pixel-art спрайтов предметов: dagger, сундуки, портал.
 
-- weapons/dagger.png, pistol.png, shotgun.png — 16×16 иконки для
-  WeaponPickup (на полу) и потенциально HUD.
+- weapons/dagger.png — 16×16 иконка для WeaponPickup (на полу) и HUD.
+  Остальные fantasy оружия (short_sword, spear, short_bow, crossbow,
+  wand, apprentice_staff) генерируются `tools/gen_weapon_sprites.py`.
 - pickups/chest_closed.png, chest_open.png — 20×16, сундук в двух
   состояниях. Открытие меняет текстуру Sprite2D.
 - pickups/portal.png — 24×32, магический портал (дверь на след. этаж).
@@ -61,71 +62,6 @@ DAGGER = [
     ".....DHhhHD.....",
     ".....DHhhHD.....",
     "......DHHD......",
-    "................",
-]
-
-
-# ============================================================================
-# PISTOL 16×16 — короткий пистолет
-# ============================================================================
-PISTOL_PALETTE = {
-    ".": (0, 0, 0, 0),
-    "M": (180, 185, 195, 255),   # металл
-    "m": (110, 115, 125, 255),   # тень металла
-    "D": (40, 42, 50, 255),      # контур
-    "H": (95, 55, 30, 255),      # деревянная рукоять
-    "h": (60, 35, 15, 255),
-    "S": (240, 220, 60, 255),    # спуск (золотистый)
-}
-PISTOL = [
-    "................",
-    "................",
-    "....DMMMMMMMD...",
-    "...DMMmmmmmmD...",
-    "...DMMMMMMMMD...",
-    "...DDDDMDDDDD...",
-    "......DMD.......",
-    "....DDDMDDD.....",
-    "....DHHHHHD.....",
-    "....DHhhhHD.....",
-    "....DHhSSHD.....",
-    "....DHhhhHD.....",
-    "....DHhhhHD.....",
-    "....DHHHHHD.....",
-    ".....DDDDD......",
-    "................",
-]
-
-
-# ============================================================================
-# SHOTGUN 16×16 — обрез с длинным двуствольным дулом
-# ============================================================================
-SHOTGUN_PALETTE = {
-    ".": (0, 0, 0, 0),
-    "M": (150, 155, 165, 255),   # металл (светлее)
-    "m": (95, 100, 110, 255),
-    "D": (35, 37, 45, 255),
-    "H": (105, 65, 30, 255),
-    "h": (65, 40, 15, 255),
-    "S": (245, 220, 60, 255),
-    "K": (25, 15, 8, 255),       # тёмное дуло
-}
-SHOTGUN = [
-    "................",
-    "................",
-    ".DMMMMMMMMMMMMD.",   # длинное двуствольное дуло
-    ".DMKKKKKKKKKKMD.",
-    ".DMMMMMMMMMMMMD.",
-    ".DMKKKKKKKKKKMD.",
-    ".DMMMMMMMMMMMMD.",
-    ".DDDDDDDDDDMMMMD",   # переход к рукояти
-    "...........DMHD.",
-    "..........DHHHD.",
-    "..........DHhSHD",
-    "..........DHhhHD",
-    "..........DHhhHD",
-    "..........DHHHD.",
-    "...........DDD..",
     "................",
 ]
 
@@ -251,8 +187,6 @@ PORTAL = [
 
 SPRITES: list[tuple[str, list[str], dict[str, tuple[int, int, int, int]]]] = [
     ("weapons/dagger.png", DAGGER, DAGGER_PALETTE),
-    ("weapons/pistol.png", PISTOL, PISTOL_PALETTE),
-    ("weapons/shotgun.png", SHOTGUN, SHOTGUN_PALETTE),
     ("pickups/chest_closed.png", CHEST_CLOSED, CHEST_CLOSED_PALETTE),
     ("pickups/chest_open.png", CHEST_OPEN, CHEST_OPEN_PALETTE),
     ("pickups/portal.png", PORTAL, PORTAL_PALETTE),

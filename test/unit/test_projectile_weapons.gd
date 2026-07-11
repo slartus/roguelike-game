@@ -130,11 +130,27 @@ func test_pierce_bullet_destroyed_by_wall_does_not_pierce_through() -> void:
 	assert_false(is_instance_valid(bullet),
 		"пуля должна быть уничтожена стеной, а не потратить один pierce")
 
-func test_bullet_pierce_defaults_to_zero_for_legacy_weapon() -> void:
-	# Legacy Dagger не задаёт pierce → default 0.
-	var dagger: WeaponResource = preload("res://resources/weapons/dagger.tres")
+func test_bullet_pierce_defaults_to_zero_for_weapon_without_pierce() -> void:
+	# Оружие без явного pierce должно давать pierce=0 у пули.
+	# Пример: короткий лук без апгрейдов.
 	var bullet := BulletScene.instantiate()
-	bullet.apply_weapon(dagger)
+	bullet.apply_weapon(ShortBowRes)
 	add_child_autofree(bullet)
 	assert_eq(bullet.pierce, 0,
-		"legacy dagger без pierce → default 0, обратная совместимость")
+		"weapon без pierce → default 0")
+
+func test_dagger_is_melee_arc_not_projectile() -> void:
+	# После fantasy overhaul dagger — melee_arc warrior оружие, не projectile.
+	var dagger: WeaponResource = preload("res://resources/weapons/dagger.tres")
+	assert_eq(dagger.attack_type, "melee_arc",
+		"dagger — melee_arc после миграции")
+	assert_eq(dagger.style, "warrior",
+		"dagger — warrior style")
+
+func test_dagger_does_not_spawn_projectile() -> void:
+	# После миграции dagger не должен создавать снаряд — только melee hitbox.
+	# WeaponController.try_attack на melee_arc идёт в _attack_melee, не
+	# _attack_projectile. Дополнительно проверим что projectile_scene не задан.
+	var dagger: WeaponResource = preload("res://resources/weapons/dagger.tres")
+	assert_null(dagger.projectile_scene,
+		"dagger.projectile_scene должен быть пустым для melee")

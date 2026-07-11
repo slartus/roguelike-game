@@ -16,8 +16,6 @@ const WEAPON_ROSTER: Array[WeaponResource] = [
 	preload("res://resources/weapons/spear.tres"),
 	preload("res://resources/weapons/short_bow.tres"),
 	preload("res://resources/weapons/crossbow.tres"),
-	preload("res://resources/weapons/pistol.tres"),
-	preload("res://resources/weapons/shotgun.tres"),
 	preload("res://resources/weapons/apprentice_staff.tres"),
 	preload("res://resources/weapons/wand.tres"),
 ]
@@ -195,10 +193,9 @@ func _refresh_weapon_info(weapon: WeaponResource) -> void:
 	if interval > 0.0:
 		_info_speed_label.text = tr("UI_DEBUG_WEAPON_SPEED") % (1.0 / interval)
 	else:
-		# Guard от нулевого интервала. Все .tres задают положительный
-		# get_attack_interval (fallback на legacy fire_interval), но если
-		# ресурс сломан — честнее показать «—», чем `Speed: 0.0/s`, будто
-		# оружие никогда не бьёт.
+		# Guard от нулевого интервала. Все fantasy .tres задают положительный
+		# attack_interval, но если ресурс сломан — честнее показать «—», чем
+		# `Speed: 0.0/s`, будто оружие никогда не бьёт.
 		_info_speed_label.text = "—"
 
 func _spawn_weapon_row() -> void:

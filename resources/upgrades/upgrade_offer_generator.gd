@@ -30,6 +30,12 @@ static func generate_offer(
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _compute_seed(context)
 	var eligible: Array = PlayerUpgradeLibrary.get_eligible_upgrades(current_stacks)
+	# Фильтр по attack_type текущего оружия. Карта с required_attack_types
+	# и/или excluded_attack_types становится «мёртвой» для несовместимого
+	# оружия — генератор её вообще не предлагает, чтобы игрок не тратил
+	# слот на бесполезный бонус (например, sweeping_blade для копья).
+	var current_attack_type: String = String(context.get("current_weapon_attack_type", ""))
+	eligible = _filter_by_attack_type(eligible, current_attack_type)
 	if eligible.is_empty():
 		return []
 
@@ -117,4 +123,21 @@ static func _filter_out_used(pool: Array, used_ids: Dictionary) -> Array:
 	for upgrade in pool:
 		if not used_ids.has(upgrade.id):
 			out.append(upgrade)
+	return out
+
+# Убирает карты, чей required_attack_types не покрывает current, либо чей
+# excluded_attack_types покрывает current. Пустой current (нет оружия)
+# считается совместимым со всеми — иначе игрок без weapon вообще ничего
+# не увидит.
+static func _filter_by_attack_type(pool: Array, current_attack_type: String) -> Array:
+	if current_attack_type == "":
+		return pool
+	var out: Array = []
+	for upgrade in pool:
+		if upgrade.required_attack_types.size() > 0 \
+				and not upgrade.required_attack_types.has(current_attack_type):
+			continue
+		if upgrade.excluded_attack_types.has(current_attack_type):
+			continue
+		out.append(upgrade)
 	return out

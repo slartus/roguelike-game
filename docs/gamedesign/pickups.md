@@ -39,7 +39,7 @@
 
 `Sprite2D` с текстурой из `weapon.icon_texture` (16×16), окрашенный через `modulate = weapon.icon_modulate`. Коллизия 14×14. Хранит ссылку на `WeaponResource`.
 
-Поле `icon_modulate: Color = Color.WHITE` в `WeaponResource` — управляет цветом мирового пикапа независимо от `bullet_color` (тот теперь только про снаряд). У всех 9 оружий есть собственный 16×16 pixel-art спрайт, поэтому `icon_modulate` во всех `.tres` оставлен `WHITE` — цвет несёт сам спрайт. Legacy Dagger/Pistol/Shotgun генерируются `tools/gen_item_sprites.py`, v2 six (Sword/Spear/Bow/Crossbow/Staff/Wand) — `tools/gen_weapon_sprites.py`.
+Поле `icon_modulate: Color = Color.WHITE` в `WeaponResource` — управляет цветом мирового пикапа независимо от `projectile_color` (тот только про снаряд). У всех семи fantasy-оружий есть собственный 16×16 pixel-art спрайт, поэтому `icon_modulate` во всех `.tres` оставлен `WHITE` — цвет несёт сам спрайт. Dagger генерируется `tools/gen_item_sprites.py`, остальные шесть (Sword/Spear/Bow/Crossbow/Staff/Wand) — `tools/gen_weapon_sprites.py`.
 
 **Поведение:** при контакте с игроком вызывает `player.equip(weapon)` и удаляется. Игрок сохраняет новое оружие в `GameState.equipped_weapon` — оно живёт до конца забега.
 
@@ -55,12 +55,12 @@
 
 **Поведение:** при первом контакте с игроком texture меняется на `open_texture`, `monitoring` выключается (повторно не сработает), спавнит `WeaponPickup` со случайным оружием из пула. Пикап появляется чуть ниже сундука (`+Vector2(0, 14)`) чтобы игрок не подобрал его тут же.
 
-**Пул (v2, fantasy-стиль):** `chest.gd::WEAPON_POOL` — 6 классических оружий, по 2 на style:
-- Warrior: `short_sword.tres`, `spear.tres`;
+**Пул (fantasy-стиль):** `chest.gd::WEAPON_POOL` — 7 fantasy оружий:
+- Warrior: `dagger.tres`, `short_sword.tres`, `spear.tres`;
 - Archer: `short_bow.tres`, `crossbow.tres`;
 - Mage: `apprentice_staff.tres`, `wand.tres`.
 
-Legacy `Dagger`, `Pistol`, `Shotgun` **выведены** из активного пула — ресурсы остаются в проекте как исторические, но выпасть в забеге не могут.
+Firearm-контент (Pistol, Shotgun) полностью удалён из проекта.
 
 **Выбор:** `_choose_weapon()` фильтрует пул, исключая текущее оружие игрока (сравнение по `weapon.id`) — так сундук всегда даёт что-то новое. Если по фильтру ничего не осталось (пул из одного элемента или `GameState.equipped_weapon == null`), fallback — равновероятный выбор из всего пула.
 

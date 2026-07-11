@@ -48,6 +48,7 @@ func _show_next_pending_offer() -> void:
 		"current_floor_number": GameState.current_floor_number,
 		"offer_counter": GameState.upgrade_offer_counter,
 		"current_weapon_style": _current_weapon_style(),
+		"current_weapon_attack_type": _current_weapon_attack_type(),
 	}
 	var offer: Array = UpgradeOfferGenerator.generate_offer(
 		context, GameState.player_upgrade_stacks
@@ -129,3 +130,8 @@ func _current_weapon_style() -> String:
 	if GameState.equipped_weapon == null:
 		return ""
 	return GameState.equipped_weapon.style
+
+func _current_weapon_attack_type() -> String:
+	if GameState.equipped_weapon == null:
+		return ""
+	return GameState.equipped_weapon.attack_type

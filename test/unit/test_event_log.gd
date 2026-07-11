@@ -42,8 +42,8 @@ func test_log_heal_format() -> void:
 	assert_eq(_tints[0], EventLog.HEAL_TINT)
 
 func test_log_weapon_pickup_format() -> void:
-	EventLog.log_weapon_pickup("WEAPON_SHOTGUN")
-	assert_eq(_texts[0], "Взято оружие: Дробовик")
+	EventLog.log_weapon_pickup("WEAPON_SPEAR")
+	assert_eq(_texts[0], "Взято оружие: Копьё")
 	assert_eq(_tints[0], EventLog.WEAPON_TINT)
 
 func test_log_chest_open_format() -> void:

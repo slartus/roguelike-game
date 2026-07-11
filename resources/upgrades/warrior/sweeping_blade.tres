@@ -12,3 +12,4 @@ max_stacks = 2
 style = "warrior"
 effect_type = "melee_arc_multiplier"
 parameters = {"multiplier": 1.15}
+required_attack_types = Array[String](["melee_arc"])

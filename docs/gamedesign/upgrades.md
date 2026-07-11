@@ -119,6 +119,10 @@ Second Wind сбрасывается в `next_floor()` и `reset_run()`. Это 
 | `sweeping_blade` | uncommon | 2 | arc_degrees × 1.15 (только `melee_arc`) |
 | `pushback` | common | 2 | knockback +20 |
 
+**Sweeping Blade и фильтр по attack_type.** У `PlayerUpgradeResource` есть поля `required_attack_types: Array[String]` и `excluded_attack_types: Array[String]`. Sweeping Blade объявляет `required_attack_types = ["melee_arc"]` — генератор офферов (`UpgradeOfferGenerator._filter_by_attack_type`) не предлагает её, если текущее оружие игрока имеет `attack_type != "melee_arc"`. Так копьё (`melee_thrust`) не получает мёртвое предложение: `arc_degrees` у thrust не применяется, карта была бы визуально в UI, но без эффекта.
+
+Другие warrior-карты остаются доступны для копья. Пустой список `required_attack_types` (у большинства карт) означает «работает на любом типе атаки». Фильтр по `excluded_attack_types` — обратный: карта исключается для перечисленных типов.
+
 ### Archer (`resources/upgrades/archer/`)
 
 | ID | Rarity | Max | Effect |

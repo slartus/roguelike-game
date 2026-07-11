@@ -44,8 +44,12 @@ const RANGED_SPECS := {
 
 const WEAPON_TRES_PATHS: Array[String] = [
 	"res://resources/weapons/dagger.tres",
-	"res://resources/weapons/pistol.tres",
-	"res://resources/weapons/shotgun.tres",
+	"res://resources/weapons/short_sword.tres",
+	"res://resources/weapons/spear.tres",
+	"res://resources/weapons/short_bow.tres",
+	"res://resources/weapons/crossbow.tres",
+	"res://resources/weapons/wand.tres",
+	"res://resources/weapons/apprentice_staff.tres",
 ]
 
 const CHARGER_PATH := "res://scenes/enemies/charger.tscn"
