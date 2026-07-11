@@ -272,12 +272,17 @@ rotation = aim_direction.angle() + held_aim_rotation_offset
 
 ### Z-order layering — `_update_weapon_layering(aim_direction)`
 
-При прицеливании вверх оружие уходит **за** спрайт игрока:
+**Side-rest melee** (Sword, Dagger) — при прицеливании вверх уходят **за** спрайт игрока (читается как «замах над плечом»):
 ```
 show_behind_parent = aim_direction.y < WEAPON_BEHIND_Y_THRESHOLD  # -0.25
 ```
 
-Порог даёт гистерезис у горизонтали, чтобы sprite не мерцал при aim ровно вбок.
+**Aim-aligned** (Bow, Crossbow, Spear, Wand, Apprentice Staff) — всегда **перед** игроком. Они «стрелковые»: tip должен быть виден по направлению aim, иначе стрельба вверх не читается визуально.
+
+### Flip_h policy
+
+- **Side-rest**: `flip_h = _facing < 0` — при facing left sprite отражается. Ассиметричный клинок (blade вверху PNG, handle внизу) остаётся ориентирован правильно.
+- **Aim-aligned**: `flip_h = false` всегда. Оружие крутится через rotation по aim direction (полный 360°). Flip у ассиметричного sprite (например, тетива лука в колонке 5 из 16) сдвигает pivot между сторонами — тетива оказывается за краем при facing left.
 
 ### Icon vs held
 

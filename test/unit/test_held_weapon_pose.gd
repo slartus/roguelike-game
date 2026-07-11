@@ -148,6 +148,42 @@ func test_weapon_in_front_when_aiming_right() -> void:
 	assert_false(weapon_sprite.show_behind_parent,
 		"aim вправо → оружие перед игроком")
 
+func test_aim_aligned_weapon_never_goes_behind_body_when_aiming_up() -> void:
+	# Aim-aligned оружия (лук, арбалет, копьё, жезл, посох) остаются перед
+	# игроком всегда — они «стрелковые», tip должен быть виден по aim.
+	# Regression: пользователь заметил что копьё/лук/жезл/посох уходили
+	# ЗА игрока при повороте вверх — это было by design threshold, но
+	# неправильно для aim-aligned.
+	GameState.equipped_weapon = ShortBowRes
+	var player := _make_player()
+	await get_tree().process_frame
+	player._update_weapon_pose(Vector2.UP)
+	var weapon_sprite: Sprite2D = player.get_node("Weapon")
+	assert_false(weapon_sprite.show_behind_parent,
+		"aim-aligned bow остаётся перед игроком при aim вверх")
+
+func test_aim_aligned_weapon_never_flips_horizontally() -> void:
+	# Aim-aligned оружия не должны flip_h — они крутятся через rotation по
+	# aim direction. Flip у ассиметричного sprite (bow: тетива в col 5)
+	# сдвигает pivot между сторонами, ломая held offset.
+	GameState.equipped_weapon = ShortBowRes
+	var player := _make_player()
+	await get_tree().process_frame
+	player.face(-1)
+	var weapon_sprite: Sprite2D = player.get_node("Weapon")
+	assert_false(weapon_sprite.flip_h,
+		"aim-aligned bow не должен flip_h даже при facing left")
+
+func test_side_rest_weapon_still_flips_when_facing_left() -> void:
+	# Sword (side-rest) — flip_h работает как раньше.
+	GameState.equipped_weapon = ShortSwordRes
+	var player := _make_player()
+	await get_tree().process_frame
+	player.face(-1)
+	var weapon_sprite: Sprite2D = player.get_node("Weapon")
+	assert_true(weapon_sprite.flip_h,
+		"side-rest sword flip_h=true при facing left")
+
 func test_layering_transitions_at_threshold() -> void:
 	# Порог -0.25 y-компоненты: aim (1, -0.2).normalized() → y ≈ -0.196,
 	# всё ещё «перед». aim (1, -0.5).normalized() → y ≈ -0.447, «сзади».

@@ -141,7 +141,15 @@ func _apply_facing_visuals() -> void:
 		return
 	var hand_offset: Vector2 = _get_hand_offset()
 	_weapon_sprite.position = Vector2(hand_offset.x * _facing, hand_offset.y)
-	_weapon_sprite.flip_h = _facing < 0
+	# flip_h нужен только для side-rest оружий (sword, dagger) — их sprite
+	# ассиметричен «клинок вверх, handle вниз», и при facing left визуал
+	# инвертируется. Aim-aligned оружия крутятся через rotation по aim
+	# direction, поэтому им flip не нужен (иначе pivot ассиметричного
+	# sprite'а — как тетива лука — прыгает между сторонами).
+	if equipped_weapon != null and equipped_weapon.held_aim_aligned:
+		_weapon_sprite.flip_h = false
+	else:
+		_weapon_sprite.flip_h = _facing < 0
 	_weapon_sprite.rotation = _get_rest_rotation()
 
 # Aim-based обновление pose. Вызывается каждый physics tick. Для
@@ -159,18 +167,27 @@ func _update_weapon_pose(aim_direction: Vector2) -> void:
 		return
 	var hand_offset: Vector2 = _get_hand_offset()
 	_weapon_sprite.position = Vector2(hand_offset.x * _facing, hand_offset.y)
-	_weapon_sprite.flip_h = _facing < 0
+	# flip_h: side-rest — по facing; aim-aligned — никогда (см. пояснение
+	# в _apply_facing_visuals).
+	if equipped_weapon.held_aim_aligned:
+		_weapon_sprite.flip_h = false
+	else:
+		_weapon_sprite.flip_h = _facing < 0
 	if equipped_weapon.held_aim_aligned and aim_direction != Vector2.ZERO:
 		_weapon_sprite.rotation = aim_direction.angle() + equipped_weapon.held_aim_rotation_offset
 	else:
 		_weapon_sprite.rotation = _get_rest_rotation()
 	_update_weapon_layering(aim_direction)
 
-# Z-order: оружие уходит за спрайт игрока при прицеливании вверх.
-# При aim вниз / вправо / влево — рисуется перед. Threshold с гистерезисом
-# защищает от мерцания на границе.
+# Z-order: side-rest melee (sword, dagger) уходит за спрайт игрока при
+# прицеливании вверх — читается как «замах над плечом». Aim-aligned
+# оружия (лук, арбалет, копьё, жезл, посох) остаются перед игроком всегда:
+# они «стрелковые», их tip должен быть виден по aim direction.
 func _update_weapon_layering(aim_direction: Vector2) -> void:
 	if _weapon_sprite == null or not _weapon_sprite.visible:
+		return
+	if equipped_weapon != null and equipped_weapon.held_aim_aligned:
+		_weapon_sprite.show_behind_parent = false
 		return
 	_weapon_sprite.show_behind_parent = aim_direction.y < WEAPON_BEHIND_Y_THRESHOLD
 
