@@ -32,6 +32,20 @@ const SWING_OUT_DURATION: float = 0.06
 const SWING_BACK_DURATION: float = 0.12
 const WEAPON_SWING_ANGLE: float = PI * 0.55
 
+# Weapon в руке игрока. Позиция и rest-поза зависят от направления
+# «взгляда» — куда указывает мышь. Смещаем sprite по X в противоположную
+# сторону от игрока и наклоняем рукоятью вниз (для melee), так чтобы
+# читалось «игрок держит оружие в дальней руке под углом», а не
+# «клинок торчит из плеча».
+const HAND_X_OFFSET: float = 5.0
+const HAND_Y_OFFSET: float = 3.0
+# ~20° — слабый наклон от вертикали для меча/кинжала/копья в rest.
+# Знак умножается на _facing, чтобы клинок смотрел «наружу» от игрока.
+const MELEE_REST_ANGLE: float = 0.35
+# Порог по dx до мыши, ниже которого считаем «направление не задано»
+# и не переключаем facing — чтобы не дёргалось у самой точки под курсором.
+const FACING_DEADZONE_PX: float = 2.0
+
 var max_health: int
 var health: int
 var equipped_weapon: WeaponResource
@@ -40,6 +54,10 @@ var _poison_tick_timer: float = 0.0
 var _slow_source_count: int = 0
 var _visual_base_position: Vector2 = Vector2.ZERO
 var _swing_tween: Tween
+# +1 → игрок смотрит вправо, -1 → влево. Обновляется по направлению
+# к курсору (aim direction). Определяет сторону, где рендерится
+# оружие, и знак rest-угла для melee.
+var _facing: int = 1
 
 @onready var _weapon_controller: WeaponController = $WeaponController
 @onready var _visual: Sprite2D = $Visual
@@ -58,10 +76,12 @@ func _ready() -> void:
 	health_changed.emit(health, max_health)
 	weapon_changed.emit(equipped_weapon)
 
-# Показать модель оружия в правой руке игрока. Использует
-# icon_texture ресурса, окрашивает через icon_modulate.
-# Melee оружие рисуется чуть повёрнутым к вертикали (rest pose).
-# Ranged (лук/арбалет/посох) — то же смещение, но без вращения.
+# Показать модель оружия в руке игрока. Иконка спрайта нарисована как
+# «blade вверху PNG, handle внизу PNG» — офсет `-h/2` совмещает pivot
+# с handle, чтобы позиция ноды была именно в руке игрока (при вращении
+# handle не «убегает» из руки, а клинок описывает дугу над плечом).
+# Melee оружие получает rest-наклон ±MELEE_REST_ANGLE через
+# `_apply_facing_visuals`, ranged/spell остаются вертикально.
 func _apply_weapon_visual(weapon: WeaponResource) -> void:
 	if _weapon_sprite == null:
 		return
@@ -70,11 +90,43 @@ func _apply_weapon_visual(weapon: WeaponResource) -> void:
 		return
 	_weapon_sprite.texture = weapon.icon_texture
 	_weapon_sprite.modulate = weapon.icon_modulate
-	# Пивот в верхней точке текстуры — при вращении она вертится вокруг
-	# «рукояти», а не вокруг центра клинка (то же что у Skeleton).
-	_weapon_sprite.offset = Vector2(0, weapon.icon_texture.get_height() * 0.5)
-	_weapon_sprite.rotation = 0.0
+	_weapon_sprite.offset = Vector2(0, -weapon.icon_texture.get_height() * 0.5)
 	_weapon_sprite.visible = true
+	_apply_facing_visuals()
+
+# Перевешивает оружие с левой руки на правую (и наоборот), выставляет
+# rest-угол и `flip_h` под текущий `_facing`. Вызывается на смене
+# оружия и на смене направления взгляда.
+func _apply_facing_visuals() -> void:
+	if _weapon_sprite == null or not _weapon_sprite.visible:
+		return
+	_weapon_sprite.position = Vector2(HAND_X_OFFSET * _facing, HAND_Y_OFFSET)
+	_weapon_sprite.flip_h = _facing < 0
+	_weapon_sprite.rotation = _get_rest_rotation()
+
+func _get_rest_rotation() -> float:
+	if equipped_weapon == null:
+		return 0.0
+	if equipped_weapon.attack_type in ["melee_arc", "melee_thrust"]:
+		return MELEE_REST_ANGLE * _facing
+	return 0.0
+
+# Публичный хук: тесты не могут удобно эмулировать позицию мыши, а
+# `_physics_process` дёргает этот же метод от `get_global_mouse_position`.
+# Значения кроме ±1 игнорируются, знак нуля тоже — чтобы не менять facing.
+func face(direction: int) -> void:
+	if direction == 0 or direction == _facing:
+		return
+	_facing = 1 if direction > 0 else -1
+	# Активный swing tween был спланирован под старый facing (swing_target
+	# и restore rest_rotation captured'ы по знаку прошлого _facing). Если
+	# не убить — back-фаза вернёт rotation в чужой знак, а мгновенное
+	# присваивание в _apply_facing_visuals успеет перезаписаться tween'ом.
+	# Прерываем свинг: игрок в момент удара сменил направление курсора —
+	# честнее оборвать анимацию и мгновенно встать в новую rest-позу.
+	if _swing_tween != null and _swing_tween.is_valid():
+		_swing_tween.kill()
+	_apply_facing_visuals()
 
 # WeaponController зовёт это на успешной атаке. Играет короткий
 # выпад корпуса + свинг оружия для melee, только выпад для ranged.
@@ -90,13 +142,17 @@ func play_attack_visual(target_position: Vector2, weapon: WeaponResource) -> voi
 	_swing_tween = create_tween()
 	_swing_tween.tween_property(_visual, "position", swing_offset, SWING_OUT_DURATION)
 	# Свинг оружия только для melee — у projectile/spell вращение выглядит
-	# странно (лук не должен «резать»).
+	# странно (лук не должен «резать»). Знак угла завязан на facing:
+	# при facing right свинг идёт по часовой (клинок вправо), при left —
+	# против (клинок влево), чтобы удар всегда шёл «в сторону цели».
 	var is_melee := weapon != null and weapon.attack_type in ["melee_arc", "melee_thrust"]
+	var rest_rot := _get_rest_rotation()
+	var swing_target := rest_rot + WEAPON_SWING_ANGLE * _facing
 	if is_melee and _weapon_sprite != null and _weapon_sprite.visible:
-		_swing_tween.parallel().tween_property(_weapon_sprite, "rotation", WEAPON_SWING_ANGLE, SWING_OUT_DURATION)
+		_swing_tween.parallel().tween_property(_weapon_sprite, "rotation", swing_target, SWING_OUT_DURATION)
 	_swing_tween.tween_property(_visual, "position", _visual_base_position, SWING_BACK_DURATION)
 	if is_melee and _weapon_sprite != null and _weapon_sprite.visible:
-		_swing_tween.parallel().tween_property(_weapon_sprite, "rotation", 0.0, SWING_BACK_DURATION)
+		_swing_tween.parallel().tween_property(_weapon_sprite, "rotation", rest_rot, SWING_BACK_DURATION)
 
 func _on_leveled_up(_new_level: int, new_max_health: int) -> void:
 	max_health = new_max_health
@@ -109,10 +165,20 @@ func _physics_process(delta: float) -> void:
 	velocity = input_vector * current_speed()
 	move_and_slide()
 
+	_update_facing_from_aim()
+
 	if Input.is_action_pressed("attack") and equipped_weapon != null:
 		_weapon_controller.try_attack(equipped_weapon, get_global_mouse_position())
 
 	_tick_poison(delta)
+
+func _update_facing_from_aim() -> void:
+	# Направление «взгляда» = знак dx от игрока до курсора. Deadzone
+	# защищает от дрожания сайда, когда курсор ровно над игроком.
+	var dx := get_global_mouse_position().x - global_position.x
+	if absf(dx) < FACING_DEADZONE_PX:
+		return
+	face(1 if dx > 0.0 else -1)
 
 func equip(weapon: WeaponResource) -> void:
 	if weapon == null:

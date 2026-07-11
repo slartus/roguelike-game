@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponResource" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://resources/weapon_resource.gd" id="1_wr"]
-[ext_resource type="Texture2D" path="res://assets/sprites/weapons/dagger.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/short_bow.png" id="2_icon"]
 
 [resource]
 script = ExtResource("1_wr")
@@ -20,4 +20,3 @@ projectile_color = Color(0.75, 0.55, 0.3, 1.0)
 projectiles_per_attack = 1
 spread_angle_deg = 2.0
 pierce = 0
-icon_modulate = Color(0.7, 0.5, 0.3, 1.0)

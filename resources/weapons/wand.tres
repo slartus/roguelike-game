@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponResource" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://resources/weapon_resource.gd" id="1_wr"]
-[ext_resource type="Texture2D" path="res://assets/sprites/weapons/dagger.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/wand.png" id="2_icon"]
 
 [resource]
 script = ExtResource("1_wr")
@@ -21,4 +21,3 @@ projectiles_per_attack = 1
 spread_angle_deg = 4.0
 pierce = 0
 mana_cost = 0
-icon_modulate = Color(0.8, 0.5, 1.0, 1.0)
