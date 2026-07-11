@@ -296,10 +296,112 @@ static func get_zone_for_world(world_id: String, floor_number: int) -> String
 
 Портал (открытая дверь) визуально живой: `door.gd` в `open()` включает эмиссию `CPUParticles2D` с фиолетовой пылью и запускает `_process`, который через синус-пульсацию `sin(_shimmer_time)` мерцает `modulate` sprite'а между тёплым фиолетовым (`brightness ≈ 0.75`) и белым пиком (`brightness ≈ 1.15`) с частотой ~2 пульсации/сек. При `_set_closed()` эмиссия и `_process` выключаются, чтобы закрытые двери не тратили ресурсы.
 
+## Материалы окружения и профили зон
+
+Начиная с PR 1 «Environment materials and zone identity» башня перестала выглядеть как один материал на весь забег. Каждая зона получает свой `EnvironmentVisualProfile`, а роль комнаты может ещё раз переопределить материал пола.
+
+### `EnvironmentVisualProfile`
+
+`scenes/dungeon/environment_visual_profile.gd` (`class_name EnvironmentVisualProfile`) — Resource с полями:
+
+| Поле | Смысл |
+|---|---|
+| `id: StringName` | ID зоны (совпадает с `TowerZone.ZONE_*`) |
+| `background_color: Color` | Заливка `FloorsRoot` под всеми rect'ами |
+| `default_floor_material: StringName` | Материал пола комнаты, если нет override по роли |
+| `corridor_floor_material: StringName` | Материал пола коридора/дверного проёма |
+| `default_wall_material: StringName` | Материал стен всего этажа |
+| `room_role_floor_overrides: Dictionary` | `role → material_id`, приоритетнее default |
+| `room_role_wall_overrides: Dictionary` | Тоже для стен (в этом PR используется редко) |
+| `ambient_tint: Color` | Заготовка под будущий color grading |
+| `detail_density_multiplier: float` | Заготовка под density-декор PR 2 |
+
+Регистр — `scenes/dungeon/environment_visual_profiles.gd` (`class_name EnvironmentVisualProfiles`). Публичный API:
+
+```gdscript
+static func for_zone(zone: StringName) -> EnvironmentVisualProfile
+static func has_zone(zone: StringName) -> bool
+static func all_zones() -> Array
+static func resolve_floor_material(zone, role, is_corridor) -> StringName
+static func resolve_wall_material(zone, role) -> StringName
+```
+
+Приоритеты `resolve_floor_material`:
+
+1. `corridor_floor_material` — если `is_corridor == true`, независимо от роли.
+2. `room_role_floor_overrides[role]` — если роль есть в override'ах.
+3. `default_floor_material` — иначе.
+
+Неизвестная зона резолвится через FALLBACK (`tower_top`) — генератор не крешит.
+
+### Zone → материалы
+
+| Zone | Default floor | Corridor floor | Default wall |
+|---|---|---|---|
+| `tower_top` | `wood_floor` | `corridor_stone` | `plaster_wall` |
+| `residential` | `wood_floor` | `corridor_stone` | `wood_panel_wall` |
+| `technical` | `reinforced_stone` | `stone_metal_grid` | `technical_stone_wall` |
+| `lower_tower` | `damaged_tower_stone` | `damaged_tower_stone` | `tower_stone_wall` |
+| `basement` | `wet_basement_stone` | `wet_basement_stone` | `basement_brick_wall` |
+| `caves` | `cave_ground` | `cave_ground` | `natural_cave_wall` |
+
+Ключевые инварианты:
+
+- **`caves` не используют regular tower brick.** `natural_cave_wall` — органическая скала без кладки. Игрок, спустившийся в пещеры, визуально ощущает переход из здания в природу.
+- **`basement` уходит в холодную сине-серую палитру.** `wet_basement_stone` + `basement_brick_wall` резко отличаются от жилых этажей.
+- **`technical` сохраняет fantasy identity.** Медные полосы и рунические каналы — не современный индустриал; палитра сдвинута в латунь/медь.
+
+### Room role overrides (residential + technical)
+
+| Zone | Role | Floor override |
+|---|---|---|
+| `tower_top` | `study` | `dark_wood_floor` |
+| `residential` | `bedroom`, `living_room`, `storage` | `wood_floor` |
+| `residential` | `study` | `dark_wood_floor` |
+| `residential` | `kitchen` | `light_stone_tile` |
+| `technical` | `machine_room`, `storage` | `reinforced_stone` |
+| `technical` | `boiler_room` | `heat_stained_stone` |
+| `technical` | `switch_room` | `stone_metal_grid` |
+
+Wall overrides: `residential/kitchen` → `plaster_wall` (кухня со светлыми стенами вместо панелей). Для остальных пока используется `default_wall_material` зоны — стены разделяют две комнаты, единой роли у стены нет.
+
+### Каталог материалов
+
+`scenes/dungeon/environment_material_catalog.gd` (`class_name EnvironmentMaterialCatalog`). Data-driven регистр `EnvironmentMaterial` по `StringName`-ID. Материалы задаются в коде (не как `.tres`), потому что их немного, список стабилен и служит контрактом для тестов.
+
+Минимальный набор PR 1:
+
+- **Floor:** `wood_floor`, `dark_wood_floor`, `corridor_stone`, `light_stone_tile`, `reinforced_stone`, `stone_metal_grid`, `heat_stained_stone`, `damaged_tower_stone`, `wet_basement_stone`, `cave_ground`.
+- **Wall (face + cap):** `plaster_wall`, `wood_panel_wall`, `tower_stone_wall`, `technical_stone_wall`, `basement_brick_wall`, `natural_cave_wall`.
+- **Doorway:** `doorway_threshold` — общий overlay поверх corridor'а, визуально маркирующий границу между room material и corridor material.
+
+Все текстуры лежат в `assets/sprites/environment/*.png` и генерируются `tools/gen_environment_sprites.py`. Legacy `floor.png` / `wall.png` сохранены совместимо с существующими preload'ами тестов.
+
+### Wall cap distinct from solid wall
+
+Толстые (2+ tile) горизонтальные стены имеют верхний ряд без коллизии (`cap`) — сохраняется top-down эффект глубины (см. секцию Cap-tiles ниже). PR 1 сделал cap **визуально отличным** от solid wall: у каждого wall материала есть `wall_texture` (для solid) и `wall_cap_texture` (для cap). Cap текстура автоматически выводится из face — верхние 6 px осветлены на ~35%, чтобы кромка читалась как «козырёк».
+
+Инвариант проверяется в `test_environment_material_resolution.gd::test_wall_and_cap_are_different_textures`: для каждого wall материала `wall_texture.resource_path != wall_cap_texture.resource_path`.
+
+### Детерминизм материалов
+
+Резолвинг материала — pure функция от `(zone, room_role, is_corridor)`, без RNG. `layout.zone` и `room_infos[i].role` уже детерминированы `DungeonGenerator` от `tower_seed`, поэтому:
+
+- Тот же `tower_seed` + `current_floor_number` всегда даёт ту же раскладку материалов.
+- Cosmetic-RNG (декор в `_place_decor`) отделён от gameplay RNG (генерация layout) — cosmetic получает `tower_seed * 31 + 7`, gameplay — `tower_seed * 100003 + floor_number`. Ни один cosmetic-путь не влияет на количество или расположение комнат.
+
+Инвариант проверяется в `test_floor_material_rendering.gd::test_same_seed_produces_same_material_sequence` и `test_layout_room_count_matches_between_two_runs_with_same_seed`.
+
+### Ограничение PR 1: мебель и физические props
+
+PR 1 добавил только материалы пола и стен + wall cap distinction + doorway threshold. **Мебель, физические props, интерактивные объекты и новый layout этажей** — задачи PR 2 «Room props and atmospheric decoration» и PR 3 «Larger levels and layout topology». `detail_density_multiplier` на профиле — заготовка под density-логику PR 2, сейчас не читается.
+
 ## Тайлы окружения
 
-- `assets/sprites/environment/floor.png` (20×20) — каменные плитки со швами.
-- `assets/sprites/environment/wall.png` (20×20) — тёмная кирпичная кладка (running bond).
+- `assets/sprites/environment/floor.png` (20×20) — legacy floor.
+- `assets/sprites/environment/wall.png` (20×20) — legacy wall.
+
+Плюс полный набор материалов из PR 1 (см. предыдущий раздел).
 
 UV — абсолютные координаты этажа. Стыки между комнатами / проёмами / стенами бесшовные.
 
