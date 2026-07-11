@@ -63,8 +63,34 @@ const ESCAPE_DURATION: float = 0.4
 @export var wander_change_interval: float = 2.5
 @export_range(0.0, 1.0) var memory: float = 0.65
 @export var memory_check_interval: float = 1.0
+# ID семейства существа для системы темпераментов. Пустая строка =
+# монстр не участвует в темпераментах (босс). Задаётся в .tscn.
+@export var creature_type_id: StringName = &""
+# Явный override темперамента. Если задан ДО _ready(), выбор из пула не
+# производится. Тестам и ручной настройке — приоритет.
+@export var temperament_id: StringName = &""
+
+# Порог HP, ниже которого cautious-темперамент запускает flee. 0..1.
+# CAUTIOUS-flee = «увидел что осталось <= порога → убегает до смерти».
+const CAUTIOUS_FLEE_HP_RATIO: float = 0.35
+const CAUTIOUS_FLEE_SPEED_MULT: float = 1.20
+# Множители применения темперамента — те же числа, что в
+# docs/gamedesign/enemies.md, вынесены в const'ы чтобы правки числа
+# шли одной точкой, а не разбегались по match.
+const TEMPERAMENT_AGGRESSIVE_SPEED_MULT: float = 1.12
+const TEMPERAMENT_AGGRESSIVE_COOLDOWN_MULT: float = 0.85
+const TEMPERAMENT_PERSISTENT_MEMORY_FLOOR: float = 0.95
+const TEMPERAMENT_PERSISTENT_MEMORY_INTERVAL_MULT: float = 1.25
+const TEMPERAMENT_RESTLESS_WANDER_RATIO_MULT: float = 1.35
+const TEMPERAMENT_RESTLESS_WANDER_INTERVAL_MULT: float = 0.60
+const TEMPERAMENT_WATCHFUL_PERCEPTION_MULT: float = 1.30
+const TEMPERAMENT_WATCHFUL_WANDER_RATIO_MULT: float = 0.80
 
 var health: int
+var temperament_seed: int = 0
+var _has_explicit_seed: bool = false
+var _temperament_applied: bool = false
+var _is_fleeing: bool = false
 var _state: int = State.WANDER
 var _target: Node2D
 var _contact_timer: float = 0.0
@@ -83,6 +109,7 @@ var _last_escape_side: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
+	_apply_temperament()
 	var level := get_effective_monster_level()
 	max_health = Balance.scaled_hp(max_health, level)
 	contact_damage = Balance.scaled_damage(contact_damage, level)
@@ -94,14 +121,62 @@ func _ready() -> void:
 func get_effective_monster_level() -> int:
 	return MonsterLevelUtil.effective_level(monster_level, elite_rank)
 
-func configure_spawn(level: int, elite: int = 0) -> void:
+# creature_seed — детерминированный сид от Main._spawn_enemies. Если
+# монстр создан runtime (bud/split/summon/тест), сид не передаётся —
+# fallback вычисляется из tower_seed + floor + type_id + позиции.
+func configure_spawn(level: int, elite: int = 0, creature_seed: int = 0) -> void:
 	monster_level = maxi(1, level)
 	elite_rank = maxi(0, elite)
+	temperament_seed = creature_seed
+	_has_explicit_seed = true
+
+func _apply_temperament() -> void:
+	if _temperament_applied:
+		return
+	_temperament_applied = true
+	var seed_value: int
+	if _has_explicit_seed:
+		seed_value = temperament_seed
+	else:
+		seed_value = CreatureTemperament.compute_fallback_seed(
+			creature_type_id, global_position)
+	temperament_id = CreatureTemperament.resolve_id(
+		temperament_id, creature_type_id, seed_value)
+	if temperament_id == &"":
+		return
+	_apply_temperament_modifiers()
+
+func _apply_temperament_modifiers() -> void:
+	match temperament_id:
+		CreatureTemperament.AGGRESSIVE:
+			speed *= TEMPERAMENT_AGGRESSIVE_SPEED_MULT
+			contact_cooldown *= TEMPERAMENT_AGGRESSIVE_COOLDOWN_MULT
+		CreatureTemperament.CAUTIOUS:
+			# Flee запускается в _physics_process через _update_flee_state,
+			# stat-модификаторов при спавне нет.
+			pass
+		CreatureTemperament.PERSISTENT:
+			memory = maxf(memory, TEMPERAMENT_PERSISTENT_MEMORY_FLOOR)
+			memory_check_interval *= TEMPERAMENT_PERSISTENT_MEMORY_INTERVAL_MULT
+		CreatureTemperament.RESTLESS:
+			wander_speed_ratio = minf(1.0,
+				wander_speed_ratio * TEMPERAMENT_RESTLESS_WANDER_RATIO_MULT)
+			wander_change_interval *= TEMPERAMENT_RESTLESS_WANDER_INTERVAL_MULT
+		CreatureTemperament.WATCHFUL:
+			perception_radius *= TEMPERAMENT_WATCHFUL_PERCEPTION_MULT
+			wander_speed_ratio *= TEMPERAMENT_WATCHFUL_WANDER_RATIO_MULT
 
 func _physics_process(delta: float) -> void:
 	_contact_timer = maxf(0.0, _contact_timer - delta)
 	if _target == null or not is_instance_valid(_target):
 		_target = _find_player()
+	# CAUTIOUS-flee проверяется каждый tick: как только HP упал ниже
+	# порога — переключаемся в flee до смерти (лечения врагов пока
+	# нет, обратного пути из flee тоже).
+	_update_flee_state()
+	if _is_fleeing and _target != null and is_instance_valid(_target):
+		_flee_from_target(delta)
+		return
 	if _target == null:
 		_wander(delta)
 		return
@@ -217,11 +292,15 @@ func _chase_direct(_target_pos: Vector2, _delta: float) -> void:
 	_handle_player_contact()
 	_update_stuck_state(to_target, _delta)
 
-func _update_stuck_state(to_target: Vector2, delta: float) -> void:
+func _update_stuck_state(to_target: Vector2, delta: float, desired_speed: float = -1.0) -> void:
 	# Если после slide velocity почти обнулилась — прижались к стене.
 	# Копим таймер; по истечении STUCK_TIMEOUT включаем escape в
 	# перпендикулярном направлении, чтобы попытаться обогнуть угол.
-	if velocity.length() < speed * STUCK_VELOCITY_RATIO:
+	# desired_speed позволяет вызывающему коду (например flee с ×1.20)
+	# указать эталонную скорость для порога — базовый `speed` тогда
+	# ложно бы считал flee «не застрявшим».
+	var reference_speed := desired_speed if desired_speed > 0.0 else speed
+	if velocity.length() < reference_speed * STUCK_VELOCITY_RATIO:
 		_stuck_timer += delta
 		if _stuck_timer >= STUCK_TIMEOUT and _escape_timer <= 0.0:
 			_escape_direction = _pick_escape_direction(to_target)
@@ -287,6 +366,37 @@ func _wander(delta: float) -> void:
 	if velocity.length() < 1.0:
 		_wander_direction = -_wander_direction.rotated(randf_range(-PI / 3.0, PI / 3.0))
 		_wander_timer = 0.0
+
+func _update_flee_state() -> void:
+	if _is_fleeing:
+		return
+	if temperament_id != CreatureTemperament.CAUTIOUS:
+		return
+	if max_health <= 0:
+		return
+	if float(health) / float(max_health) <= CAUTIOUS_FLEE_HP_RATIO:
+		_is_fleeing = true
+
+func _flee_from_target(delta: float) -> void:
+	# Обратное направление к игроку. Если позиции совпадают (edge case
+	# «стоим в игроке» — например только что заспавнились поверх), берём
+	# фиксированный вектор — stuck-detector дальше выберет вменяемое.
+	var away := (global_position - _target.global_position).normalized()
+	if away == Vector2.ZERO:
+		away = Vector2.RIGHT
+	var direction: Vector2
+	if _escape_timer > 0.0:
+		_escape_timer -= delta
+		direction = _escape_direction
+	else:
+		direction = away
+	var flee_speed := speed * CAUTIOUS_FLEE_SPEED_MULT
+	velocity = direction * flee_speed
+	move_and_slide()
+	# CAUTIOUS-goblin не должен наносить урон при беге. _handle_player_contact
+	# НЕ вызываем — иначе flee превращался бы в «отступает и всё равно бьёт»,
+	# что нарушает тематику труса.
+	_update_stuck_state(away, delta, flee_speed)
 
 func _pick_wander_direction() -> void:
 	var angle := randf() * TAU

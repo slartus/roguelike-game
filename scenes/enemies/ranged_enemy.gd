@@ -43,8 +43,32 @@ const ESCAPE_DURATION: float = 0.4
 # от активного kiting.
 @export var wander_speed_ratio: float = 0.4
 @export var wander_change_interval: float = 2.5
+# Темпераменты: ID семейства и явный override (0 = catalog rolls).
+@export var creature_type_id: StringName = &""
+@export var temperament_id: StringName = &""
+
+# Множители темпераментов — вынесены в const'ы, чтобы правки чисел шли
+# одной точкой (те же значения продублированы в enemy.gd/charger.gd
+# по своему набору полей — общее семейство описано в plans/).
+const TEMPERAMENT_AGGRESSIVE_FIRE_INTERVAL_MULT: float = 0.85
+const TEMPERAMENT_AGGRESSIVE_SPEED_MULT: float = 1.08
+const TEMPERAMENT_AGGRESSIVE_RANGE_MULT: float = 0.90
+const TEMPERAMENT_CAUTIOUS_PREFERRED_MULT: float = 1.15
+const TEMPERAMENT_CAUTIOUS_MIN_MULT: float = 1.20
+const TEMPERAMENT_CAUTIOUS_RETREAT_MULT: float = 1.20
+const TEMPERAMENT_RESTLESS_WANDER_RATIO_MULT: float = 1.35
+const TEMPERAMENT_RESTLESS_WANDER_INTERVAL_MULT: float = 0.60
+const TEMPERAMENT_WATCHFUL_PERCEPTION_MULT: float = 1.30
+const TEMPERAMENT_WATCHFUL_WANDER_RATIO_MULT: float = 0.80
 
 var health: int
+var temperament_seed: int = 0
+# Множитель скорости отступления (dist < min_range). CAUTIOUS
+# поднимает до 1.20; остальные — 1.0. Приближение и wander всегда
+# используют базовую `speed`.
+var retreat_speed_multiplier: float = 1.0
+var _has_explicit_seed: bool = false
+var _temperament_applied: bool = false
 var _target: Node2D
 var _fire_timer: float = 0.0
 var _stuck_timer: float = 0.0
@@ -56,6 +80,7 @@ var _wander_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemy")
+	_apply_temperament()
 	var level := get_effective_monster_level()
 	max_health = Balance.scaled_hp(max_health, level)
 	xp_reward = Balance.scaled_xp_reward(xp_reward, level)
@@ -66,9 +91,49 @@ func _ready() -> void:
 func get_effective_monster_level() -> int:
 	return MonsterLevelUtil.effective_level(monster_level, elite_rank)
 
-func configure_spawn(level: int, elite: int = 0) -> void:
+func configure_spawn(level: int, elite: int = 0, creature_seed: int = 0) -> void:
 	monster_level = maxi(1, level)
 	elite_rank = maxi(0, elite)
+	temperament_seed = creature_seed
+	_has_explicit_seed = true
+
+func _apply_temperament() -> void:
+	if _temperament_applied:
+		return
+	_temperament_applied = true
+	var seed_value: int
+	if _has_explicit_seed:
+		seed_value = temperament_seed
+	else:
+		seed_value = CreatureTemperament.compute_fallback_seed(
+			creature_type_id, global_position)
+	temperament_id = CreatureTemperament.resolve_id(
+		temperament_id, creature_type_id, seed_value)
+	if temperament_id == &"":
+		return
+	_apply_temperament_modifiers()
+
+func _apply_temperament_modifiers() -> void:
+	match temperament_id:
+		CreatureTemperament.AGGRESSIVE:
+			fire_interval *= TEMPERAMENT_AGGRESSIVE_FIRE_INTERVAL_MULT
+			speed *= TEMPERAMENT_AGGRESSIVE_SPEED_MULT
+			preferred_range *= TEMPERAMENT_AGGRESSIVE_RANGE_MULT
+			min_range *= TEMPERAMENT_AGGRESSIVE_RANGE_MULT
+		CreatureTemperament.CAUTIOUS:
+			preferred_range *= TEMPERAMENT_CAUTIOUS_PREFERRED_MULT
+			min_range *= TEMPERAMENT_CAUTIOUS_MIN_MULT
+			retreat_speed_multiplier = TEMPERAMENT_CAUTIOUS_RETREAT_MULT
+		CreatureTemperament.RESTLESS:
+			wander_speed_ratio = minf(1.0,
+				wander_speed_ratio * TEMPERAMENT_RESTLESS_WANDER_RATIO_MULT)
+			wander_change_interval *= TEMPERAMENT_RESTLESS_WANDER_INTERVAL_MULT
+		CreatureTemperament.WATCHFUL:
+			perception_radius *= TEMPERAMENT_WATCHFUL_PERCEPTION_MULT
+			wander_speed_ratio *= TEMPERAMENT_WATCHFUL_WANDER_RATIO_MULT
+		# PERSISTENT — не используется ranged-семейством в этой фиче.
+		_:
+			pass
 
 func _physics_process(delta: float) -> void:
 	if _target == null or not is_instance_valid(_target):
@@ -88,20 +153,29 @@ func _physics_process(delta: float) -> void:
 	# Kiting: приближаемся если далеко, отходим если близко.
 	var to_player := (_target.global_position - global_position).normalized()
 	var intended_dir: Vector2 = Vector2.ZERO
+	var is_retreat := false
 	if dist > preferred_range:
 		intended_dir = to_player
 	elif dist < min_range:
 		intended_dir = -to_player
+		is_retreat = true
+
+	# Retreat_speed_multiplier применяется только при отступлении (dist <
+	# min_range). Приближение и escape-fallback идут по базовой `speed` —
+	# иначе CAUTIOUS-ranged догонял бы игрока быстрее обычного.
+	var move_speed := speed
+	if is_retreat:
+		move_speed *= retreat_speed_multiplier
 
 	if _escape_timer > 0.0:
 		_escape_timer -= delta
-		velocity = _escape_direction * speed
+		velocity = _escape_direction * move_speed
 	elif intended_dir != Vector2.ZERO:
-		velocity = intended_dir * speed
+		velocity = intended_dir * move_speed
 	else:
 		velocity = Vector2.ZERO
 	move_and_slide()
-	_update_stuck_state(intended_dir, delta)
+	_update_stuck_state(intended_dir, delta, move_speed)
 
 	# Стрельба — всегда пока игрок в perception.
 	_fire_timer -= delta
@@ -109,12 +183,15 @@ func _physics_process(delta: float) -> void:
 		_fire_timer = fire_interval
 		_shoot()
 
-func _update_stuck_state(intended_dir: Vector2, delta: float) -> void:
+func _update_stuck_state(intended_dir: Vector2, delta: float, desired_speed: float = -1.0) -> void:
 	# Проверяем «застряли ли» только если реально пытались двигаться —
 	# на ideal-range ranged-враг штатно стоит на месте, ложных срабатываний
-	# быть не должно.
+	# быть не должно. desired_speed — фактическая целевая скорость
+	# (базовая или retreat×multiplier), нужна чтобы CAUTIOUS-ranged не
+	# ложно триггерил stuck при увеличенном отступе.
+	var reference_speed := desired_speed if desired_speed > 0.0 else speed
 	var wanted_to_move := intended_dir != Vector2.ZERO or _escape_timer > 0.0
-	if wanted_to_move and velocity.length() < speed * STUCK_VELOCITY_RATIO:
+	if wanted_to_move and velocity.length() < reference_speed * STUCK_VELOCITY_RATIO:
 		_stuck_timer += delta
 		if _stuck_timer >= STUCK_TIMEOUT and _escape_timer <= 0.0:
 			_escape_direction = _pick_escape_direction(intended_dir)

@@ -10,6 +10,7 @@ radius = 7.0
 z_index = 1
 script = ExtResource("1_enemy")
 display_name = "ENEMY_SKELETON"
+creature_type_id = &"skeleton"
 max_health = 3
 speed = 50.0
 contact_damage = 2

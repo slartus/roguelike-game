@@ -16,11 +16,20 @@ func _create_fake_player(pos: Vector2) -> Node2D:
 	add_child_autofree(p)
 	return p
 
-func test_ranged_moves_toward_player_when_beyond_preferred_range() -> void:
-	_create_fake_player(Vector2(180, 0))   # dist 180 > preferred 160
+# Kiting-тесты завязаны на конкретные значения preferred_range / min_range из
+# .tscn. Темперамент в _ready() может двигать эти значения (AGGRESSIVE ×0.90,
+# CAUTIOUS ×1.15/1.20), поэтому force'им no-op темперамент PERSISTENT — для
+# ranged-семейства он не меняет ни диапазоны, ни fire_interval, ни perception.
+func _spawn_neutral_archer() -> Node:
 	var enemy = RangedScene.instantiate()
+	enemy.temperament_id = &"persistent"
 	enemy.global_position = Vector2.ZERO
 	add_child_autofree(enemy)
+	return enemy
+
+func test_ranged_moves_toward_player_when_beyond_preferred_range() -> void:
+	_create_fake_player(Vector2(180, 0))   # dist 180 > preferred 160
+	var enemy = _spawn_neutral_archer()
 	# Direct вызов надёжнее чем await physics_frame в GUT.
 	enemy._physics_process(0.016)
 	assert_gt(enemy.velocity.x, 0.0,
@@ -28,18 +37,14 @@ func test_ranged_moves_toward_player_when_beyond_preferred_range() -> void:
 
 func test_ranged_retreats_when_within_min_range() -> void:
 	_create_fake_player(Vector2(50, 0))    # dist 50 < min 100
-	var enemy = RangedScene.instantiate()
-	enemy.global_position = Vector2.ZERO
-	add_child_autofree(enemy)
+	var enemy = _spawn_neutral_archer()
 	enemy._physics_process(0.016)
 	assert_lt(enemy.velocity.x, 0.0,
 		"Skeleton Archer должен отступать когда dist < min_range (50 < 100)")
 
 func test_ranged_stands_still_in_preferred_band() -> void:
 	_create_fake_player(Vector2(130, 0))   # 100 <= 130 <= 160
-	var enemy = RangedScene.instantiate()
-	enemy.global_position = Vector2.ZERO
-	add_child_autofree(enemy)
+	var enemy = _spawn_neutral_archer()
 	enemy._physics_process(0.016)
 	assert_eq(enemy.velocity, Vector2.ZERO,
 		"Skeleton Archer стоит когда dist в [min_range, preferred_range]")
@@ -67,10 +72,9 @@ func test_ranged_ranges_are_consistent() -> void:
 
 func test_ranged_does_not_shoot_outside_perception() -> void:
 	# Игрок вне perception (200) — timer не должен тикать / стрелять.
-	_create_fake_player(Vector2(500, 0))   # 500 > 200
-	var enemy = RangedScene.instantiate()
-	enemy.global_position = Vector2.ZERO
-	add_child_autofree(enemy)
+	# Player при 500 > (200 × 1.30) — WATCHFUL тоже не догонит, безопасно.
+	_create_fake_player(Vector2(500, 0))   # 500 > 200 (даже WATCHFUL 260)
+	var enemy = _spawn_neutral_archer()
 	var timer_before = enemy._fire_timer
 	enemy._physics_process(0.016)
 	# Timer должен остаться прежним (не декрементился)
