@@ -1,0 +1,23 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/debug/weapon_test_screen.gd" id="1_weapon_test"]
+
+[node name="WeaponTestScreen" type="Node2D"]
+script = ExtResource("1_weapon_test")
+
+[node name="Room" type="Node2D" parent="."]
+
+[node name="Weapons" type="Node2D" parent="."]
+
+[node name="PlayerRoot" type="Node2D" parent="."]
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="HintLabel" type="Label" parent="HUD"]
+offset_left = 8.0
+offset_top = 4.0
+offset_right = 472.0
+offset_bottom = 20.0
+theme_override_font_sizes/font_size = 10
+text = "UI_DEBUG_WEAPON_HINT"
+horizontal_alignment = 1

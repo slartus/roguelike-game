@@ -83,10 +83,10 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Играть"
 
-[node name="GenerateButton" type="Button" parent="VBox"]
+[node name="DebugButton" type="Button" parent="VBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
-text = "Генерить уровни"
+text = "UI_TITLE_DEBUG"
 
 [node name="ExitButton" type="Button" parent="VBox"]
 layout_mode = 2
