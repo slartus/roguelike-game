@@ -37,6 +37,13 @@ extends Resource
 @export var spread_angle_deg: float = 0.0
 # pierce > 0 → снаряд пробивает N врагов до queue_free.
 @export var pierce: int = 0
+# Смещение точки спавна снаряда относительно игрока. По умолчанию 0 —
+# снаряд рождается в центре игрока (совместимо со старым поведением).
+# Ненулевое `projectile_spawn_distance` сдвигает spawn на
+# `direction * distance + direction.orthogonal() * lateral` — снаряд выходит
+# от наконечника оружия, а не из центра тела.
+@export var projectile_spawn_distance: float = 0.0
+@export var projectile_spawn_lateral_offset: float = 0.0
 
 # --- Melee stats ---
 @export var arc_degrees: float = 80.0
