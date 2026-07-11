@@ -1,18 +1,11 @@
 extends Control
 
-# Стартовый экран: заголовок + три кнопки.
-# «Играть» — обнуляет состояние забега (GameState.reset_run) и грузит
-#            основную сцену игры.
-# «Генерить уровни» — визуализатор dungeon-генератора; там же можно
-#            крутить новый seed по Space.
-# «Выход» — закрывает приложение через get_tree().quit(). Единственный
-#            «мирный» способ выйти из десктоп-сборки; ESC на title screen
-#            не забинден на quit (это делается только явной кнопкой).
-#
-# Экран также показывается после смерти игрока — см. player.gd::_die.
+# ESC на title screen намеренно не забинден на quit — из десктоп-сборки
+# выйти можно только явной кнопкой «Выход», чтобы случайное нажатие Esc
+# на экране «Итоги забега» не выкидывало игрока из приложения.
 
 const MAIN_SCENE_PATH: String = "res://scenes/main.tscn"
-const VISUALIZER_SCENE_PATH: String = "res://scenes/dungeon/level_visualizer.tscn"
+const DEBUG_MENU_SCENE_PATH: String = "res://scenes/ui/debug_menu.tscn"
 
 @onready var _run_stats_panel: PanelContainer = $VBox/RunStatsPanel
 @onready var _run_stats_title: Label = $VBox/RunStatsPanel/RunStatsBox/RunStatsTitle
@@ -23,8 +16,9 @@ const VISUALIZER_SCENE_PATH: String = "res://scenes/dungeon/level_visualizer.tsc
 
 func _ready() -> void:
 	$VBox/PlayButton.pressed.connect(_on_play_pressed)
-	$VBox/GenerateButton.pressed.connect(_on_generate_pressed)
+	$VBox/DebugButton.pressed.connect(_on_debug_pressed)
 	$VBox/ExitButton.pressed.connect(_on_exit_pressed)
+	$VBox/DebugButton.text = tr("UI_TITLE_DEBUG")
 	$VBox/PlayButton.grab_focus()
 	_refresh_run_stats_panel()
 
@@ -48,8 +42,8 @@ func _on_play_pressed() -> void:
 	GameState.reset_run()
 	get_tree().change_scene_to_file(MAIN_SCENE_PATH)
 
-func _on_generate_pressed() -> void:
-	get_tree().change_scene_to_file(VISUALIZER_SCENE_PATH)
+func _on_debug_pressed() -> void:
+	get_tree().change_scene_to_file(DEBUG_MENU_SCENE_PATH)
 
 func _on_exit_pressed() -> void:
 	get_tree().quit()
