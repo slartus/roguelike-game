@@ -25,4 +25,4 @@ pierce = 0
 projectile_spawn_distance = 18.0
 held_aim_aligned = true
 held_aim_rotation_offset = 1.5707963
-held_sprite_offset = Vector2(3, 0)
+held_sprite_offset = Vector2(2, 0)
