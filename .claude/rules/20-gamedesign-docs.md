@@ -25,6 +25,7 @@
 | `autoloads/game_state.gd`, `autoloads/balance.gd`, любая логика XP/level/gold/save | `docs/gamedesign/progression.md` |
 | Броня (`ArmorResource`, `equipped_armor`, `ArmorPickup`) | `docs/gamedesign/armor.md` |
 | HUD, pause, title screen, i18n-строки | `docs/gamedesign/ui.md` / `docs/gamedesign/i18n.md` |
+| `assets/sprites/player/player.png`, `assets/sprites/weapons/*.png`, `scenes/player/player.gd` (hand offset / rest angle), новое `resources/weapons/<id>.tres` | `docs/gamedesign/media/player_with_*.png` — см. `60-player-weapon-showcase.md` |
 
 ## Чеклист перед commit'ом
 

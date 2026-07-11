@@ -43,6 +43,7 @@
 
 - Изменить число (`@export damage = 5` → `= 7`) без обновления таблицы в `docs/gamedesign/*.md`.
 - Изменить `_draw` / tween-формулу без обновления `tools/gen_animation_gifs.py` и перегенерации gif'а.
+- Изменить `assets/sprites/player/player.png`, любой `assets/sprites/weapons/*.png` или константы hand-offset / rest-angle в `player.gd` без перегенерации `docs/gamedesign/media/player_with_*.png` через `tools/gen_player_weapon_showcase.py`. Добавить новое оружие без соответствующего `player_with_<id>.png` и строки в таблице `weapons.md`. См. `60-player-weapon-showcase.md`.
 - Писать «планы» в основной раздел docs — только в отдельный «Планируемое» с явной пометкой.
 - Переписывать код в docs — описывай **что**, не **как**.
 
