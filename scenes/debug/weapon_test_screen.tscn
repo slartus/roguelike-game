@@ -11,6 +11,15 @@ script = ExtResource("1_weapon_test")
 
 [node name="PlayerRoot" type="Node2D" parent="."]
 
+[node name="PlayerPreview" type="Node2D" parent="."]
+position = Vector2(36, 228)
+scale = Vector2(3, 3)
+
+[node name="PreviewVisual" type="Sprite2D" parent="PlayerPreview"]
+
+[node name="PreviewWeapon" type="Sprite2D" parent="PlayerPreview"]
+visible = false
+
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="HintLabel" type="Label" parent="HUD"]
@@ -21,3 +30,56 @@ offset_bottom = 20.0
 theme_override_font_sizes/font_size = 10
 text = "UI_DEBUG_WEAPON_HINT"
 horizontal_alignment = 1
+
+[node name="WeaponInfoPanel" type="VBoxContainer" parent="HUD"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -150.0
+offset_top = -80.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="EmptyLabel" type="Label" parent="HUD/WeaponInfoPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "UI_DEBUG_WEAPON_INFO_EMPTY"
+horizontal_alignment = 2
+
+[node name="StatsBox" type="VBoxContainer" parent="HUD/WeaponInfoPanel"]
+visible = false
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="HUD/WeaponInfoPanel/StatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "—"
+horizontal_alignment = 2
+
+[node name="DamageLabel" type="Label" parent="HUD/WeaponInfoPanel/StatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "—"
+horizontal_alignment = 2
+
+[node name="RangeLabel" type="Label" parent="HUD/WeaponInfoPanel/StatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "—"
+horizontal_alignment = 2
+
+[node name="AngleLabel" type="Label" parent="HUD/WeaponInfoPanel/StatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "—"
+horizontal_alignment = 2
+
+[node name="SpeedLabel" type="Label" parent="HUD/WeaponInfoPanel/StatsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "—"
+horizontal_alignment = 2

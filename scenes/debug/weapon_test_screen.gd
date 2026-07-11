@@ -48,6 +48,19 @@ const WALL_COLOR: Color = Color(0.22, 0.18, 0.28, 1.0)
 @onready var _weapons_root: Node2D = $Weapons
 @onready var _player_root: Node2D = $PlayerRoot
 @onready var _hint_label: Label = $HUD/HintLabel
+@onready var _info_empty_label: Label = $HUD/WeaponInfoPanel/EmptyLabel
+@onready var _info_stats_box: VBoxContainer = $HUD/WeaponInfoPanel/StatsBox
+@onready var _info_name_label: Label = $HUD/WeaponInfoPanel/StatsBox/NameLabel
+@onready var _info_damage_label: Label = $HUD/WeaponInfoPanel/StatsBox/DamageLabel
+@onready var _info_range_label: Label = $HUD/WeaponInfoPanel/StatsBox/RangeLabel
+@onready var _info_angle_label: Label = $HUD/WeaponInfoPanel/StatsBox/AngleLabel
+@onready var _info_speed_label: Label = $HUD/WeaponInfoPanel/StatsBox/SpeedLabel
+@onready var _preview_visual: Sprite2D = $PlayerPreview/PreviewVisual
+@onready var _preview_weapon: Sprite2D = $PlayerPreview/PreviewWeapon
+
+var _player: CharacterBody2D
+var _player_visual: Sprite2D
+var _player_weapon: Sprite2D
 
 func _ready() -> void:
 	# dungeon_preview_screen отключает viewport-stretch. Если игрок прошёл
@@ -61,6 +74,7 @@ func _ready() -> void:
 	GameState.reset_run()
 	GameState.equipped_weapon = null
 	_hint_label.text = tr("UI_DEBUG_WEAPON_HINT")
+	_info_empty_label.text = tr("UI_DEBUG_WEAPON_INFO_EMPTY")
 	_build_room()
 	_spawn_player()
 	_spawn_weapon_row()
@@ -118,6 +132,10 @@ func _add_wall(top_left: Vector2, size: Vector2) -> void:
 
 func _spawn_player() -> void:
 	var player: CharacterBody2D = PlayerScene.instantiate()
+	# Подписываемся ДО add_child: Player._ready эмиттит weapon_changed(null),
+	# и мы хотим поймать этот initial-сигнал, чтобы панель сразу встала в
+	# состояние «оружие не взято» без ручного вызова после add_child.
+	player.weapon_changed.connect(_refresh_weapon_info)
 	player.position = PLAYER_SPAWN_POSITION
 	_player_root.add_child(player)
 	var camera: Camera2D = player.get_node("Camera2D")
@@ -125,20 +143,99 @@ func _spawn_player() -> void:
 	camera.limit_top = 0
 	camera.limit_right = ROOM_WIDTH
 	camera.limit_bottom = ROOM_HEIGHT
+	_player = player
+	_player_visual = player.get_node("Visual")
+	_player_weapon = player.get_node("Weapon")
+
+# Каждый кадр обновляем 3× превью игрока слева-снизу: перекидываем
+# текстуры/поворот/flip'ы с реального Player.Visual и Player.Weapon.
+# Дублировать node'ы через duplicate() было бы дороже (перенос сигналов
+# и скриптов); нам нужна только визуальная зеркальная копия.
+func _process(_delta: float) -> void:
+	# is_instance_valid не только для Player, но и для его child'ов: teardown
+	# может освободить Sprite2D'шки раньше самого Player (порядок tree exit),
+	# и tree_exited на _player пришёл бы уже после падения на dangling ref.
+	if not is_instance_valid(_player) or not is_instance_valid(_player_visual) \
+			or not is_instance_valid(_player_weapon):
+		return
+	_preview_visual.texture = _player_visual.texture
+	_preview_visual.flip_h = _player_visual.flip_h
+	_preview_visual.modulate = _player_visual.modulate * _player.modulate
+	_preview_visual.position = _player_visual.position
+	_preview_weapon.visible = _player_weapon.visible
+	if not _player_weapon.visible:
+		return
+	_preview_weapon.texture = _player_weapon.texture
+	_preview_weapon.modulate = _player_weapon.modulate
+	_preview_weapon.offset = _player_weapon.offset
+	_preview_weapon.position = _player_weapon.position
+	_preview_weapon.rotation = _player_weapon.rotation
+	_preview_weapon.flip_h = _player_weapon.flip_h
+
+# Обновляет панель справа-снизу под текущее оружие игрока. weapon == null →
+# скрываем 5 stat-строк, показываем placeholder «оружие не взято». Иначе —
+# читаем damage/range/arc/interval прямо с WeaponResource: WeaponStats.compute
+# применяет style-модификаторы, но у нас в песочнице нет upgrade cards, так
+# что raw поля адекватно отражают то, что реально почувствует игрок при ударе.
+# Для «угла» берём arc_degrees у melee_arc/melee_thrust и spread_angle_deg
+# у projectile/spell — эти поля семантически заменяют друг друга.
+func _refresh_weapon_info(weapon: WeaponResource) -> void:
+	if weapon == null:
+		_info_empty_label.visible = true
+		_info_stats_box.visible = false
+		return
+	_info_empty_label.visible = false
+	_info_stats_box.visible = true
+	_info_name_label.text = tr(weapon.display_name)
+	_info_damage_label.text = tr("UI_DEBUG_WEAPON_DAMAGE") % weapon.damage
+	_info_range_label.text = tr("UI_DEBUG_WEAPON_RANGE") % int(round(weapon.attack_range))
+	var angle_deg: float = weapon.arc_degrees if weapon.attack_type in ["melee_arc", "melee_thrust"] else weapon.spread_angle_deg
+	_info_angle_label.text = tr("UI_DEBUG_WEAPON_ANGLE") % int(round(angle_deg))
+	var interval: float = weapon.get_attack_interval()
+	if interval > 0.0:
+		_info_speed_label.text = tr("UI_DEBUG_WEAPON_SPEED") % (1.0 / interval)
+	else:
+		# Guard от нулевого интервала. Все .tres задают положительный
+		# get_attack_interval (fallback на legacy fire_interval), но если
+		# ресурс сломан — честнее показать «—», чем `Speed: 0.0/s`, будто
+		# оружие никогда не бьёт.
+		_info_speed_label.text = "—"
 
 func _spawn_weapon_row() -> void:
-	# Равномерная раскладка вдоль верхней стены: делим внутреннюю ширину
-	# на n слотов и ставим пикап в центр каждого. Порядок совпадает с
-	# WEAPON_ROSTER — читать слева направо, легче искать оружие глазами.
+	for i in WEAPON_ROSTER.size():
+		_spawn_pickup_at_slot(i)
+
+# Кладёт пикап в конкретный слот и подписывается на его снятие: при
+# каждом body_entered пикап делает queue_free, что дёргает tree_exited
+# → мы тут же спавним новый экземпляр того же оружия в той же позиции.
+# Так дебаг-песочница остаётся полной: игрок может подбирать одно и то
+# же оружие много раз, тестировать смены между несколькими подряд, а
+# также визуально видеть, что ряд не редеет.
+func _spawn_pickup_at_slot(slot_index: int) -> void:
+	var weapon: WeaponResource = WEAPON_ROSTER[slot_index]
+	var pickup: Area2D = WeaponPickupScene.instantiate()
+	pickup.weapon = weapon
+	pickup.position = _slot_position(slot_index)
+	pickup.tree_exited.connect(_on_pickup_taken.bind(slot_index))
+	_weapons_root.add_child(pickup)
+
+# Равномерная раскладка вдоль верхней стены: делим внутреннюю ширину на
+# n слотов и берём центр каждого. Порядок соответствует WEAPON_ROSTER —
+# читается слева направо, глаза быстро находят нужное оружие.
+func _slot_position(slot_index: int) -> Vector2:
 	var inner_left := float(WALL_THICKNESS)
 	var inner_width := float(ROOM_WIDTH - WALL_THICKNESS * 2)
 	var slot_width := inner_width / float(WEAPON_ROSTER.size())
-	for i in WEAPON_ROSTER.size():
-		var weapon: WeaponResource = WEAPON_ROSTER[i]
-		var pickup: Area2D = WeaponPickupScene.instantiate()
-		pickup.weapon = weapon
-		pickup.position = Vector2(
-			inner_left + slot_width * (float(i) + 0.5),
-			float(WEAPONS_ROW_Y),
-		)
-		_weapons_root.add_child(pickup)
+	return Vector2(
+		inner_left + slot_width * (float(slot_index) + 0.5),
+		float(WEAPONS_ROW_Y),
+	)
+
+func _on_pickup_taken(slot_index: int) -> void:
+	# tree_exited эмиттится и при обычном выходе игрока на debug_menu:
+	# change_scene_to_file рушит всю сцену — самих себя тоже. В этот
+	# момент мы уже вне дерева, спавнить нового ребёнка нет смысла и
+	# небезопасно.
+	if not is_inside_tree():
+		return
+	_spawn_pickup_at_slot(slot_index)
