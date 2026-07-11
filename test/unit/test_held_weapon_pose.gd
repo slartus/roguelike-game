@@ -71,16 +71,17 @@ func test_sword_and_dagger_are_side_rest() -> void:
 	assert_false(DaggerRes.held_aim_aligned, "dagger — side-rest")
 
 func test_aim_right_rotates_bow_to_horizontal_right() -> void:
-	# aim direction (1,0) → angle 0 → rotation = 0 + PI/2 = PI/2 (sprite
-	# нарисован «вверх», offset +PI/2 разворачивает к правой стороне).
+	# Bow sprite уже нарисован в «aim right» позе (тетива слева, дуга справа),
+	# поэтому held_aim_rotation_offset = 0. Aim direction (1,0) → angle 0 →
+	# rotation = 0. Sprite остаётся as-is.
 	GameState.equipped_weapon = ShortBowRes
 	var player := _make_player()
 	await get_tree().process_frame
 	player.face(1)
 	player._update_weapon_pose(Vector2.RIGHT)
 	var weapon_sprite: Sprite2D = player.get_node("Weapon")
-	assert_almost_eq(weapon_sprite.rotation, PI / 2, 0.001,
-		"bow aim right → rotation ≈ PI/2 (blade вправо)")
+	assert_almost_eq(weapon_sprite.rotation, 0.0, 0.001,
+		"bow aim right → rotation ≈ 0 (natural pose)")
 
 func test_aim_down_rotates_bow_to_vertical_down() -> void:
 	GameState.equipped_weapon = ShortBowRes
@@ -89,9 +90,9 @@ func test_aim_down_rotates_bow_to_vertical_down() -> void:
 	player.face(1)
 	player._update_weapon_pose(Vector2.DOWN)
 	var weapon_sprite: Sprite2D = player.get_node("Weapon")
-	# angle(0,1) = PI/2, +PI/2 offset = PI
-	assert_almost_eq(weapon_sprite.rotation, PI, 0.001,
-		"bow aim down → rotation ≈ PI")
+	# angle(0,1) = PI/2, +0 offset = PI/2
+	assert_almost_eq(weapon_sprite.rotation, PI / 2, 0.001,
+		"bow aim down → rotation ≈ PI/2")
 
 func test_aim_up_rotates_bow_to_vertical_up_zero() -> void:
 	GameState.equipped_weapon = ShortBowRes
@@ -100,9 +101,9 @@ func test_aim_up_rotates_bow_to_vertical_up_zero() -> void:
 	player.face(1)
 	player._update_weapon_pose(Vector2.UP)
 	var weapon_sprite: Sprite2D = player.get_node("Weapon")
-	# angle(0,-1) = -PI/2, +PI/2 offset = 0 → sprite вверх
-	assert_almost_eq(weapon_sprite.rotation, 0.0, 0.001,
-		"bow aim up → rotation ≈ 0 (blade вверх)")
+	# angle(0,-1) = -PI/2, +0 offset = -PI/2
+	assert_almost_eq(weapon_sprite.rotation, -PI / 2, 0.001,
+		"bow aim up → rotation ≈ -PI/2")
 
 func test_sword_rotation_not_affected_by_aim_direction() -> void:
 	# Side-rest sword держится под rest-углом даже при разных aim.
