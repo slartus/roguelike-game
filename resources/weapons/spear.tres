@@ -19,3 +19,5 @@ hitbox_width = 18.0
 hitbox_length = 58.0
 active_time = 0.09
 knockback = 30.0
+held_aim_aligned = true
+held_aim_rotation_offset = 1.5707963

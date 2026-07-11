@@ -23,3 +23,5 @@ projectiles_per_attack = 1
 spread_angle_deg = 0.0
 pierce = 1
 projectile_spawn_distance = 10.0
+held_aim_aligned = true
+held_aim_rotation_offset = 1.5707963

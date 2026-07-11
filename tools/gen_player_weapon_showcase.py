@@ -40,9 +40,9 @@ from PIL import Image
 
 # Синхронизировано с scenes/player/player.gd. При изменении констант
 # в .gd — обновить и здесь (см. .claude/rules/60-player-weapon-showcase.md).
-HAND_X_OFFSET = 5
-HAND_Y_OFFSET = 3
-MELEE_REST_ANGLE = 0.35  # rad
+HAND_X_OFFSET_DEFAULT = 5
+HAND_Y_OFFSET_DEFAULT = 3
+MELEE_REST_ANGLE_DEFAULT = 0.35  # rad
 MELEE_ATTACK_TYPES = {"melee_arc", "melee_thrust"}
 
 # Масштаб пиксельарта на итоговой картинке. 8× даёт 128 px тело игрока —
@@ -66,6 +66,40 @@ class WeaponMeta:
     weapon_id: str
     attack_type: str
     sprite_path: Path
+    held_scale: float
+    held_rest_rotation: float
+    held_aim_aligned: bool
+    held_aim_rotation_offset: float
+    hand_x_offset: float
+    hand_y_offset: float
+
+
+def _parse_float(text: str, key: str, default: float) -> float:
+    match = re.search(rf'''^{key}\s*=\s*(-?[\d.eE+-]+)$''', text, re.MULTILINE)
+    return float(match.group(1)) if match else default
+
+
+def _parse_bool(text: str, key: str, default: bool) -> bool:
+    match = re.search(rf'''^{key}\s*=\s*(true|false)$''', text, re.MULTILINE)
+    if not match:
+        return default
+    return match.group(1) == "true"
+
+
+def _parse_vector2_uniform(text: str, key: str, default: float) -> float:
+    # Обрабатывает Vector2(x, y). Возвращает x, если x==y (uniform scale);
+    # иначе среднее. Для нашего showcase хватает uniform-scale.
+    match = re.search(rf'''^{key}\s*=\s*Vector2\(([\d.eE+-]+),\s*([\d.eE+-]+)\)$''', text, re.MULTILINE)
+    if not match:
+        return default
+    return (float(match.group(1)) + float(match.group(2))) * 0.5
+
+
+def _parse_vector2_xy(text: str, key: str, default_xy: tuple[float, float]) -> tuple[float, float]:
+    match = re.search(rf'''^{key}\s*=\s*Vector2\(([\d.eE+-]+),\s*([\d.eE+-]+)\)$''', text, re.MULTILINE)
+    if not match:
+        return default_xy
+    return (float(match.group(1)), float(match.group(2)))
 
 
 def parse_weapon_tres(path: Path) -> WeaponMeta:
@@ -77,7 +111,23 @@ def parse_weapon_tres(path: Path) -> WeaponMeta:
     sprite = SPRITES_DIR / f"{weapon_id}.png"
     if not sprite.exists():
         raise FileNotFoundError(f"weapon sprite not found: {sprite}")
-    return WeaponMeta(weapon_id=weapon_id, attack_type=attack_type, sprite_path=sprite)
+    held_scale = _parse_vector2_uniform(text, "held_scale", 1.0)
+    held_rest_rotation = _parse_float(text, "held_rest_rotation", 0.0)
+    held_aim_aligned = _parse_bool(text, "held_aim_aligned", False)
+    held_aim_rotation_offset = _parse_float(text, "held_aim_rotation_offset", 0.0)
+    hand_x, hand_y = _parse_vector2_xy(text, "held_hand_offset",
+        (HAND_X_OFFSET_DEFAULT, HAND_Y_OFFSET_DEFAULT))
+    return WeaponMeta(
+        weapon_id=weapon_id,
+        attack_type=attack_type,
+        sprite_path=sprite,
+        held_scale=held_scale,
+        held_rest_rotation=held_rest_rotation,
+        held_aim_aligned=held_aim_aligned,
+        held_aim_rotation_offset=held_aim_rotation_offset,
+        hand_x_offset=hand_x,
+        hand_y_offset=hand_y,
+    )
 
 
 def load_scaled(path: Path, scale: int) -> Image.Image:
@@ -107,7 +157,13 @@ def rotate_weapon_around_handle(weapon: Image.Image, angle_rad: float) -> tuple[
     return rotated, layer_center
 
 
-def compose_showcase(player_img: Image.Image, weapon_img: Image.Image, angle_rad: float) -> Image.Image:
+def compose_showcase(
+    player_img: Image.Image,
+    weapon_img: Image.Image,
+    angle_rad: float,
+    hand_x: float,
+    hand_y: float,
+) -> Image.Image:
     canvas = Image.new("RGBA", (CANVAS_SIZE, CANVAS_SIZE), (0, 0, 0, 0))
     cx = CANVAS_SIZE // 2
     cy = CANVAS_SIZE // 2
@@ -117,8 +173,8 @@ def compose_showcase(player_img: Image.Image, weapon_img: Image.Image, angle_rad
     canvas.paste(player_img, (player_paste_x, player_paste_y), player_img)
 
     rotated_weapon, pivot_center = rotate_weapon_around_handle(weapon_img, angle_rad)
-    weapon_pivot_x = cx + HAND_X_OFFSET * SCALE
-    weapon_pivot_y = cy + HAND_Y_OFFSET * SCALE
+    weapon_pivot_x = cx + int(hand_x * SCALE)
+    weapon_pivot_y = cy + int(hand_y * SCALE)
     canvas.paste(
         rotated_weapon,
         (weapon_pivot_x - pivot_center, weapon_pivot_y - pivot_center),
@@ -127,10 +183,26 @@ def compose_showcase(player_img: Image.Image, weapon_img: Image.Image, angle_rad
     return canvas
 
 
-def rest_angle_for(attack_type: str) -> float:
-    if attack_type in MELEE_ATTACK_TYPES:
-        return MELEE_REST_ANGLE  # facing = +1 → положительный угол
+def rest_angle_for(meta: WeaponMeta) -> float:
+    # Приоритет: явный held_rest_rotation → aim-aligned rest (offset при
+    # нулевом aim) → attack_type-based fallback.
+    if meta.held_rest_rotation != 0.0:
+        return meta.held_rest_rotation  # facing = +1 → положительный
+    if meta.held_aim_aligned:
+        # В rest без aim rotation = 0 + offset. Sprite нарисован «вверх»,
+        # offset PI/2 разворачивает к горизонтали вправо.
+        return meta.held_aim_rotation_offset
+    if meta.attack_type in MELEE_ATTACK_TYPES:
+        return MELEE_REST_ANGLE_DEFAULT
     return 0.0
+
+
+def scale_weapon_image(img: Image.Image, factor: float) -> Image.Image:
+    if abs(factor - 1.0) < 0.001:
+        return img
+    new_w = max(1, int(round(img.width * factor)))
+    new_h = max(1, int(round(img.height * factor)))
+    return img.resize((new_w, new_h), Image.NEAREST)
 
 
 def main() -> None:
@@ -144,11 +216,15 @@ def main() -> None:
     for tres in weapon_files:
         meta = parse_weapon_tres(tres)
         weapon_img = load_scaled(meta.sprite_path, SCALE)
-        angle = rest_angle_for(meta.attack_type)
-        image = compose_showcase(player_img, weapon_img, angle)
+        weapon_img = scale_weapon_image(weapon_img, meta.held_scale)
+        angle = rest_angle_for(meta)
+        image = compose_showcase(player_img, weapon_img, angle,
+                                 meta.hand_x_offset, meta.hand_y_offset)
         out = OUT_DIR / f"player_with_{meta.weapon_id}.png"
         image.save(out)
-        print(f"wrote {out} ({image.width}x{image.height}, attack_type={meta.attack_type})")
+        print(f"wrote {out} ({image.width}x{image.height}, "
+              f"attack_type={meta.attack_type}, angle={angle:.2f}, "
+              f"scale={meta.held_scale:.2f})")
 
 
 if __name__ == "__main__":

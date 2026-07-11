@@ -31,20 +31,39 @@ const SWING_DISTANCE: float = 6.0
 const SWING_OUT_DURATION: float = 0.06
 const SWING_BACK_DURATION: float = 0.12
 const WEAPON_SWING_ANGLE: float = PI * 0.55
+# melee_thrust — короткий выпад оружия вперёд без вращения. Копьё
+# «тычет», не рубит.
+const THRUST_DISTANCE: float = 8.0
+const THRUST_OUT_DURATION: float = 0.05
+const THRUST_BACK_DURATION: float = 0.10
+# projectile — короткая отдача оружия назад: лук/арбалет отскакивают
+# от рук стрелка. Не вращают, только сдвигают.
+const RECOIL_DISTANCE: float = 3.0
+const RECOIL_OUT_DURATION: float = 0.04
+const RECOIL_BACK_DURATION: float = 0.10
+# spell — pulse scale: оружие «дышит» при касте. Меньше чем melee swing,
+# без вращения. Возвращается в base scale.
+const CAST_SCALE_MULTIPLIER: float = 1.2
+const CAST_OUT_DURATION: float = 0.06
+const CAST_BACK_DURATION: float = 0.10
 
-# Weapon в руке игрока. Позиция и rest-поза зависят от направления
-# «взгляда» — куда указывает мышь. Смещаем sprite по X в противоположную
-# сторону от игрока и наклоняем рукоятью вниз (для melee), так чтобы
-# читалось «игрок держит оружие в дальней руке под углом», а не
-# «клинок торчит из плеча».
-const HAND_X_OFFSET: float = 5.0
-const HAND_Y_OFFSET: float = 3.0
-# ~20° — слабый наклон от вертикали для меча/кинжала/копья в rest.
-# Знак умножается на _facing, чтобы клинок смотрел «наружу» от игрока.
-const MELEE_REST_ANGLE: float = 0.35
+# Weapon в руке игрока. Fallback: `held_hand_offset` из WeaponResource
+# (дефолт (5, 3)). Дублируем константы здесь, чтобы _apply_facing_visuals
+# работал даже без weapon-настроек.
+const DEFAULT_HAND_X_OFFSET: float = 5.0
+const DEFAULT_HAND_Y_OFFSET: float = 3.0
+# ~20° — слабый наклон от вертикали для меча/кинжала в rest.
+# Fallback: `held_rest_rotation` из WeaponResource. Если 0.0 → используем
+# этот дефолт для melee_arc, иначе явное значение.
+const DEFAULT_MELEE_REST_ANGLE: float = 0.35
 # Порог по dx до мыши, ниже которого считаем «направление не задано»
 # и не переключаем facing — чтобы не дёргалось у самой точки под курсором.
 const FACING_DEADZONE_PX: float = 2.0
+# aim_direction.y < этого порога → оружие уходит за спину игрока.
+# Иначе — перед спрайтом. Ненулевой порог создаёт dead-zone у чистой
+# горизонтали, чтобы sprite не мерцал между «перед» и «сзади» при aim
+# вправо (y ≈ 0 ± небольшой шум курсора).
+const WEAPON_BEHIND_Y_THRESHOLD: float = -0.25
 
 var max_health: int
 var health: int
@@ -76,39 +95,93 @@ func _ready() -> void:
 	health_changed.emit(health, max_health)
 	weapon_changed.emit(equipped_weapon)
 
-# Показать модель оружия в руке игрока. Иконка спрайта нарисована как
+# Показать модель оружия в руке игрока. Использует held_texture из
+# ресурса (fallback на icon_texture). Иконка спрайта нарисована как
 # «blade вверху PNG, handle внизу PNG» — офсет `-h/2` совмещает pivot
 # с handle, чтобы позиция ноды была именно в руке игрока (при вращении
 # handle не «убегает» из руки, а клинок описывает дугу над плечом).
-# Melee оружие получает rest-наклон ±MELEE_REST_ANGLE через
-# `_apply_facing_visuals`, ranged/spell остаются вертикально.
+# Явный `held_sprite_offset` в ресурсе переопределяет автодефолт.
+# Rest-поза (facing-based) применяется в `_apply_facing_visuals` — для
+# per-frame aim-tracking есть `_update_weapon_pose(aim_direction)`.
 func _apply_weapon_visual(weapon: WeaponResource) -> void:
 	if _weapon_sprite == null:
 		return
-	if weapon == null or weapon.icon_texture == null:
+	if weapon == null:
 		_weapon_sprite.visible = false
 		return
-	_weapon_sprite.texture = weapon.icon_texture
+	var texture: Texture2D = weapon.get_held_texture()
+	if texture == null:
+		_weapon_sprite.visible = false
+		return
+	_weapon_sprite.texture = texture
 	_weapon_sprite.modulate = weapon.icon_modulate
-	_weapon_sprite.offset = Vector2(0, -weapon.icon_texture.get_height() * 0.5)
+	_weapon_sprite.scale = weapon.held_scale
+	# По умолчанию pivot держим на handle (нижний край PNG). Явный
+	# held_sprite_offset в ресурсе позволяет сдвинуть pivot (aim-aligned
+	# оружия типа копья/лука хотят pivot на середине древка).
+	if weapon.held_sprite_offset == Vector2.ZERO:
+		_weapon_sprite.offset = Vector2(0, -texture.get_height() * 0.5)
+	else:
+		_weapon_sprite.offset = weapon.held_sprite_offset
 	_weapon_sprite.visible = true
 	_apply_facing_visuals()
 
-# Перевешивает оружие с левой руки на правую (и наоборот), выставляет
-# rest-угол и `flip_h` под текущий `_facing`. Вызывается на смене
-# оружия и на смене направления взгляда.
+# Facing-based rest-поза: position, flip_h и rotation по _facing. Не знает
+# про aim direction — используется как fallback при equip / face() / в
+# тестах без physics tick. Per-frame aim-tracking делает
+# `_update_weapon_pose(aim_direction)` из `_physics_process`.
 func _apply_facing_visuals() -> void:
 	if _weapon_sprite == null or not _weapon_sprite.visible:
 		return
-	_weapon_sprite.position = Vector2(HAND_X_OFFSET * _facing, HAND_Y_OFFSET)
+	var hand_offset: Vector2 = _get_hand_offset()
+	_weapon_sprite.position = Vector2(hand_offset.x * _facing, hand_offset.y)
 	_weapon_sprite.flip_h = _facing < 0
 	_weapon_sprite.rotation = _get_rest_rotation()
+
+# Aim-based обновление pose. Вызывается каждый physics tick. Для
+# aim-aligned оружия (лук, арбалет, копьё, жезл) rotation следует
+# курсору. Для side-rest (меч, кинжал, посох) — fallback к rest-углу
+# по facing.
+func _update_weapon_pose(aim_direction: Vector2) -> void:
+	if _weapon_sprite == null or not _weapon_sprite.visible:
+		return
+	if equipped_weapon == null:
+		return
+	# swing / thrust / recoil / cast tweens — приоритетные, aim-tracking
+	# на время анимации не мешает им перезаписывать rotation/position.
+	if _swing_tween != null and _swing_tween.is_valid():
+		return
+	var hand_offset: Vector2 = _get_hand_offset()
+	_weapon_sprite.position = Vector2(hand_offset.x * _facing, hand_offset.y)
+	_weapon_sprite.flip_h = _facing < 0
+	if equipped_weapon.held_aim_aligned and aim_direction != Vector2.ZERO:
+		_weapon_sprite.rotation = aim_direction.angle() + equipped_weapon.held_aim_rotation_offset
+	else:
+		_weapon_sprite.rotation = _get_rest_rotation()
+	_update_weapon_layering(aim_direction)
+
+# Z-order: оружие уходит за спрайт игрока при прицеливании вверх.
+# При aim вниз / вправо / влево — рисуется перед. Threshold с гистерезисом
+# защищает от мерцания на границе.
+func _update_weapon_layering(aim_direction: Vector2) -> void:
+	if _weapon_sprite == null or not _weapon_sprite.visible:
+		return
+	_weapon_sprite.show_behind_parent = aim_direction.y < WEAPON_BEHIND_Y_THRESHOLD
+
+func _get_hand_offset() -> Vector2:
+	if equipped_weapon == null:
+		return Vector2(DEFAULT_HAND_X_OFFSET, DEFAULT_HAND_Y_OFFSET)
+	return equipped_weapon.held_hand_offset
 
 func _get_rest_rotation() -> float:
 	if equipped_weapon == null:
 		return 0.0
+	# Явный held_rest_rotation в ресурсе — приоритет. 0.0 → attack_type-based
+	# fallback: melee_arc/melee_thrust получают default наклон, ranged 0.
+	if equipped_weapon.held_rest_rotation != 0.0:
+		return equipped_weapon.held_rest_rotation * _facing
 	if equipped_weapon.attack_type in ["melee_arc", "melee_thrust"]:
-		return MELEE_REST_ANGLE * _facing
+		return DEFAULT_MELEE_REST_ANGLE * _facing
 	return 0.0
 
 # Публичный хук: тесты не могут удобно эмулировать позицию мыши, а
@@ -128,31 +201,96 @@ func face(direction: int) -> void:
 		_swing_tween.kill()
 	_apply_facing_visuals()
 
-# WeaponController зовёт это на успешной атаке. Играет короткий
-# выпад корпуса + свинг оружия для melee, только выпад для ranged.
+# WeaponController зовёт это на успешной атаке. Диспатчер по attack_type
+# выбирает нужную анимацию: swing для melee_arc, thrust для melee_thrust,
+# recoil для projectile, cast для spell_projectile.
 func play_attack_visual(target_position: Vector2, weapon: WeaponResource) -> void:
-	if _visual == null:
+	if _visual == null or weapon == null:
 		return
 	if _swing_tween != null and _swing_tween.is_valid():
 		_swing_tween.kill()
 	var direction := (target_position - global_position).normalized()
 	if direction == Vector2.ZERO:
 		return
+	match weapon.attack_type:
+		"melee_arc":
+			_play_melee_arc_visual(direction)
+		"melee_thrust":
+			_play_melee_thrust_visual(direction)
+		"projectile":
+			_play_projectile_recoil_visual(direction)
+		"spell_projectile", "spell_area":
+			_play_spell_cast_visual(direction)
+		_:
+			# Неизвестный тип — просто короткий выпад корпуса без анимации
+			# оружия, чтобы игрок хоть какую-то отдачу видел.
+			_play_body_lunge_only(direction)
+
+# melee_arc: короткий выпад корпуса + широкий swing оружия по дуге.
+# Знак угла умножается на _facing — удар всегда идёт «в сторону цели»
+# (по часовой при facing right, против при left).
+func _play_melee_arc_visual(direction: Vector2) -> void:
 	var swing_offset := _visual_base_position + direction * SWING_DISTANCE
-	_swing_tween = create_tween()
-	_swing_tween.tween_property(_visual, "position", swing_offset, SWING_OUT_DURATION)
-	# Свинг оружия только для melee — у projectile/spell вращение выглядит
-	# странно (лук не должен «резать»). Знак угла завязан на facing:
-	# при facing right свинг идёт по часовой (клинок вправо), при left —
-	# против (клинок влево), чтобы удар всегда шёл «в сторону цели».
-	var is_melee := weapon != null and weapon.attack_type in ["melee_arc", "melee_thrust"]
 	var rest_rot := _get_rest_rotation()
 	var swing_target := rest_rot + WEAPON_SWING_ANGLE * _facing
-	if is_melee and _weapon_sprite != null and _weapon_sprite.visible:
+	_swing_tween = create_tween()
+	_swing_tween.tween_property(_visual, "position", swing_offset, SWING_OUT_DURATION)
+	if _weapon_sprite != null and _weapon_sprite.visible:
 		_swing_tween.parallel().tween_property(_weapon_sprite, "rotation", swing_target, SWING_OUT_DURATION)
 	_swing_tween.tween_property(_visual, "position", _visual_base_position, SWING_BACK_DURATION)
-	if is_melee and _weapon_sprite != null and _weapon_sprite.visible:
+	if _weapon_sprite != null and _weapon_sprite.visible:
 		_swing_tween.parallel().tween_property(_weapon_sprite, "rotation", rest_rot, SWING_BACK_DURATION)
+
+# melee_thrust: короткий выпад корпуса + оружие идёт вперёд вдоль
+# direction без вращения. Копьё «тычет», не рубит.
+func _play_melee_thrust_visual(direction: Vector2) -> void:
+	var body_offset := _visual_base_position + direction * SWING_DISTANCE
+	var hand_offset: Vector2 = _get_hand_offset()
+	var weapon_rest := Vector2(hand_offset.x * _facing, hand_offset.y)
+	var weapon_thrust := weapon_rest + direction * THRUST_DISTANCE
+	_swing_tween = create_tween()
+	_swing_tween.tween_property(_visual, "position", body_offset, THRUST_OUT_DURATION)
+	if _weapon_sprite != null and _weapon_sprite.visible:
+		_swing_tween.parallel().tween_property(_weapon_sprite, "position", weapon_thrust, THRUST_OUT_DURATION)
+	_swing_tween.tween_property(_visual, "position", _visual_base_position, THRUST_BACK_DURATION)
+	if _weapon_sprite != null and _weapon_sprite.visible:
+		_swing_tween.parallel().tween_property(_weapon_sprite, "position", weapon_rest, THRUST_BACK_DURATION)
+
+# projectile: recoil — корпус и оружие отскакивают назад (в противоположную
+# от direction сторону) при выстреле. Не вращают оружие.
+func _play_projectile_recoil_visual(direction: Vector2) -> void:
+	var body_offset := _visual_base_position - direction * RECOIL_DISTANCE
+	var hand_offset: Vector2 = _get_hand_offset()
+	var weapon_rest := Vector2(hand_offset.x * _facing, hand_offset.y)
+	var weapon_recoil := weapon_rest - direction * RECOIL_DISTANCE
+	_swing_tween = create_tween()
+	_swing_tween.tween_property(_visual, "position", body_offset, RECOIL_OUT_DURATION)
+	if _weapon_sprite != null and _weapon_sprite.visible:
+		_swing_tween.parallel().tween_property(_weapon_sprite, "position", weapon_recoil, RECOIL_OUT_DURATION)
+	_swing_tween.tween_property(_visual, "position", _visual_base_position, RECOIL_BACK_DURATION)
+	if _weapon_sprite != null and _weapon_sprite.visible:
+		_swing_tween.parallel().tween_property(_weapon_sprite, "position", weapon_rest, RECOIL_BACK_DURATION)
+
+# spell_projectile / spell_area: cast pulse — оружие «дышит» через scale
+# up/down. Без вращения и без сдвига corp'уса вперёд — маг не выпадает.
+func _play_spell_cast_visual(direction: Vector2) -> void:
+	var body_offset := _visual_base_position + direction * (SWING_DISTANCE * 0.5)
+	var base_scale: Vector2 = _weapon_sprite.scale if _weapon_sprite != null else Vector2.ONE
+	var pulse_scale := base_scale * CAST_SCALE_MULTIPLIER
+	_swing_tween = create_tween()
+	_swing_tween.tween_property(_visual, "position", body_offset, CAST_OUT_DURATION)
+	if _weapon_sprite != null and _weapon_sprite.visible:
+		_swing_tween.parallel().tween_property(_weapon_sprite, "scale", pulse_scale, CAST_OUT_DURATION)
+	_swing_tween.tween_property(_visual, "position", _visual_base_position, CAST_BACK_DURATION)
+	if _weapon_sprite != null and _weapon_sprite.visible:
+		_swing_tween.parallel().tween_property(_weapon_sprite, "scale", base_scale, CAST_BACK_DURATION)
+
+# Fallback анимация для неизвестного attack_type: только выпад корпуса.
+func _play_body_lunge_only(direction: Vector2) -> void:
+	var body_offset := _visual_base_position + direction * SWING_DISTANCE
+	_swing_tween = create_tween()
+	_swing_tween.tween_property(_visual, "position", body_offset, SWING_OUT_DURATION)
+	_swing_tween.tween_property(_visual, "position", _visual_base_position, SWING_BACK_DURATION)
 
 func _on_leveled_up(_new_level: int, new_max_health: int) -> void:
 	max_health = new_max_health
@@ -166,11 +304,23 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 	_update_facing_from_aim()
+	# Aim-tracking pose (rotation по курсору для лука/арбалета/копья/жезла)
+	# и z-order (оружие уходит за спину при aim вверх). Attack tweens
+	# приоритетные — на время анимации aim update пропускается.
+	_update_weapon_pose(_aim_direction())
 
 	if Input.is_action_pressed("attack") and equipped_weapon != null:
 		_weapon_controller.try_attack(equipped_weapon, get_global_mouse_position())
 
 	_tick_poison(delta)
+
+# Возвращает нормализованное направление от игрока к курсору. Zero если
+# курсор совпадает с игроком (deadzone).
+func _aim_direction() -> Vector2:
+	var delta := get_global_mouse_position() - global_position
+	if delta.length_squared() < FACING_DEADZONE_PX * FACING_DEADZONE_PX:
+		return Vector2.ZERO
+	return delta.normalized()
 
 func _update_facing_from_aim() -> void:
 	# Направление «взгляда» = знак dx от игрока до курсора. Deadzone
