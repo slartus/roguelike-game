@@ -23,6 +23,6 @@ projectiles_per_attack = 1
 spread_angle_deg = 4.0
 pierce = 0
 mana_cost = 0
-projectile_spawn_distance = 7.0
+projectile_spawn_distance = 18.0
 held_aim_aligned = true
 held_aim_rotation_offset = 1.5707963

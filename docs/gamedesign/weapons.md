@@ -181,10 +181,12 @@ i18n: `WEAPON_WAND`.
 
 | Оружие | Projectile scene | Sprite (px) | Shape | Rotation | Spawn distance |
 |--------|------------------|------------:|-------|----------|---------------:|
-| Short Bow | `scenes/bullets/player_arrow.tscn` | 12×5 деревянная стрела с оперением | `RectangleShape2D(12×4)` | вдоль direction | 8 |
-| Crossbow | `scenes/bullets/player_crossbow_bolt.tscn` | 9×5 короткий стальной bolt | `RectangleShape2D(9×4)` | вдоль direction | 10 |
-| Wand | `scenes/bullets/player_wand_orb.tscn` | 7×7 компактный пурпурный orb | `CircleShape2D(3.0)` | нет (круглый) | 7 |
-| Apprentice Staff | `scenes/bullets/player_staff_orb.tscn` | 11×11 крупный сине-голубой orb | `CircleShape2D(5.0)` | нет (круглый) | 9 |
+| Short Bow | `scenes/bullets/player_arrow.tscn` | 12×5 деревянная стрела с оперением | `RectangleShape2D(12×4)` | вдоль direction | 18 |
+| Crossbow | `scenes/bullets/player_crossbow_bolt.tscn` | 9×5 короткий стальной bolt | `RectangleShape2D(9×4)` | вдоль direction | 20 |
+| Wand | `scenes/bullets/player_wand_orb.tscn` | 7×7 компактный пурпурный orb | `CircleShape2D(3.0)` | нет (круглый) | 18 |
+| Apprentice Staff | `scenes/bullets/player_staff_orb.tscn` | 11×11 крупный сине-голубой orb | `CircleShape2D(5.0)` | нет (круглый) | 20 |
+
+Значения `projectile_spawn_distance` подобраны под aim-aligned pose: сумма `held_hand_offset.x` (5 px) и длины sprite'а оружия (~16 px) — снаряд рождается у tip оружия, а не в центре игрока.
 
 Все четыре сцены используют один скрипт `scenes/bullets/bullet.gd` — он наносит урон **врагам**, не игроку. Enemy-projectiles (`arrow_bullet.tscn`, `magic_bolt_bullet.tscn`, `dark_orb_bullet.tscn`) используют другой скрипт (`enemy_bullet.gd`) с обратной damage-логикой и не должны переиспользоваться для оружия игрока.
 

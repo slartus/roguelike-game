@@ -22,6 +22,6 @@ projectile_color = Color(1.0, 1.0, 1.0, 1.0)
 projectiles_per_attack = 1
 spread_angle_deg = 2.0
 pierce = 0
-projectile_spawn_distance = 8.0
+projectile_spawn_distance = 18.0
 held_aim_aligned = true
 held_aim_rotation_offset = 1.5707963

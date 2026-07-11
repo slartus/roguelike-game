@@ -174,8 +174,8 @@ func after_each() -> void:
 	_free_all_bullets()
 
 func test_spawn_origin_shifted_along_direction_by_spawn_distance() -> void:
-	# Aiming right → direction = (1, 0). Spawn distance 8 → пуля должна
-	# оказаться в 8 пикселях справа от owner_player.global_position.
+	# Aiming right → direction = (1, 0). Spawn distance 18 → пуля должна
+	# оказаться в 18 пикселях справа от owner_player.global_position.
 	var wc := _make_controller_with_owner_at(Vector2(100, 100))
 	var owner: Node2D = wc.get_parent()
 	var target: Vector2 = owner.global_position + Vector2(100, 0)
@@ -184,11 +184,11 @@ func test_spawn_origin_shifted_along_direction_by_spawn_distance() -> void:
 	assert_true(attacked)
 	var bullet: Node2D = _find_new_projectile(before)
 	assert_not_null(bullet, "стрела должна быть заспавнена")
-	# ShortBowRes.projectile_spawn_distance = 8, spread 2°: bullet может
+	# ShortBowRes.projectile_spawn_distance = 18, spread 2°: bullet может
 	# слегка отклониться от чистого (1,0). Проверяем что расстояние от
-	# owner до spawn point ≈ 8 и позиция сдвинута вправо.
+	# owner до spawn point ≈ 18 и позиция сдвинута вправо.
 	var offset: Vector2 = bullet.global_position - owner.global_position
-	assert_almost_eq(offset.length(), 8.0, 0.5,
+	assert_almost_eq(offset.length(), 18.0, 0.5,
 		"spawn distance примерно совпадает с weapon.projectile_spawn_distance")
 	assert_gt(offset.x, 0.0,
 		"spawn сдвинут вправо от игрока (по direction)")
@@ -216,12 +216,12 @@ func test_spawn_origin_at_player_when_distance_zero() -> void:
 
 func test_spawn_origin_works_in_all_cardinal_directions() -> void:
 	# Проверяем что spawn работает для 4 сторон — не только вправо.
-	# ShortBowRes.projectile_spawn_distance = 8. offset считаем от owner.
+	# ShortBowRes.projectile_spawn_distance = 18. offset считаем от owner.
 	var direction_offsets := [
-		[Vector2(100, 0),  Vector2(8, 0)],   # right
-		[Vector2(-100, 0), Vector2(-8, 0)],  # left
-		[Vector2(0, 100),  Vector2(0, 8)],   # down
-		[Vector2(0, -100), Vector2(0, -8)],  # up
+		[Vector2(100, 0),  Vector2(18, 0)],   # right
+		[Vector2(-100, 0), Vector2(-18, 0)],  # left
+		[Vector2(0, 100),  Vector2(0, 18)],   # down
+		[Vector2(0, -100), Vector2(0, -18)],  # up
 	]
 	for pair in direction_offsets:
 		var target_offset: Vector2 = pair[0]
