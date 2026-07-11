@@ -56,8 +56,8 @@ WEAPONS_DIR = ROOT / "resources" / "weapons"
 SPRITES_DIR = ROOT / "assets" / "sprites" / "weapons"
 OUT_DIR = ROOT / "docs" / "gamedesign" / "media"
 
-# Legacy оружия (dagger/pistol/shotgun) объявлены в .tres без поля
-# `attack_type` — они pre-refactor и ведут себя как обычные снаряды.
+# Fallback только для повреждённого .tres без `attack_type` — активные
+# fantasy оружия его всегда задают явно.
 LEGACY_ATTACK_TYPE = "projectile"
 
 

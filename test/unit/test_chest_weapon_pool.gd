@@ -1,10 +1,12 @@
 extends GutTest
 
-# Пул сундука после M6:
-# - 6 классических оружий, по 2 на style (warrior/archer/mage);
-# - Dagger/Pistol/Shotgun выведены из активного пула;
+# Fantasy weapon pool после roster overhaul:
+# - 7 fantasy-оружий: warrior×3 (dagger/sword/spear), archer×2 (bow/crossbow),
+#   mage×2 (wand/staff);
+# - Pistol/Shotgun удалены из проекта — legacy shooter-контент срезан;
+# - Dagger теперь melee_arc warrior-оружие, входит в общий пул;
 # - _choose_weapon НЕ возвращает текущее оружие если есть альтернатива;
-# - стартовое оружие игрока = short_sword (fantasy start, не shooter).
+# - стартовое оружие игрока = short_sword.
 
 const ChestScript = preload("res://scenes/pickups/chest.gd")
 
@@ -16,9 +18,9 @@ func before_each() -> void:
 func after_each() -> void:
 	GameState.equipped_weapon = _weapon_snapshot
 
-func test_pool_contains_six_classical_weapons() -> void:
-	assert_eq(ChestScript.WEAPON_POOL.size(), 6,
-		"6 классических оружий по 2 на стиль")
+func test_pool_contains_seven_fantasy_weapons() -> void:
+	assert_eq(ChestScript.WEAPON_POOL.size(), 7,
+		"7 fantasy оружий: warrior×3 + archer×2 + mage×2")
 
 func test_pool_scenes_all_load() -> void:
 	for weapon in ChestScript.WEAPON_POOL:
@@ -26,26 +28,34 @@ func test_pool_scenes_all_load() -> void:
 		assert_ne(weapon.display_name, "",
 			"каждое оружие имеет i18n display_name")
 
-func test_pool_covers_all_three_styles() -> void:
-	var styles: Dictionary = {}
+func test_pool_covers_all_three_styles_with_expected_counts() -> void:
+	var counts: Dictionary = {"warrior": 0, "archer": 0, "mage": 0}
 	for weapon in ChestScript.WEAPON_POOL:
-		styles[weapon.style] = true
-	assert_true(styles.has("warrior"), "pool содержит warrior weapon")
-	assert_true(styles.has("archer"), "pool содержит archer weapon")
-	assert_true(styles.has("mage"), "pool содержит mage weapon")
+		counts[weapon.style] = counts.get(weapon.style, 0) + 1
+	assert_eq(counts["warrior"], 3, "3 warrior weapons")
+	assert_eq(counts["archer"], 2, "2 archer weapons")
+	assert_eq(counts["mage"], 2, "2 mage weapons")
 
-func test_pool_excludes_legacy_dagger_pistol_shotgun() -> void:
-	# Классический fantasy — старые shooter-оружия не выпадают.
-	var pool_paths: Array = []
+func test_pool_excludes_removed_firearms() -> void:
+	# Pistol/Shotgun удалены из проекта — соответствующие .tres в pool
+	# ссылаться не должны, а их id больше нигде не мелькает.
+	var pool_ids: Array = []
 	for weapon in ChestScript.WEAPON_POOL:
-		pool_paths.append(weapon.resource_path)
-	for legacy in [
-		"res://resources/weapons/dagger.tres",
-		"res://resources/weapons/pistol.tres",
-		"res://resources/weapons/shotgun.tres",
-	]:
-		assert_false(pool_paths.has(legacy),
-			"legacy %s не должен быть в активном пуле" % legacy)
+		pool_ids.append(weapon.id)
+	for removed in ["pistol", "shotgun"]:
+		assert_false(pool_ids.has(removed),
+			"removed weapon '%s' не должен быть в pool" % removed)
+
+func test_pool_contains_dagger_as_warrior_melee_arc() -> void:
+	# Регресс: после миграции Dagger обязан быть в пуле как melee_arc.
+	var dagger: WeaponResource = null
+	for weapon in ChestScript.WEAPON_POOL:
+		if weapon.id == "dagger":
+			dagger = weapon
+			break
+	assert_not_null(dagger, "Dagger должен быть в pool")
+	assert_eq(dagger.style, "warrior", "Dagger — warrior style")
+	assert_eq(dagger.attack_type, "melee_arc", "Dagger — melee_arc")
 
 func test_choose_weapon_does_not_return_current() -> void:
 	# Игрок держит short_sword (default стартовое) — сундук не выдаст его же.

@@ -23,14 +23,26 @@ func _make_upgrade(id: String, style: String = "", rarity: String = "common", ma
 	u.parameters = {"amount": 1}
 	return u
 
-func _basic_context(current_style: String = "warrior") -> Dictionary:
+func _basic_context(current_style: String = "warrior", current_attack_type: String = "") -> Dictionary:
 	return {
 		"tower_seed": 12345,
 		"player_level": 3,
 		"current_floor_number": 1,
 		"offer_counter": 0,
 		"current_weapon_style": current_style,
+		"current_weapon_attack_type": current_attack_type,
 	}
+
+func _make_upgrade_with_attack_types(
+	id: String,
+	style: String,
+	required: Array[String],
+	excluded: Array[String] = [] as Array[String],
+) -> PlayerUpgradeResource:
+	var u := _make_upgrade(id, style)
+	u.required_attack_types = required
+	u.excluded_attack_types = excluded
+	return u
 
 func test_same_seed_returns_same_offer() -> void:
 	PlayerUpgradeLibrary._cache = [
@@ -159,6 +171,71 @@ func test_rare_cards_are_reachable_but_not_dominant() -> void:
 		"common карты должны появляться чаще rare (%d vs %d)" % [common_count, rare_count])
 	assert_gt(rare_count, 0,
 		"rare карта должна быть достижима хотя бы иногда")
+
+func test_excludes_card_when_required_attack_type_does_not_match_current() -> void:
+	# sweeping_blade требует melee_arc → для melee_thrust weapon не предлагается.
+	PlayerUpgradeLibrary._cache = [
+		_make_upgrade_with_attack_types("sweeping", "warrior",
+			["melee_arc"] as Array[String]),
+		_make_upgrade("heavy_strike", "warrior"),
+		_make_upgrade("gen1", ""),
+	]
+	var offer: Array = UpgradeOfferGenerator.generate_offer(
+		_basic_context("warrior", "melee_thrust"), {})
+	for u in offer:
+		assert_ne(u.id, "sweeping",
+			"melee_arc-only карта не должна предлагаться melee_thrust оружию")
+
+func test_includes_card_when_required_attack_type_matches_current() -> void:
+	PlayerUpgradeLibrary._cache = [
+		_make_upgrade_with_attack_types("sweeping", "warrior",
+			["melee_arc"] as Array[String]),
+	]
+	var offer: Array = UpgradeOfferGenerator.generate_offer(
+		_basic_context("warrior", "melee_arc"), {})
+	var has_sweeping := false
+	for u in offer:
+		if u.id == "sweeping":
+			has_sweeping = true
+			break
+	assert_true(has_sweeping,
+		"melee_arc-only карта должна предлагаться melee_arc оружию")
+
+func test_excluded_attack_types_removes_card() -> void:
+	PlayerUpgradeLibrary._cache = [
+		_make_upgrade_with_attack_types("no_thrust", "warrior",
+			[] as Array[String], ["melee_thrust"] as Array[String]),
+		_make_upgrade("gen1", ""),
+	]
+	var offer: Array = UpgradeOfferGenerator.generate_offer(
+		_basic_context("warrior", "melee_thrust"), {})
+	for u in offer:
+		assert_ne(u.id, "no_thrust",
+			"card с excluded='melee_thrust' не предлагается melee_thrust оружию")
+
+func test_empty_required_attack_types_does_not_filter() -> void:
+	PlayerUpgradeLibrary._cache = [
+		_make_upgrade("universal", "warrior"),
+	]
+	# universal — без required. Не должен фильтроваться ни для одного типа.
+	for attack_type in ["melee_arc", "melee_thrust", "projectile", "spell_projectile"]:
+		var offer: Array = UpgradeOfferGenerator.generate_offer(
+			_basic_context("warrior", attack_type), {})
+		var ids: Array = offer.map(func(u): return u.id)
+		assert_true(ids.has("universal"),
+			"universal карта должна предлагаться для attack_type=%s" % attack_type)
+
+func test_no_current_attack_type_disables_filter() -> void:
+	# Пустой current_weapon_attack_type (нет оружия) — все карты доступны.
+	PlayerUpgradeLibrary._cache = [
+		_make_upgrade_with_attack_types("sweeping", "warrior",
+			["melee_arc"] as Array[String]),
+	]
+	var offer: Array = UpgradeOfferGenerator.generate_offer(
+		_basic_context("warrior", ""), {})
+	var ids: Array = offer.map(func(u): return u.id)
+	assert_true(ids.has("sweeping"),
+		"без attack_type фильтр не применяется — карта попадает в offer")
 
 func test_seed_changes_with_offer_counter() -> void:
 	# Один и тот же level, разный offer_counter → разный offer (иначе

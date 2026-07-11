@@ -5,12 +5,18 @@
 
 [resource]
 script = ExtResource("1_wr")
+id = "dagger"
+style = "warrior"
+attack_type = "melee_arc"
+tier = 1
+tags = Array[String](["warrior", "melee", "melee_arc", "dagger", "fast"])
 display_name = "WEAPON_DAGGER"
-damage = 1
-fire_interval = 0.16
-bullet_speed = 280.0
-bullet_lifetime = 0.35
-bullet_color = Color(0.9, 0.95, 1.0, 1.0)
-bullets_per_shot = 1
-spread_angle_deg = 0.0
 icon_texture = ExtResource("2_icon")
+damage = 1
+attack_interval = 0.28
+attack_range = 24.0
+arc_degrees = 60.0
+hitbox_width = 22.0
+hitbox_length = 24.0
+active_time = 0.06
+knockback = 10.0

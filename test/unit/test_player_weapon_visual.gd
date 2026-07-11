@@ -106,14 +106,14 @@ func test_play_attack_visual_zero_direction_is_safe() -> void:
 	assert_true(is_instance_valid(player),
 		"nulled direction — safe no-op, player не крешит")
 
-func test_legacy_dagger_still_shows_weapon_sprite() -> void:
-	# Backward compat: legacy Dagger имеет icon_texture — должна отображаться.
+func test_dagger_still_shows_weapon_sprite() -> void:
+	# Dagger как melee_arc weapon рисуется в руке игрока.
 	GameState.equipped_weapon = DaggerRes
 	var player := _make_player()
 	await get_tree().process_frame
 	var weapon_sprite: Sprite2D = player.get_node("Weapon")
 	assert_true(weapon_sprite.visible,
-		"legacy Dagger рисуется в руке игрока")
+		"Dagger рисуется в руке игрока")
 
 func test_melee_weapon_has_rest_tilt() -> void:
 	# Меч/кинжал/копьё в rest pose наклонены под небольшим углом —
@@ -126,7 +126,7 @@ func test_melee_weapon_has_rest_tilt() -> void:
 		"melee weapon в rest должен быть наклонён (rotation != 0)")
 
 func test_projectile_weapon_has_no_rest_tilt() -> void:
-	# Лук/арбалет/пистолет в rest — вертикально, наклон только у melee.
+	# Лук/арбалет в rest — вертикально, наклон только у melee.
 	GameState.equipped_weapon = ShortBowRes
 	var player := _make_player()
 	await get_tree().process_frame

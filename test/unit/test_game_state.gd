@@ -1,7 +1,7 @@
 extends GutTest
 
 const SHORT_SWORD := preload("res://resources/weapons/short_sword.tres")
-const PISTOL := preload("res://resources/weapons/pistol.tres")
+const DAGGER := preload("res://resources/weapons/dagger.tres")
 
 var _snapshot: Dictionary
 
@@ -71,7 +71,7 @@ func test_reset_run_clears_run_state_but_keeps_gold() -> void:
 	GameState.player_xp = 12
 	GameState.player_max_health = 8
 	GameState.player_health = 2
-	GameState.equipped_weapon = PISTOL
+	GameState.equipped_weapon = DAGGER
 	GameState.total_gold = 100
 	GameState.reset_run()
 	assert_eq(GameState.current_floor_number, 1)

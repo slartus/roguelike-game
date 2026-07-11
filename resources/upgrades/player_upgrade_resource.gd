@@ -36,4 +36,13 @@ extends Resource
 #   style_damage_bonus → {"style": "warrior", "amount": 1}
 @export var parameters: Dictionary = {}
 
+# Совместимость с типом атаки текущего оружия. Пусто → карта работает на
+# любом attack_type. Иначе оффер-генератор фильтрует карту, если у
+# equipped_weapon.attack_type нет матча в required. `excluded_attack_types`
+# — обратный список: карта не предлагается для перечисленных типов.
+# Пример: sweeping_blade расширяет arc_degrees и полезна только melee_arc
+# оружию → required_attack_types = ["melee_arc"].
+@export var required_attack_types: Array[String] = []
+@export var excluded_attack_types: Array[String] = []
+
 @export var icon_texture: Texture2D

@@ -1,8 +1,8 @@
 extends GutTest
 
-# M7 контракт для WeaponPickup:
+# Контракт для WeaponPickup:
 # - все active pool weapons имеют icon_texture (иначе Sprite2D пустой);
-# - WeaponPickup ставит modulate = weapon.icon_modulate, не bullet_color
+# - WeaponPickup ставит modulate = weapon.icon_modulate, не projectile_color
 #   (иначе projectile-специфичный цвет пачкает мировой пикап);
 # - equip() и weapon_changed сигнал работают.
 
@@ -30,12 +30,12 @@ func test_all_pool_weapons_have_distinct_icon_texture() -> void:
 	assert_eq(textures.size(), ChestScript.WEAPON_POOL.size(),
 		"каждое оружие должно иметь свой icon_texture — иначе визуал сливается")
 
-func test_pickup_uses_icon_modulate_not_bullet_color() -> void:
-	# Регресс M7 acceptance: pickup визуал не зависит от bullet-специфичного
-	# поля. Даже если bullet_color = красный, а icon_modulate = синий,
+func test_pickup_uses_icon_modulate_not_projectile_color() -> void:
+	# Регресс: pickup визуал не должен зависеть от projectile-специфичного
+	# поля. Даже если projectile_color = красный, а icon_modulate = синий,
 	# pickup покажет синий.
 	var weapon: WeaponResource = WeaponResource.new()
-	weapon.bullet_color = Color(1.0, 0.0, 0.0, 1.0)
+	weapon.projectile_color = Color(1.0, 0.0, 0.0, 1.0)
 	weapon.icon_modulate = Color(0.0, 0.0, 1.0, 1.0)
 	weapon.icon_texture = DaggerRes.icon_texture  # берём валидную текстуру
 	var pickup = WeaponPickupScene.instantiate()
@@ -44,13 +44,13 @@ func test_pickup_uses_icon_modulate_not_bullet_color() -> void:
 	await get_tree().process_frame
 	var visual: Sprite2D = pickup.get_node("Visual")
 	assert_eq(visual.modulate, Color(0.0, 0.0, 1.0, 1.0),
-		"pickup должен использовать icon_modulate, а не bullet_color")
+		"pickup должен использовать icon_modulate, а не projectile_color")
 
-func test_legacy_dagger_icon_modulate_defaults_to_white() -> void:
-	# Legacy .tres без icon_modulate → default WHITE → полноцветный спрайт
-	# рендерится как есть (не обесцвечен).
+func test_dagger_icon_modulate_defaults_to_white() -> void:
+	# Dagger .tres не задаёт icon_modulate → default WHITE → полноцветный
+	# спрайт рендерится как есть (не обесцвечен).
 	assert_eq(DaggerRes.icon_modulate, Color.WHITE,
-		"legacy Dagger должен иметь icon_modulate = WHITE (default)")
+		"Dagger должен иметь icon_modulate = WHITE (default)")
 
 func test_pickup_calls_equip_and_emits_weapon_changed() -> void:
 	# Fake player с методом equip и сигналом weapon_changed.
