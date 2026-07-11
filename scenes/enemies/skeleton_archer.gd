@@ -11,7 +11,10 @@ var _arrow_damage_bonus: int = 0
 var _arrow_texture: Texture2D
 
 func _ready() -> void:
-	var variant: Dictionary = SkeletonArsenal.pick(SkeletonArsenal.ARROW_VARIANTS)
+	var pool: Array = SkeletonArsenal.ARROW_VARIANTS
+	if _summon_profile != null and not _summon_profile.arsenal_pool.is_empty():
+		pool = _summon_profile.arsenal_pool
+	var variant: Dictionary = SkeletonArsenal.pick(pool)
 	display_name = variant["display_key"]
 	_arrow_damage_bonus = variant["damage_bonus"]
 	_arrow_texture = load(variant["sprite_path"]) as Texture2D
@@ -23,6 +26,12 @@ func _ready() -> void:
 func _configure_bullet(bullet: Node) -> void:
 	if _arrow_damage_bonus != 0 and bullet.get("damage") != null:
 		bullet.damage += _arrow_damage_bonus
+	# Hard cap на damage стрелы: даже wooden+iron bonus'ы не должны
+	# случайно превысить cap профиля (текущий: 2 у necromancer_ranged).
+	# Проверяем «bullet имеет field damage» через get() → null-check,
+	# т.к. базовые Godot Node2D не имеют такого свойства.
+	if _summon_profile != null and _summon_profile.max_damage > 0 and bullet.get("damage") != null:
+		bullet.damage = mini(bullet.damage, _summon_profile.max_damage)
 	if _arrow_texture != null:
 		var bullet_visual: Sprite2D = bullet.get_node_or_null("Visual") as Sprite2D
 		if bullet_visual != null:

@@ -597,29 +597,75 @@ Bonus прибавляется к `damage` каждой заспавненной
 - Каждые `volley_interval` выпускает `volley_count` штук `dark_orb_bullet.tscn` **по кругу** — направления через равные `TAU / volley_count` радиан (45° между пулями). Каждый второй залп сдвигается на `step / 2` (22.5° при `volley_count = 8`), чтобы звёздочка визуально вращалась между кадрами и игрок не мог заучить статичные коридоры безопасности.
 - Параллельно, каждые `aimed_fire_interval = 1.0 s`, выпускает **прицельный `magic_bolt_bullet.tscn`** — как обычный лич. Направление считается с упреждением по вектору движения игрока: `predicted = target.pos + target.velocity * (distance / AIMED_BULLET_SPEED)`, `AIMED_BULLET_SPEED = 100` (совпадает с `magic_bolt::speed`). Формула идентична `lich.gd::_compute_lead_direction`, вынесена в pure-функцию для тестов. Aimed shot добавляет постоянное давление между залпами звёздочек — раньше игрок в промежутках между volley спокойно вложить урон.
 
-**Призыв свиты — батч из 5 скелетов.** Аналог лича по механике, но с бустом:
+**Призыв свиты — фиксированная композиция 3 melee + 2 archer.**
 
 | Параметр | Значение |
 |----------|----------|
 | SUMMON_COOLDOWN | 10.0 s |
 | SUMMON_CAST_DURATION | 1.2 s |
-| SUMMON_COUNT | 5 |
-| SUMMON_OFFSET_MIN | 18 px |
-| SUMMON_OFFSET_MAX | 40 px |
-| SUMMON_TOWARD_PLAYER_ARC | ~108° (TAU × 0.30) |
+| SUMMON_MELEE_COUNT | 3 |
+| SUMMON_RANGED_COUNT | 2 |
+| SUMMON_COUNT | 5 (сумма) |
 
-- `_minions: Array` держит ссылки на всех живых миньонов; `_cleanup_minions` каждый тик прополняет мёртвых (`is_instance_valid`).
-- **Первый каст стартует сразу.** `_summon_cooldown_timer` инициализирован нулём — босс со входа в комнату начинает колдовать свиту, а не тратит 10 s на «зарядку». Игрок мгновенно понимает роль призывателя; `SUMMON_CAST_DURATION = 1.2 s` даёт окно среагировать до появления первой пятёрки скелетов.
-- **Топ-ап, не всегда 5.** Если 3 миньона выжили с прошлого каста — следующий каст призовёт 2, чтобы вернуть популяцию к SUMMON_COUNT. Не растёт бесконечно.
-- Если инвентарь миньонов полон (`_minions.size() >= SUMMON_COUNT`) — каст не стартует, кулдаун ждёт снижения популяции.
+- **Раздельные квоты по ролям.** `_melee_minions` и `_ranged_minions` — отдельные списки живых миньонов. `_cleanup_minions` каждый тик прополняет мёртвых (`is_instance_valid`) в каждом списке независимо. Гибель конкретной роли пополняется именно этой ролью: убили всех melee → следующий каст призовёт 3 melee, не подмену случайными.
+- **Первый каст стартует сразу.** `_summon_cooldown_timer` инициализирован нулём — босс со входа в комнату начинает колдовать свиту, а не тратит 10 s на «зарядку». Игрок мгновенно понимает роль призывателя; `SUMMON_CAST_DURATION = 1.2 s` даёт окно среагировать до появления первой пятёрки миньонов.
+- **Топ-ап, не всегда 5.** Пример: 2 melee + 2 ranged живы → следующий каст = 1 melee. 3 melee + 0 ranged → 2 ranged.
+- Если оба списка полные (`_total_alive_minions() >= SUMMON_COUNT`) — каст не стартует, кулдаун ждёт снижения популяции.
 - Каст (1.2 s) полностью тормозит босса: `_summon_cast_timer > 0` → пропускается движение (`velocity = 0`), контактный урон (не двигается — нет `move_and_collide`), и volley-таймер тоже пропускается (декремент только вне каста). Игрок получает окно «босс колдует, добивай минионов пока свежие не появились».
 - Каст-визуал: `Visual.modulate` мешается с `Color(0.7, 1.6, 0.85)` через синусоидальную пульсацию поверх линейного прогресса — тот же паттерн что у лича, но более длинная фаза телеграфа. Gif `media/cast_pulse.gif` рендерит 0.8 s (длительность лича); у босса эта же пульсация растянута до 1.2 s.
 
   ![Cast pulse (та же формула, у босса растянута до 1.2 s)](media/cast_pulse.gif)
-- Позиция каждого миньона: сначала до `SPAWN_ATTEMPTS_PER_MINION = 10` попыток в узком секторе к игроку (миньоны становятся щитом между Necromancer и целью), fallback: 10 попыток в полном 360° кольце. Отсев через `AStarGrid2D.is_point_solid` и `is_in_boundsv` — не спавнит в стены.
-- Миньоны без наград: `xp_reward = 0`, `gold_reward = 0`, `pickup_scene = null` — как у лича. Иначе игрок фармил бы босса стоя на расстоянии.
+- **Formation — не рандомный сектор.** Melee идут во фронт между боссом и игроком: 3 слота по anchor'ам `boss + forward * (28|34) + right * (-22|0|+22)`. Ranged занимают фланги чуть позади: 2 слота `boss - forward * 10 + right * (±56)`. Если основной anchor попал в стену, `_find_walkable_near` разлетается по 30°-спирали радиусами 20/40/60 px; крайний fallback — прежний random-arc-обход. Формация создаёт перекрёстный fire и не окружает игрока сразу.
 
-Не дропает пикапы — награда идёт через XP/gold. Появляется каждые 5 этажей (boss-этаж).
+#### Профили миньонов (`SummonedCreatureProfile`)
+
+Свита создаётся не как обычные floor mob'ы. Босс перед `add_child()` вызывает `configure_summon(profile)` на скелете/лучнике — профиль задаёт уровень, arsenal pool, cap'ы, темпераменты и флаг наград. Без профиля призванный скелет полу-fallback скейлился по boss floor 5 (`Balance.scaled_damage`), мог случайно получить iron sword (+3 damage) и наносить 6–7 damage — ваншот игрока со стартовыми 5 HP.
+
+**Melee summon (`_build_melee_profile`):**
+
+| Параметр | Значение |
+|----------|----------|
+| monster_level | 1 (fixed, не boss floor) |
+| elite_rank | 0 (не может быть champion/elite) |
+| grants_xp / gold / drops | все `false` — нет фарма |
+| arsenal_pool | `SkeletonArsenal.NECROMANCER_MINION_MELEE` |
+| max_damage | 3 (hard cap после всех модификаторов) |
+| allowed_temperaments | `persistent`, `watchful` (**aggressive исключён**) |
+
+Пул `NECROMANCER_MINION_MELEE` (веса нормированные, сумма 1.00):
+
+| Вариант | Вес | damage_bonus | Итоговый contact_damage (base 2) | Reach |
+|---------|----:|-------------:|----------------------------------:|-------|
+| unarmed | 0.50 | 0 | 2 | touch |
+| wooden_dagger | 0.35 | 0 | 2 | touch |
+| wooden_sword | 0.15 | 1 | 3 | 22 px |
+
+Iron-варианты **отсутствуют**. Cap 3 применяется после `Balance.scaled_damage`, чтобы будущие правки Balance не смогли случайно снова начать ваншотить.
+
+**Ranged summon (`_build_ranged_profile`):**
+
+| Параметр | Значение |
+|----------|----------|
+| monster_level | 1 (fixed) |
+| grants_xp / gold / drops | все `false` |
+| arsenal_pool | `SkeletonArsenal.NECROMANCER_MINION_RANGED` |
+| max_damage | 2 (hard cap на arrow damage в `_configure_bullet`) |
+| first_attack_delay | 1.0 s (нет мгновенного залпа после появления) |
+| fire_interval_override | 2.1 s |
+| allowed_temperaments | `cautious`, `watchful` (**aggressive исключён**) |
+
+Пул `NECROMANCER_MINION_RANGED`:
+
+| Стрела | Вес | damage_bonus | Итоговый arrow damage (base 1) |
+|--------|----:|-------------:|-------------------------------:|
+| wooden arrow | 0.80 | 0 | 1 |
+| iron arrow | 0.20 | 1 | 2 |
+
+Первый выстрел `1.0 s` после появления — окно на «заметить нового лучника». Дальше `fire_interval = 2.1 s` (редкий обстрел, чтобы вдвоём не превратились в bullet-hell при boss projectiles).
+
+**Aggressive исключён** из обеих ролей: у melee — speed×1.12 + cooldown×0.85 в паре с 3-мя melee и залпами босса; у ranged — fire_interval×0.85 + range×0.90 не оставили бы окна уклонения.
+
+Босс сам не дропает пикапы — награда идёт через XP/gold. Появляется каждые 5 этажей (boss-этаж).
 
 ## Пул спавна
 
