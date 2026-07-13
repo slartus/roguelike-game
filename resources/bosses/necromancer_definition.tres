@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BossDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/boss_definition.gd" id="1_bd"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/boss.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_bd")
+id = &"necromancer"
+display_name_key = &"ENEMY_NECROMANCER"
+scene = ExtResource("2_scene")
+floor_number = 5
+zone = &"residential"
+arena_profile_id = &"legacy_600x400"
+reward_profile_id = &"legacy"
+fallback_allowed = true

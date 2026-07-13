@@ -1,16 +1,25 @@
-extends CharacterBody2D
+extends BossBase
 
-signal died_at(position: Vector2)
+# Первый босс башни. Классический некромант: медленный маг, стреляющий
+# по кругу «звёздочкой» dark_orb, попутно бьющий прицельным magic_bolt
+# с упреждением и периодически призывающий 3+2 свиту скелетов.
+#
+# Всё что здесь — специфично для Некроманта. Lifecycle (health, death,
+# reward, spawn context, phase helper) вынесен в `BossBase`.
 
 const SkeletonScene: PackedScene = preload("res://scenes/enemies/skeleton.tscn")
 const SkeletonArcherScene: PackedScene = preload("res://scenes/enemies/ranged_enemy.tscn")
 const SkeletonArsenal = preload("res://scenes/enemies/skeleton_arsenal.gd")
 
-@export var display_name: String = "ENEMY_UNKNOWN"
-@export var max_health: int = 30
+# Stable attack IDs — используются как payload для BossBase.attack_started /
+# attack_resolved и для будущей аналитики. Совпадают с планом.
+const ATTACK_AIMED_PROJECTILE: StringName = &"aimed_projectile"
+const ATTACK_RADIAL_VOLLEY: StringName = &"radial_volley"
+const ATTACK_SUMMON_MINIONS: StringName = &"summon_minions"
+const ATTACK_CONTACT: StringName = &"contact"
+
 @export var speed: float = 25.0
 @export var perception_radius: float = 3000.0
-@export var contact_damage: int = 3
 @export var contact_cooldown: float = 0.8
 @export var bullet_scene: PackedScene
 @export var volley_interval: float = 2.0
@@ -22,8 +31,6 @@ const SkeletonArsenal = preload("res://scenes/enemies/skeleton_arsenal.gd")
 # не влияет на другой, оба тикают параллельно каждый physics-frame.
 @export var aimed_bullet_scene: PackedScene
 @export var aimed_fire_interval: float = 1.0
-@export var xp_reward: int = 40
-@export var gold_reward: int = 20
 
 # Призыв свиты: каждые SUMMON_COOLDOWN секунд топ-ап до SUMMON_COUNT
 # живых скелетов вокруг босса. Кулдаун и каст длиннее чем у обычного
@@ -68,7 +75,6 @@ const MINION_RANGED_FIRST_SHOT_DELAY: float = 1.0
 # через константу, не создаём инстанс bullet ради `.speed`.
 const AIMED_BULLET_SPEED: float = 100.0
 
-var health: int
 var _target: Node2D
 var _contact_timer: float = 0.0
 var _volley_timer: float = 0.0
@@ -90,21 +96,13 @@ var _ranged_minions: Array = []
 # всё ещё даёт окно на реакцию.
 var _summon_cooldown_timer: float = 0.0
 var _summon_cast_timer: float = 0.0
-var _visual_base_modulate: Color = Color.WHITE
 
 func _ready() -> void:
-	add_to_group("enemy")
-	var floor_num := GameState.current_floor_number
-	max_health = Balance.scaled_hp(max_health, floor_num)
-	contact_damage = Balance.scaled_damage(contact_damage, floor_num)
-	xp_reward = Balance.scaled_xp_reward(xp_reward, floor_num)
-	gold_reward = Balance.scaled_gold_reward(gold_reward, floor_num)
-	health = max_health
+	# base._ready(): группа, floor scaling для max_health / contact_damage /
+	# xp / gold, health = max_health, visual_base_modulate.
+	super()
 	_volley_timer = volley_interval
 	_aimed_fire_timer = aimed_fire_interval
-	var visual: Sprite2D = get_node_or_null("Visual") as Sprite2D
-	if visual != null:
-		_visual_base_modulate = visual.modulate
 
 func _physics_process(delta: float) -> void:
 	_contact_timer = max(0.0, _contact_timer - delta)
@@ -135,7 +133,8 @@ func _physics_process(delta: float) -> void:
 		var collider := collision.get_collider()
 		if collider and collider.is_in_group("player") and _contact_timer <= 0.0:
 			if collider.has_method("take_damage"):
-				collider.take_damage(contact_damage, DamageContext.from_enemy_attack(self, &"contact"))
+				collider.take_damage(contact_damage, DamageContext.from_enemy_attack(self, ATTACK_CONTACT))
+				attack_resolved.emit(ATTACK_CONTACT, true)
 			_contact_timer = contact_cooldown
 
 	if _volley_timer <= 0.0:
@@ -149,6 +148,7 @@ func _physics_process(delta: float) -> void:
 func _fire_volley() -> void:
 	if bullet_scene == null:
 		return
+	attack_started.emit(ATTACK_RADIAL_VOLLEY)
 	for angle in _compute_volley_angles(_volley_index):
 		var bullet := bullet_scene.instantiate()
 		bullet.global_position = global_position
@@ -180,6 +180,7 @@ func _fire_aimed_shot() -> void:
 	var direction := _compute_lead_direction(_target.global_position, target_velocity)
 	if direction == Vector2.ZERO:
 		return
+	attack_started.emit(ATTACK_AIMED_PROJECTILE)
 	var bullet := aimed_bullet_scene.instantiate()
 	bullet.global_position = global_position
 	bullet.direction = direction
@@ -218,6 +219,7 @@ func _maybe_start_summon(delta: float) -> void:
 	if _summon_cooldown_timer > 0.0:
 		return
 	_summon_cast_timer = SUMMON_CAST_DURATION
+	attack_started.emit(ATTACK_SUMMON_MINIONS)
 
 func _tick_cast(delta: float) -> void:
 	_summon_cast_timer -= delta
@@ -235,6 +237,9 @@ func _finish_cast() -> void:
 	var spawned := _summon_batch()
 	if spawned > 0:
 		_summon_cooldown_timer = SUMMON_COOLDOWN
+		attack_resolved.emit(ATTACK_SUMMON_MINIONS, true)
+	else:
+		attack_resolved.emit(ATTACK_SUMMON_MINIONS, false)
 
 func _summon_batch() -> int:
 	_cleanup_minions()
@@ -461,24 +466,3 @@ func _reset_cast_visual() -> void:
 	var visual := get_node_or_null("Visual") as Sprite2D
 	if visual != null:
 		visual.modulate = _visual_base_modulate
-
-# ------------------------------------------------------------------
-
-func _find_player() -> Node2D:
-	var players := get_tree().get_nodes_in_group("player")
-	return players[0] if players.size() > 0 else null
-
-func take_damage(amount: int, context: DamageContext = null) -> void:
-	Analytics.record_damage_dealt(mini(health, amount), context)
-	health -= amount
-	modulate = Color(1, 0.5, 0.5)
-	await get_tree().create_timer(0.08).timeout
-	if is_inside_tree():
-		modulate = Color.WHITE
-	if health <= 0 and is_inside_tree():
-		died_at.emit(global_position)
-		EventLog.log_kill(display_name, xp_reward, gold_reward)
-		GameState.award_xp(xp_reward)
-		GameState.award_gold(gold_reward, &"boss")
-		GameState.award_enemy_kill(context)
-		queue_free()

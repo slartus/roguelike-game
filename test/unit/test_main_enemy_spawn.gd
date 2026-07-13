@@ -33,13 +33,17 @@ func test_main_script_no_longer_declares_enemy_scenes_constant() -> void:
 	assert_null(MAIN_SCRIPT.get("ENEMY_SCENES"),
 		"ENEMY_SCENES должен быть удалён из main.gd — теперь через MonsterSpawnTable")
 
-func test_main_script_still_has_boss_scene_and_boss_floor_interval() -> void:
-	# Boss floor не должен быть подменён обычным MonsterSpawnTable — это
-	# отдельная арена, тестируем что константы на месте.
-	assert_not_null(MAIN_SCRIPT.get("BOSS_SCENE"),
-		"BOSS_SCENE должен остаться preload'ом")
-	assert_eq(MAIN_SCRIPT.get("BOSS_FLOOR_INTERVAL"), 5,
-		"каждые 5 этажей — boss floor")
+func test_main_script_delegates_boss_selection_to_registry() -> void:
+	# После PR 1 hardcoded `BOSS_SCENE` и magic constant `BOSS_FLOOR_INTERVAL`
+	# удалены из main.gd — выбор боссов идёт через BossRegistry (data-driven).
+	# Если константы вернутся — значит откатили framework.
+	assert_null(MAIN_SCRIPT.get("BOSS_SCENE"),
+		"BOSS_SCENE должен быть удалён — теперь через BossRegistry")
+	assert_null(MAIN_SCRIPT.get("BOSS_FLOOR_INTERVAL"),
+		"BOSS_FLOOR_INTERVAL должен быть удалён — интервал определяет registry")
+	# Sanity: registry действительно резолвит boss floor 5.
+	assert_not_null(BossRegistry.definition_for_floor(5),
+		"BossRegistry обязан вернуть definition для floor 5")
 
 func test_floor_1_spawn_excludes_dangerous_enemies() -> void:
 	# Регресс: Floor 1 не должен спавнить Adult Slime, Orc, Spider,
