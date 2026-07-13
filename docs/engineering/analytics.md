@@ -590,11 +590,22 @@ Analytics использует контекст для:
 - полный temperament comparator (aggressive attacks/sec, cautious flee_activations и т.п.) — есть только temperament в group key;
 - weapon `offer_seen`/`offer_selected` из сундука — сундук всё ещё выдаёт случайное оружие без UI выбора;
 - room transition tracking / backtracking distance estimate;
-- local reports pipeline / CSV / HTML (PR 3);
-- content balance hash (PR 3);
-- version comparison (PR 3);
 - settings-UI toggle;
 - remote endpoint.
+
+## Local analysis pipeline (PR 3)
+
+JSONL-файлы разбираются локально через `tools/analytics/`:
+
+- `import_jsonl.py` — устойчив к corrupt последним строкам, дублям, unknown events, future schema;
+- `validate_events.py` — envelope + payload + run/floor consistency (error/warning/info);
+- `build_dataset.py` — 9 CSV (sessions, runs, floors, weapons, upgrade_offers, upgrade_selections, enemies, economy, rooms) + `data_quality.json`;
+- `generate_report.py` — самодостаточный HTML отчёт;
+- `compare_versions.py` — сравнение baseline/candidate `balance_version`;
+- `hash_content.py` — deterministic SHA256 значимых balance ресурсов.
+
+Полный CLI и workflow балансировки — `tools/analytics/README.md`
++ `docs/engineering/analytics-reports.md`.
 
 При добавлении новых событий следуй той же дисциплине: envelope
 неизменен, payload event-specific, никакого сдвига RNG, никакого

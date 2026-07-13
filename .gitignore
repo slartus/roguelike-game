@@ -24,3 +24,8 @@ mono_crash.*.json
 .vscode/
 .idea/
 *.swp
+
+# Локальные analytics-outputs (не коммитить реальные пользовательские
+# JSONL и построенные CSV/HTML). См. tools/analytics/README.md.
+analytics_output/
+tools/analytics/**/__pycache__/
