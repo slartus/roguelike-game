@@ -717,7 +717,150 @@ Contact/attack damage — const'ы в `castellan_armor.gd`, не exported. Balan
 
 До PR 6 использует generic boss reward flow: XP + gold идут через стандартный `_handle_death`. `reward_profile_id = "castellan_reward_legacy"` — placeholder на PR 6 (уникальный relic).
 
-### Necromancer (`boss.tscn`) — fallback этажей 10/15/20
+### Rune Golem (`rune_golem.tscn`) — этаж 10
+
+Второй босс башни. Каменно-латунный конструкт technical-зоны: массивный корпус, руническое ядро в груди, медные conduits по плечам и предплечьям, тяжёлые кулаки-плиты. Спрайт `rune_golem.png` (32×32), коллизия r=14. Fantasy infrastructure — никакой современной промышленности.
+
+Босс учит:
+
+- **читать опасные зоны пола** — руны на арене вспыхивают предупреждением (`0.8 s`) до damage frame;
+- **планировать маршрут** — safe region всегда существует, но требует движения через lanes;
+- **ловить vulnerability window** — после трёх тяжёлых actions конструкт перегревается на `2.0 s` и получает `×1.5` damage;
+- **сохранять пространство для уклонения** — twin rune lines в phase 2 всегда оставляют safe corridor.
+
+Босс НЕ использует:
+
+- summons / bullet hell;
+- radial ring волн вокруг себя;
+- ваншот-атаки обычным контактом;
+- random overheat — только детерминированный триггер по счётчику тяжёлых actions.
+
+#### Базовые параметры
+
+| Параметр                | Значение |
+|-------------------------|---------:|
+| max_health              | 65       |
+| speed                   | 22       |
+| contact_damage          | 2        |
+| contact_cooldown        | 0.9 s    |
+| xp_reward               | 85       |
+| gold_reward             | 45       |
+| phase 2 HP fraction     | 0.50     |
+| phase 2 speed mult      | 1.10     |
+| phase transition dur    | 0.85 s   |
+
+#### Атаки
+
+**`fist_slam`** — тяжёлый удар кулаком по прямоугольной зоне перед боссом.
+
+| Параметр        | Значение |
+|-----------------|---------:|
+| wind-up         | 0.55 s   |
+| active          | 0.10 s   |
+| recovery        | 0.60 s   |
+| length          | 95 px    |
+| width           | 62 px    |
+| arc             | 100°     |
+| damage          | 3        |
+
+Damage применяется один раз в active frame. Direction зафиксирована после половины wind-up — «no tracking after final wind-up portion» (плановый инвариант): игрок может выйти из сектора движением в сторону в последний момент.
+
+**`rune_line`** — стационарная lane hazard на полу. Три фазы:
+
+| Параметр            | Значение |
+|---------------------|---------:|
+| warning duration    | 0.8 s (phase 1), 0.9 s (phase 2 twin) |
+| active duration     | 0.35 s   |
+| lingering duration  | 1.2 s    |
+| lane length         | 240 px   |
+| lane width          | 44 px    |
+| damage              | 1        |
+
+Warning — только визуал (пульсирующее свечение), damage не проходит. Active — прямоугольная damage-зона, single-hit per target per activation (dedupe через `_hit_this_cycle`). Lingering — тусклый residual visual, damage НЕ тикает (иначе burst-риск при intersection).
+
+Layout: 6 предустановленных lanes относительно центра арены (3 horizontal, 3 vertical) с шагом `LANE_SPACING = 105 px`. Phase 1 выбирает одну; phase 2 — twin из перпендикулярных пар.
+
+**`twin_rune_lines`** (только phase 2) — активируются две lanes одновременно, с warning `0.9 s`. Всегда validated safe region: `_pattern_leaves_safe_region()` строит grid `8×6` поверх арены, помечает cells в lane rectangles, делает flood-fill свободных cells и требует connected free region размером `>= SAFE_MIN_CELLS = 6`.
+
+Приоритет перпендикулярным парам (horizontal + vertical) — они всегда оставляют широкие quadrants. Fallback: исчерпывающий перебор пар с той же validation. Extreme fallback — single lane (лучше downgrade, чем сломать invariant).
+
+**Intersection cap:** каждая lane даёт максимум 1 hit per activation. Игрок в пересечении twin lanes получает максимум 2 damage total — ниже design cap (`SLAM_DAMAGE = 3`).
+
+#### Перегрев (overheat, vulnerability window)
+
+Строго детерминированный триггер: после `OVERHEAT_HEAVY_THRESHOLD = 3` тяжёлых actions (любой из `fist_slam` / `rune_line` / `twin_rune_lines`) в следующем цикле `_tick_approach` босс уходит в `OVERHEATED`.
+
+| Параметр                    | Значение |
+|-----------------------------|---------:|
+| threshold                   | 3 heavy actions |
+| duration                    | 2.0 s   |
+| incoming damage multiplier  | ×1.5    |
+
+В OVERHEATED:
+
+- boss останавливается (velocity = 0), attack timers pause;
+- contact damage подавлен;
+- `take_damage` умножает входящий amount на `OVERHEAT_DAMAGE_MULTIPLIER = 1.5`;
+- визуально ядро пульсирует яркой tint'ой (`OVERHEAT_TINT_COLOR = Color(1.6, 1.2, 0.6)`);
+- attack_started не эмиттится — новые атаки не стартуют.
+
+Counter сбрасывается при выходе из OVERHEATED. Никакого random overheat.
+
+#### State machine
+
+```
+IDLE → APPROACH → { SLAM_WINDUP → SLAM_ACTIVE → SLAM_RECOVERY } → APPROACH
+                → { RUNE_CAST → RUNE_RECOVERY } → APPROACH
+                → OVERHEATED → APPROACH (после накопления 3 heavy actions)
+                → PHASE_TRANSITION → APPROACH (при 50% HP)
+                → DEAD
+```
+
+Инвариант: одна атака за раз. `_state_timer` и `_damage_applied` сбрасываются в `_set_state()`. Ни один timer не тикает во время OVERHEATED / PHASE_TRANSITION — новые атаки не могут стартовать. RECOVERY тоже не запускает атак — только tick таймера + `POST_ATTACK_COOLDOWN = 0.35 s` перед следующим выбором.
+
+#### Attack selection
+
+Weighted state-aware выбор через `_pick_next_action(distance)`:
+
+- phase 2 средняя дистанция (`RANGE_RUNE_MIN..MAX = 90..480 px`) → `twin_rune_lines` (~45%, если не был последним);
+- любая phase, средняя дистанция → `rune_line` (~55%, если prev не rune-based);
+- ближняя дистанция (`<= RANGE_SLAM = 90 px`) → `fist_slam`;
+- иначе → продолжаем движение к игроку.
+
+RNG — свой `RandomNumberGenerator` с seed `tower_seed * 1_299_709 + floor * 65_537 + 8_101`. Deterministic для реплеев; не смешивается с global randi.
+
+#### Phase transition (при 50% HP)
+
+- boss останавливается;
+- визуальный tint пульсирует через `TRANSITION_TINT_COLOR = Color(1.4, 1.05, 0.55)` — «ядро греется»;
+- пауза `0.85 s`; новые атаки не стартуют; damage игрока проходит (transition не защищает);
+- `phase_changed(2)` эмиттится **строго один раз** (идемпотентно через `BossBase.set_phase`);
+- movement speed × 1.10, доступен `twin_rune_lines`, rune_cast recovery короче (0.45 s vs 0.55 s), damage не меняется.
+
+#### Балансные инварианты
+
+1. Максимальный single-hit damage = 3 (`SLAM_DAMAGE`).
+2. Rune line damage = 1 (standard hit).
+3. Contact damage = 2, cooldown 0.9 s.
+4. Damage начинается только после telegraph (warning для rune, wind-up для slam).
+5. Direction slam зафиксирована после половины wind-up — no tracking.
+6. Safe region всегда существует — validated grid-check перед spawn'ом lanes.
+7. Boss не атакует во время OVERHEATED / PHASE_TRANSITION / DEAD.
+8. Overheat multiplier применяется ТОЛЬКО во время OVERHEATED — не при phase transition, не в других состояниях.
+9. Twin intersection cap: max 2 hits в пересечении, total damage ≤ 3.
+10. Effects cleanup: активные rune_line ноды удаляются при смерти босса.
+
+Contact/attack damage — const'ы в `rune_golem.gd`, не exported. Balance.scaled_damage применяется только к `contact_damage` через `BossBase._apply_floor_scaling`; slam/rune damage остаются под hard-cap'ом плана независимо от tuning'а `Balance`.
+
+#### Arena
+
+Rune Engine Chamber (`rune_engine_chamber_arena.tres`) — 620×420 px, technical zone, `clear_center_radius = 84 px`. Rune Golem занимает центральную зону, 6 lane layouts размещены вокруг с шагом `LANE_SPACING = 105 px` — гарантированно вписываются в footprint.
+
+#### Reward
+
+До PR 6 использует generic boss reward flow: XP + gold через стандартный `_handle_death`. `reward_profile_id = "rune_golem_reward_legacy"` — placeholder.
+
+### Necromancer (`boss.tscn`) — fallback этажей 15/20
 
 Крупная фигура в тёмной робе с капюшоном, посох с зелёным кристаллом. Спрайт `necromancer.png` (32×32), коллизия r=14.
 

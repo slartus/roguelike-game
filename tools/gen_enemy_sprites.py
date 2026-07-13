@@ -441,6 +441,64 @@ CASTELLAN = [
 ]
 
 
+# ============================================================================
+# RUNE GOLEM (32×32 boss) — каменно-латунный конструкт technical-зоны:
+# массивный каменный корпус с латунными обвязками, руническое ядро в груди
+# горит янтарным светом, медные каналы по плечам и предплечьям, тяжёлые
+# кулаки для fist_slam. Fantasy infrastructure — никакой промышленности.
+# ============================================================================
+RUNE_GOLEM_PALETTE = {
+    ".": (0, 0, 0, 0),
+    "S": (110, 105, 100, 255),     # камень — средний
+    "s": (75, 70, 65, 255),        # камень — тень
+    "d": (45, 42, 40, 255),        # камень — глубокая тень
+    "H": (150, 145, 140, 255),     # камень — блик
+    "B": (10, 10, 12, 255),        # чёрный (стыки, пустоты)
+    "N": (170, 120, 55, 255),      # латунь — базовый
+    "n": (110, 75, 30, 255),       # латунь — тень
+    "K": (220, 175, 90, 255),      # латунь — блик
+    "R": (240, 165, 65, 255),      # руническое свечение — центр
+    "r": (185, 105, 30, 255),      # свечение — тень
+    "Y": (255, 220, 140, 255),     # руническое свечение — hot spot
+    "C": (185, 105, 55, 255),      # медь conduit
+    "c": (120, 65, 30, 255),
+}
+RUNE_GOLEM = [
+    "................................",
+    "................................",
+    "..........dSSSSSSSSSd...........",  # голова — каменный монолит
+    ".........dSHHHSSHHHSSd..........",
+    "........dSSHHHSSHHHHSSd.........",
+    "........dSSBBBBBBBBBSSd.........",  # прорезь под руны глаз
+    "........dSSBRYRBBRYRBSSd........",  # янтарные глаза
+    "........dSSBBBBBBBBBSSd.........",
+    "........dSSSSSSSSSSSSSSd........",  # челюсть
+    ".......dSSSNNNKKKNNNSSSSd.......",  # латунный ошейник-обвязка
+    "......dSSNKKNNKKNNKKNNSSSSd.....",  # плечи с латунными пластинами
+    ".....dSCCSSNNSSSSSSSNNSSCCSSd...",  # медные conduits вдоль плеч
+    "....dSCcSSSSSNKRRRRKNSSSSSSCcd..",  # руническое ядро — грудь
+    "....dSCCSSSSNKRYYYYYRKNSSSSCCd..",  # ядро — hot core
+    "....dSCCSSSNKRYYNNYYRKNSSSCCCd..",  # рунические символы в ядре
+    "....dSCCSSSNKRYYYYYRKNSSSSCCCd..",
+    "....dSCCSSSSNKRRRRKNSSSSSSCCCd..",  # обрамление ядра
+    "....dSCCSSSSNNNNNNNSSSSSSSSCCd..",  # низ грудной пластины
+    "....dSCCSSSSSSSSSSSSSSSSSSSCCd..",  # торс продолжается
+    ".....dSSSSSSSSNSNSNSSSSSSSSSd...",  # пояс с рунами
+    "......dSSSSSSNNNNSSSSSSSSSd.....",  # низ туловища
+    ".....dNSSSSSSSSSSSSSSSSSSNNd....",  # предплечья — латунные обвязки
+    "....dNKNSSSSSSSSSSSSSSSSSNNKd...",  # кулаки готовы к slam
+    "....dNKNSSSSdSSSSSSSSdSSSSNKNd..",
+    "....dNKNSSSdSSSSSSSSSSdSSSNKNd..",  # массивные кулаки-плиты
+    "....dNKNSSdSSSSSSSSSSSSdSSNKNd..",
+    "....dNKNSdSSSSSSSSSSSSSSdSNKNd..",  # каменные ноги
+    ".....dNNdSSSdddddSSSSdddSSNNd...",
+    "......ddSSSSddSdddSSddddSSdd....",
+    ".......dSSSSdSdSSSdSdSdSSSSd....",  # ступни-платформы
+    "........ddddddddddddddddddd.....",
+    "................................",
+]
+
+
 SPRITES: list[tuple[str, list[str], dict[str, tuple[int, int, int, int]]]] = [
     ("slime.png", SLIME, SLIME_PALETTE),
     ("goblin.png", GOBLIN, GOBLIN_PALETTE),
@@ -452,6 +510,7 @@ SPRITES: list[tuple[str, list[str], dict[str, tuple[int, int, int, int]]]] = [
     ("lich.png", LICH, LICH_PALETTE),
     ("necromancer.png", NECROMANCER, NECRO_PALETTE),
     ("castellan_armor.png", CASTELLAN, CASTELLAN_PALETTE),
+    ("rune_golem.png", RUNE_GOLEM, RUNE_GOLEM_PALETTE),
 ]
 
 

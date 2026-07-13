@@ -45,12 +45,12 @@ func test_arena_profile_for_castellan_is_castellan_hall() -> void:
 		"Castellan Armor использует свой arena profile castellan_hall")
 
 func test_arena_profile_for_fallback_boss_is_legacy() -> void:
-	# Fallback slots (10/15/20) обслуживает Necromancer с legacy_600x400
-	# ареной — до PR 3–5 они делят один и тот же профиль.
-	var profile := BossRegistry.arena_profile_for_floor(10)
+	# После PR 3 fallback slot остаётся только на floor 15 и 20 (Necromancer);
+	# floor 10 занял Rune Golem со своей ареной. Проверяем 15.
+	var profile := BossRegistry.arena_profile_for_floor(15)
 	assert_not_null(profile, "fallback slot должен иметь arena profile")
 	assert_eq(profile.id, &"legacy_600x400",
-		"fallback (Necromancer) продолжает делить legacy 600×400 профиль")
+		"fallback (Necromancer) продолжает делить legacy 600×400 профиль на 15/20")
 
 func test_all_definitions_returns_registered_bosses() -> void:
 	var definitions := BossRegistry.all_definitions()
