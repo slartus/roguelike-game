@@ -21,7 +21,9 @@ extends RefCounted
 # - Гарантированный путь start → exit + пара альтернативных маршрутов.
 # - Детерминизм по seed.
 #
-# Boss-этажи (floor % 5 == 0) — одна большая арена (без изменений).
+# Boss-этажи определяются `BossRegistry` (data-driven); generator видит
+# только флаг `is_boss` и, опционально, размер арены из BossArenaProfile.
+# Одна большая комната без коридоров — без изменений с прошлых PR.
 
 const TILE: int = 20
 const MIN_ROOM_TILES: int = 4                        # 80 px — минимум (кладовочка)
@@ -80,13 +82,18 @@ class BSPNode extends RefCounted:
 
 # --- Entry point --------------------------------------------------------
 
-func generate(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayout:
+func generate(seed_value: int, floor_number: int, is_boss: bool, boss_arena_size: Vector2i = Vector2i.ZERO) -> DungeonLayout:
 	# Retry pipeline: если попытка вернула невалидный (disconnected, пустой)
 	# layout — деривируем seed и пытаемся снова. Никогда не отгружаем
 	# disconnected floor. См. `_is_layout_valid` для критериев.
+	#
+	# `boss_arena_size` (опциональный) — размер комнаты для boss floor'а,
+	# приходящий из `BossArenaProfile.size` через `BossRegistry`. Vector2i.ZERO
+	# (default) → используется legacy `BOSS_ROOM_SIZE`. Non-boss floor
+	# аргумент игнорирует.
 	for attempt in _FALLBACK_MAX_RETRIES:
 		var derived_seed: int = seed_value if attempt == 0 else seed_value ^ (_SEED_SALT * (attempt + 1))
-		var candidate := _generate_once(derived_seed, floor_number, is_boss)
+		var candidate := _generate_once(derived_seed, floor_number, is_boss, boss_arena_size)
 		if _is_layout_valid(candidate):
 			return candidate
 		push_warning("dungeon.generate: attempt %d for seed=%d floor=%d rejected, retrying" % [
@@ -95,11 +102,11 @@ func generate(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayou
 	# Все retries провалились — возвращаем последний candidate; логируем.
 	# Гарантированный минимально валидный fallback выдаёт single-room layout.
 	push_warning("dungeon.generate: all retries failed for seed=%d floor=%d, using minimal fallback" % [seed_value, floor_number])
-	return _generate_minimal_fallback(seed_value, floor_number, is_boss)
+	return _generate_minimal_fallback(seed_value, floor_number, is_boss, boss_arena_size)
 
 # --- Один проход генерации (может дать invalid layout) --------------------
 
-func _generate_once(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayout:
+func _generate_once(seed_value: int, floor_number: int, is_boss: bool, boss_arena_size: Vector2i = Vector2i.ZERO) -> DungeonLayout:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var layout := DungeonLayout.new()
@@ -107,7 +114,7 @@ func _generate_once(seed_value: int, floor_number: int, is_boss: bool) -> Dungeo
 	layout.zone = TowerZone.get_tower_zone(floor_number)
 	if is_boss:
 		layout.floor_archetype = "boss_arena"
-		_generate_boss_floor(layout)
+		_generate_boss_floor(layout, boss_arena_size)
 	else:
 		# Router по зоне. Caves теперь идут через NaturalCaveGenerator —
 		# уходят от BSP-rectangular feel.
@@ -194,7 +201,7 @@ func _is_layout_valid(layout: DungeonLayout) -> bool:
 
 # Простейший минимально-валидный fallback — одна большая rectangular room
 # с start/exit по краям. Никогда не крешит, гарантирует reachability.
-func _generate_minimal_fallback(seed_value: int, floor_number: int, is_boss: bool) -> DungeonLayout:
+func _generate_minimal_fallback(seed_value: int, floor_number: int, is_boss: bool, _boss_arena_size: Vector2i = Vector2i.ZERO) -> DungeonLayout:
 	var layout := DungeonLayout.new()
 	layout.is_boss_floor = is_boss
 	layout.zone = TowerZone.get_tower_zone(floor_number)
@@ -764,11 +771,16 @@ func _pick_extreme_room(rooms: Array[Rect2i], maximize: bool) -> int:
 
 # --- Boss floor (без изменений) ----------------------------------------
 
-func _generate_boss_floor(layout: DungeonLayout) -> void:
-	var room := Rect2i(Vector2i.ZERO, BOSS_ROOM_SIZE)
+func _generate_boss_floor(layout: DungeonLayout, arena_size: Vector2i = Vector2i.ZERO) -> void:
+	# `arena_size` приходит из `BossArenaProfile.size` (через floor.gd →
+	# BossRegistry). Vector2i.ZERO означает "нет профиля" → fallback на
+	# legacy `BOSS_ROOM_SIZE`. Соблюдает старый layout при отсутствии
+	# явного профиля.
+	var effective_size: Vector2i = arena_size if arena_size != Vector2i.ZERO else BOSS_ROOM_SIZE
+	var room := Rect2i(Vector2i.ZERO, effective_size)
 	layout.rooms.append(room)
-	layout.player_start = Vector2i(BOSS_ROOM_SIZE.x / 6, BOSS_ROOM_SIZE.y / 2)
-	layout.exit_position = Vector2i(BOSS_ROOM_SIZE.x * 5 / 6, BOSS_ROOM_SIZE.y / 2)
+	layout.player_start = Vector2i(effective_size.x / 6, effective_size.y / 2)
+	layout.exit_position = Vector2i(effective_size.x * 5 / 6, effective_size.y / 2)
 
 # --- Общие helper'ы (сохранены) ----------------------------------------
 

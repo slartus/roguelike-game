@@ -1,11 +1,8 @@
 extends Node2D
 
 const FLOOR_SCENE: PackedScene = preload("res://scenes/dungeon/floor.tscn")
-const BOSS_SCENE: PackedScene = preload("res://scenes/enemies/boss.tscn")
 const PICKUP_SCENE: PackedScene = preload("res://scenes/pickups/health_pickup.tscn")
 const CHEST_SCENE: PackedScene = preload("res://scenes/pickups/chest.tscn")
-
-const BOSS_FLOOR_INTERVAL: int = 5
 
 @onready var _enemies_root: Node2D = $Enemies
 @onready var _pickups_root: Node2D = $Pickups
@@ -141,18 +138,43 @@ func _spawn_chests() -> void:
 		_pickups_root.add_child(chest)
 
 func _is_boss_floor() -> bool:
-	return GameState.current_floor_number % BOSS_FLOOR_INTERVAL == 0
+	# Boss floor определяется наличием definition в registry, а не magic
+	# constant "% 5" — так future floors могут иметь боссов на нестандартных
+	# этажах без правки Main.
+	return BossRegistry.definition_for_floor(GameState.current_floor_number) != null
 
 func _spawn_boss() -> void:
-	var boss: Node = BOSS_SCENE.instantiate()
+	var floor_num := GameState.current_floor_number
+	var definition := BossRegistry.definition_for_floor(floor_num)
+	if definition == null or definition.scene == null:
+		push_warning("main._spawn_boss: no boss definition for floor %d" % floor_num)
+		return
+	var boss: Node = definition.scene.instantiate()
 	# В boss-этаже одна большая комната; берём её центр
-	boss.global_position = _floor.layout.rooms[0].get_center()
+	var arena_rect := Rect2()
+	if not _floor.layout.rooms.is_empty():
+		var room: Rect2i = _floor.layout.rooms[0]
+		boss.global_position = room.get_center()
+		arena_rect = Rect2(Vector2(room.position), Vector2(room.size))
+	# Typed spawn context ДО add_child(): boss.apply_spawn_context() успевает
+	# отработать до `_ready()`, поэтому floor scaling видит корректный
+	# floor_number независимо от GameState (важно для тестов и будущих
+	# бесшовных переходов).
+	if boss.has_method("apply_spawn_context"):
+		var context := BossSpawnContext.new()
+		context.floor_number = floor_num
+		context.zone = StringName(_floor.layout.zone) if _floor.layout != null else &""
+		context.tower_seed = GameState.tower_seed
+		context.arena_rect = arena_rect
+		context.player = _player
+		boss.apply_spawn_context(context)
 	boss.tree_exited.connect(_on_enemy_removed)
 	if boss.has_signal("died_at"):
 		boss.died_at.connect(_on_enemy_died_at)
 	_enemies_root.add_child(boss)
 	_alive_enemies += 1
-	Analytics.record_enemy_spawned(&"boss", &"", 0)
+	var boss_id: StringName = definition.id if definition.id != &"" else &"boss"
+	Analytics.record_enemy_spawned(boss_id, &"", 0)
 
 func _on_enemy_died_at(death_position: Vector2) -> void:
 	# Rename `position` -> `death_position` чтобы не шейдовить Node2D.position.

@@ -33,6 +33,40 @@ func test_boss_floor_has_single_room_and_no_doorways() -> void:
 	assert_eq(layout.chest_positions.size(), 0)
 	assert_true(layout.is_boss_floor)
 
+func test_boss_floor_default_arena_size_is_legacy_600x400() -> void:
+	# Backward compat: без явного arena_size (или Vector2i.ZERO) босс-этаж
+	# остаётся legacy 600×400. Guard от случайного изменения дефолта.
+	var layout = _gen.generate(42, 5, true)
+	assert_eq(layout.rooms[0].size, Vector2i(600, 400),
+		"legacy boss arena — 600×400 (PR 1 default)")
+
+func test_boss_floor_respects_custom_arena_size() -> void:
+	# Новый параметр `boss_arena_size` — точка, через которую PR 2–5
+	# начнут поставлять per-boss арены. Тест защищает от тихого регресса,
+	# при котором generator игнорировал бы кастомный размер.
+	var layout = _gen.generate(42, 5, true, Vector2i(400, 300))
+	assert_eq(layout.rooms[0].size, Vector2i(400, 300),
+		"boss arena size должна следовать переданному профилю")
+	# player_start / exit_position пересчитаны от кастомного размера.
+	assert_eq(layout.player_start, Vector2i(400 / 6, 300 / 2),
+		"player_start пропорционален arena size")
+	assert_eq(layout.exit_position, Vector2i(400 * 5 / 6, 300 / 2),
+		"exit_position пропорционален arena size")
+
+func test_non_boss_floor_ignores_arena_size_param() -> void:
+	# Non-boss floor не должен реагировать на `boss_arena_size` —
+	# параметр только для boss-этажа.
+	var layout = _gen.generate(42, 4, false, Vector2i(400, 300))
+	assert_false(layout.is_boss_floor)
+	# Хоть один room точно есть, но размер не 400×300 (это residential BSP).
+	var has_boss_sized_room := false
+	for room in layout.rooms:
+		if room.size == Vector2i(400, 300):
+			has_boss_sized_room = true
+			break
+	assert_false(has_boss_sized_room,
+		"non-boss floor не должен создавать room размера boss_arena_size")
+
 # --- Player start / exit ------------------------------------------------
 
 func test_player_start_is_in_top_left_room() -> void:

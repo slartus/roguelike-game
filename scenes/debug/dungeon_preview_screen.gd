@@ -9,7 +9,6 @@ const FloorPreviewScene: PackedScene = preload("res://scenes/debug/floor_preview
 
 const PREVIEW_FLOOR_COUNT: int = 12    # первые 12 этажей забега
 const PRIME: int = 100003              # тот же, что в Floor._pick_seed
-const BOSS_FLOOR_INTERVAL: int = 5
 
 @onready var _seed_input: LineEdit = $VBox/Controls/SeedRow/SeedInput
 @onready var _preview_root: VBoxContainer = $VBox/Scroll/PreviewList
@@ -31,7 +30,10 @@ func _regenerate() -> void:
 	var generator := DungeonGeneratorClass.new()
 	for floor_num in range(1, PREVIEW_FLOOR_COUNT + 1):
 		var floor_seed: int = seed_value * PRIME + floor_num
-		var is_boss: bool = floor_num % BOSS_FLOOR_INTERVAL == 0
+		# Boss detection через BossRegistry — единый источник истины, тот
+		# же, что использует Main. Иначе PR 2–5 (боссы на не-mod5 этажах)
+		# начнут врать в debug preview.
+		var is_boss: bool = BossRegistry.definition_for_floor(floor_num) != null
 		var layout: DungeonLayout = generator.generate(floor_seed, floor_num, is_boss)
 		var preview: Control = FloorPreviewScene.instantiate()
 		_preview_root.add_child(preview)

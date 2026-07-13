@@ -81,10 +81,20 @@ func _ready() -> void:
 	add_to_group("floor")
 	var seed_value := _pick_seed()
 	var generator := DungeonGeneratorClass.new()
+	var floor_num := GameState.current_floor_number
+	# Boss arena size на этом PR всегда legacy 600×400 (см. LEGACY_ARENA_PROFILE).
+	# Vector2i.ZERO → generator использует свой default BOSS_ROOM_SIZE (та же
+	# 600×400). Резервируем сигнатуру под будущие per-boss арены (PR 2–5).
+	var boss_arena_size: Vector2i = Vector2i.ZERO
+	if _is_boss_floor():
+		var arena_profile := BossRegistry.arena_profile_for_floor(floor_num)
+		if arena_profile != null and arena_profile.size != Vector2i.ZERO:
+			boss_arena_size = arena_profile.size
 	layout = generator.generate(
 		seed_value,
-		GameState.current_floor_number,
+		floor_num,
 		_is_boss_floor(),
+		boss_arena_size,
 	)
 	_resolve_visual_profile()
 	_resolve_room_materials()
@@ -109,7 +119,11 @@ func _pick_seed() -> int:
 	return GameState.tower_seed * 100003 + GameState.current_floor_number
 
 func _is_boss_floor() -> bool:
-	return GameState.current_floor_number % 5 == 0
+	# Единый источник истины для boss floor'ов — BossRegistry (data-driven).
+	# Совпадает с Main._is_boss_floor(). В прошлом было `floor % 5 == 0`,
+	# но magic constant разошёлся бы с registry, если в PR 2–5 появится
+	# босс не на 5/10/15/20 этаже.
+	return BossRegistry.definition_for_floor(GameState.current_floor_number) != null
 
 func _resolve_visual_profile() -> void:
 	# layout.zone — String; профили индексируются StringName-ом. Приводим
