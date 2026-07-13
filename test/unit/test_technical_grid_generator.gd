@@ -43,10 +43,21 @@ func test_technical_has_multiple_rooms() -> void:
 	assert_gte(layout.rooms.size(), 4,
 		"technical grid должен иметь минимум 4 комнаты")
 
-func test_start_and_exit_at_opposite_ends() -> void:
+func test_start_and_exit_are_far_by_graph_distance() -> void:
+	# PR3: entrance/exit ставятся по BFS-фарвест паре среди достаточно
+	# больших комнат. Для technical v2 (два rail + machine rooms между) это
+	# может уводить их в maintenance rooms на разных сторонах, не
+	# обязательно к концам X-оси.
 	var layout := _generate(202, 7)
-	assert_lt(layout.player_start.x, layout.exit_position.x,
-		"start слева, exit справа — читаемое движение через служебный этаж")
+	assert_ne(layout.entrance_room_index, layout.exit_room_index,
+		"entrance и exit — разные комнаты")
+	assert_ne(layout.player_start, layout.exit_position,
+		"start и exit не совпадают")
+	var hops: int = layout.room_graph.shortest_path_length(
+		layout.entrance_room_index, layout.exit_room_index,
+	)
+	assert_gte(hops, 3,
+		"entrance/exit на графовой дистанции >= 3 hops (technical v2)")
 
 func test_room_infos_include_technical_roles() -> void:
 	# Хотя бы одна комната должна получить одну из technical ролей
@@ -93,42 +104,33 @@ func test_technical_decor_profile_not_cave() -> void:
 		assert_false(all_types.has(cave),
 			"technical machine_room НЕ должен иметь cave-декор %s" % cave)
 
-func test_rooms_are_separated_from_service_corridor_by_wall() -> void:
-	# Регресс: без 1-tile стены doorway имеет высоту 0 и не рисуется —
-	# машинная сливается со служебным коридором в открытый альков.
-	for seed_val in [7001, 7002, 7003, 7004]:
-		var layout := _generate(seed_val, 8)
-		var main_corridor: Rect2i = layout.corridors[0]
-		for room in layout.rooms:
-			var above := room.end.y <= main_corridor.position.y
-			var below := room.position.y >= main_corridor.end.y
-			assert_true(above or below,
-				"комната %s должна быть выше или ниже коридора %s (seed=%d)" % [room, main_corridor, seed_val])
-			if above:
-				var gap: int = main_corridor.position.y - room.end.y
-				assert_gte(gap, 20,
-					"gap выше коридора должен быть >=1 tile (got=%d, seed=%d)" % [gap, seed_val])
-			else:
-				var gap: int = room.position.y - main_corridor.end.y
-				assert_gte(gap, 20,
-					"gap ниже коридора должен быть >=1 tile (got=%d, seed=%d)" % [gap, seed_val])
+func test_technical_v2_has_two_parallel_rails() -> void:
+	# PR3: technical grid v2 → два параллельных main corridor rects
+	# (top rail, bottom rail). Оба покрывают почти всю ширину этажа и
+	# идут на разной Y-координате.
+	var layout := _generate(7001, 8)
+	assert_gte(layout.corridors.size(), 2, "минимум 2 rail-корридора")
+	var top_rail: Rect2i = layout.corridors[0]
+	var bottom_rail: Rect2i = layout.corridors[1]
+	assert_gt(top_rail.size.x, 100, "top rail покрывает большую часть ширины")
+	assert_gt(bottom_rail.size.x, 100, "bottom rail тоже покрывает большую часть ширины")
+	assert_lt(top_rail.position.y, bottom_rail.position.y,
+		"top rail расположен выше bottom rail")
+	assert_ne(top_rail.position.y, bottom_rail.position.y,
+		"rail'ы на разной Y-координате")
 
-func test_every_service_room_has_doorway_to_corridor() -> void:
+func test_every_room_is_reachable_via_graph() -> void:
+	# PR3: инвариант связности проверяется через layout.room_graph, а не
+	# через ручной поиск doorway'ев (в v2 doorways появляются между
+	# machine rooms и обоими rail'ами — старая логика их не описывает).
 	for seed_val in [7101, 7102, 7103, 7104]:
 		var layout := _generate(seed_val, 8)
-		var main_corridor: Rect2i = layout.corridors[0]
-		var doorways: Array = []
-		for i in range(1, layout.corridors.size()):
-			doorways.append(layout.corridors[i])
-		for room in layout.rooms:
-			var connected := false
-			for door: Rect2i in doorways:
-				var touches_room := door.position.y == room.end.y or door.end.y == room.position.y
-				var touches_corridor := door.end.y == main_corridor.position.y or door.position.y == main_corridor.end.y
-				var x_overlap := door.position.x >= room.position.x and door.end.x <= room.end.x
-				if touches_room and touches_corridor and x_overlap:
-					connected = true
-					break
-			assert_true(connected,
-				"у служебной комнаты %s должен быть doorway в служебный коридор (seed=%d)" % [room, seed_val])
+		assert_not_null(layout.room_graph, "layout.room_graph должен быть построен")
+		assert_true(layout.room_graph.is_graph_connected(),
+			"все комнаты technical v2 должны быть достижимы (seed=%d)" % seed_val)
+		# Никакая комната не должна быть изолирована — degree >= 1.
+		for i in layout.rooms.size():
+			var neighbours = layout.room_graph.adjacency[i]
+			assert_gte(neighbours.size(), 1,
+				"комната %d не должна быть изолирована (seed=%d)" % [i, seed_val])
 
