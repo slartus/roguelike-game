@@ -26,9 +26,12 @@ func test_necromancer_definition_has_valid_scene() -> void:
 	assert_true(instance is BossBase,
 		"инстанс сцены должен наследовать BossBase")
 
-func test_necromancer_definition_targets_floor_five() -> void:
-	assert_eq(NecromancerDefinition.floor_number, 5,
-		"на этом PR некромант — первый босс на 5 этаже")
+func test_necromancer_definition_no_longer_targets_floor_five() -> void:
+	# С PR 2 5-й этаж занят Castellan Armor. Necromancer больше не имеет
+	# явного floor'а (0 = «нет explicit слота»), остаётся только
+	# fallback'ом для 10/15/20.
+	assert_ne(NecromancerDefinition.floor_number, 5,
+		"после PR 2 Necromancer не претендует на floor 5")
 
 func test_necromancer_fallback_allowed_for_higher_boss_floors() -> void:
 	# До PR 3–5 некромант служит fallback'ом для 10/15/20 — они

@@ -31,18 +31,29 @@ Main._spawn_enemies()
 
 ## Attack IDs
 
-Стабильные идентификаторы атак Некроманта (для аналитики, тестов и будущих UI-тултипов):
+Стабильные идентификаторы атак (для аналитики, тестов и будущих UI-тултипов):
+
+**Necromancer** (fallback этажей 10/15/20):
 
 - `aimed_projectile` — прицельный magic_bolt.
 - `radial_volley` — «звёздочка» dark_orb.
 - `summon_minions` — призыв 3 melee + 2 archer.
 - `contact` — контактный урон.
 
+**Castellan Armor** (этаж 5):
+
+- `sword_sweep` — дуговая атака мечом с телеграфом ~0.45 s.
+- `shield_bash` — короткий bash с knockback'ом.
+- `shield_charge` — фиксированный charge по прямой, wall impact → stun.
+- `ground_slam` — phase 2 only, near-impact + 4 orthogonal shockwaves.
+- `ground_slam_shockwave` — attack_id shockwave-волны в DamageContext игрока.
+- `contact` — фиксированный 1 damage при столкновении в approach.
+
 Каждый другой босс определит свой набор ID.
 
-## Arena profile
+## Arena profiles
 
-`legacy_arena_profile.tres`:
+`legacy_arena_profile.tres` — используется fallback-босом (Necromancer) на этажах 10/15/20:
 
 | Поле                  | Значение         |
 |-----------------------|------------------|
@@ -52,16 +63,28 @@ Main._spawn_enemies()
 | material_profile_id   | `boss_arena`     |
 | clear_center_radius   | 0.0              |
 
-`clear_center_radius` пока не используется — оставлен под будущие боссы, у которых центр арены должен быть свободен под особую механику (Rune Golem, Crystal Wyrm).
+`castellan_hall_arena.tres` — арена Castellan Armor (этаж 5):
 
-## Registry mapping (PR 1)
+| Поле                  | Значение              |
+|-----------------------|-----------------------|
+| id                    | `castellan_hall`      |
+| size                  | 640×420 px            |
+| zone                  | `residential`         |
+| material_profile_id   | `castellan_hall`      |
+| clear_center_radius   | 96.0                  |
 
-| Floor | Definition   | Notes                                      |
-|------:|--------------|--------------------------------------------|
-| 5     | necromancer  | Explicit (первый босс).                    |
-| 10    | necromancer  | Fallback (fallback_allowed=true).          |
-| 15    | necromancer  | Fallback.                                  |
-| 20    | necromancer  | Fallback.                                  |
+Прямоугольный парадный зал завершает residential-зону. Размер подобран так, чтобы `CHARGE_SPEED (220) × CHARGE_MAX_DURATION (1.6) = 352 px` был больше половины любой оси (320 / 210): charge из центра всегда уткнётся в стену → стабильное `wall stun` окно как основной vulnerability window фазы 1.
+
+Резолвинг: `BossRegistry.arena_profile_for_floor(floor)` по `arena_profile_id` definition'а. Неизвестный id → fallback на legacy 600×400.
+
+## Registry mapping (после PR 2)
+
+| Floor | Definition        | Notes                                              |
+|------:|-------------------|----------------------------------------------------|
+| 5     | castellan_armor   | Explicit (первый босс, PR 2).                     |
+| 10    | necromancer       | Fallback (fallback_allowed=true, до PR 3).        |
+| 15    | necromancer       | Fallback (до PR 4).                                |
+| 20    | necromancer       | Fallback (до PR 5).                                |
 
 Правила резолвинга (`BossRegistry.definition_for_floor(floor)`):
 
@@ -69,7 +92,9 @@ Main._spawn_enemies()
 2. **Fallback slot** — если floor присутствует в `FALLBACK_BOSS_FLOORS` (сейчас `[10, 15, 20]`) и есть хотя бы одна definition с `fallback_allowed = true`, возвращается она.
 3. **Иначе** — `null` (non-boss floor).
 
-Логика без magic constant вроде `% 5 == 0` — если завтра появится босс на floor 7, его definition просто получит `floor_number = 7` и попадёт в шаг 1; никакие guard'ы менять не нужно. Slot'ы fallback'а явно перечислены — reviewer видит, где заглушка Некроманта, и что заменяется в PR 2–5 (Castellan → floor 5, Necromancer → floor 15, Rune Golem → floor 10, Crystal Wyrm → floor 20).
+Логика без magic constant вроде `% 5 == 0` — если завтра появится босс на floor 7, его definition просто получит `floor_number = 7` и попадёт в шаг 1; никакие guard'ы менять не нужно. Slot'ы fallback'а явно перечислены — reviewer видит, где заглушка Некроманта, и что заменяется в PR 3–5 (Rune Golem → floor 10, Necromancer возвращается на 15, Crystal Wyrm → floor 20).
+
+`Necromancer` в PR 2 снят с explicit floor'а: `floor_number = 0` в его definition означает «нет явного слота, только fallback». Пока `fallback_allowed = true`, он держит все три оставшихся boss floor'а.
 
 ## Как добавить нового босса
 
@@ -101,7 +126,9 @@ Main._spawn_enemies()
 
 ## Тесты
 
-- `test/unit/test_boss_registry.gd` — mapping/uniqueness/fallback.
-- `test/unit/test_boss_definition.gd` — валидность `necromancer_definition.tres`.
+- `test/unit/test_boss_registry.gd` — mapping/uniqueness/fallback (5 → Castellan, 10/15/20 → Necromancer fallback).
+- `test/unit/test_boss_definition.gd` — валидность `necromancer_definition.tres` (после PR 2 — только fallback, floor_number=0).
 - `test/unit/test_boss_base.gd` — phase, spawn context, signals, inheritance.
-- `test/unit/test_boss_volley.gd` / `test_boss_aimed_shot.gd` / `test_boss_summon.gd` — специфика Некроманта, сохранены без изменений после миграции.
+- `test/unit/test_boss_volley.gd` / `test_boss_aimed_shot.gd` / `test_boss_summon.gd` — специфика Некроманта.
+- `test/unit/test_castellan_armor_boss.gd` — Castellan Armor: registry, HP, phase threshold, damage caps, state machine invariants, charge fixed direction / no homing / no multi-hit, phase transition эмиттит `phase_changed(2)` один раз, ground_slam доступен только в phase 2 и порождает ровно 4 shockwave'а.
+- `test/unit/test_castellan_arena.gd` — arena profile: rectangular, walls close enough for charge stun, clear center, residential zone.

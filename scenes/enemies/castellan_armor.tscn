@@ -1,0 +1,24 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/castellan_armor.gd" id="1_boss"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/castellan_armor.png" id="2_tex"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_boss"]
+radius = 14.0
+
+[node name="CastellanArmor" type="CharacterBody2D"]
+z_index = 1
+script = ExtResource("1_boss")
+boss_id = &"castellan_armor"
+display_name = "ENEMY_CASTELLAN_ARMOR"
+max_health = 45
+contact_damage = 1
+xp_reward = 55
+gold_reward = 30
+speed = 28.0
+
+[node name="Visual" type="Sprite2D" parent="."]
+texture = ExtResource("2_tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_boss")
