@@ -682,7 +682,7 @@ PR 2 добавил room-level планировщик пропов поверх 
 7. Заполняет **wall-adjacent → large → floor** до достижения `blocking budget` из таблицы плотности.
 8. Добавляет **wall surfaces** (картины, трубы) — non-blocking.
 9. Добавляет **floor decals** (ковры, кости, корни, floor-решётка) — non-blocking.
-10. Для каждого blocking placement делает **connectivity pre-check** — BFS от одного doorway anchor'а к остальным по free/reserved/decal клеткам. Если пропа ломает связность — placement отклоняется.
+10. Для каждого blocking placement делает **connectivity pre-check** — BFS от одного critical anchor'а ко всем остальным по free/reserved/decal клеткам. Critical anchors = doorways ∪ external reservations (player_start / exit / chest / enemy_spawn c clear-radius), попавшие внутрь room. Если placement ломает достижимость хоть одного anchor'а — отклоняется.
 
 Результат — `FloorPlan.placements: Array[Placement]` и `blocked_cells: Dictionary`. Floor.gd инстанциирует placements как Sprite2D + optional StaticBody2D и передаёт blocked_cells в AStar.
 
@@ -701,7 +701,11 @@ Radius = размер квадратного клирнса вокруг anchor'
 
 ### Connectivity guarantee
 
-Для комнаты с 2+ дверями planner обеспечивает: между **любой** парой doorway anchors существует путь по не-blocking клеткам (free / reserved / decal / wall-surface). Blocking placement, ломающий связность, откатывается на этапе _try_place_prop. Тест `test_prop_navigation_integration.gd::test_all_doors_of_room_remain_connected` проверяет инвариант через реальный layout.
+Planner обеспечивает, что **между любой парой critical anchors** внутри комнаты существует путь по не-blocking клеткам (free / reserved / decal / wall-surface). Critical anchors — это doorway anchors и внешние reservations (player_start / exit / chest / enemy_spawn clear-radius), которые попали внутрь room rect. Blocking placement, ломающий достижимость любого anchor'а от остальных, откатывается на этапе `_try_place_prop`. Так гарантировано, что enemy_spawn не окажется отрезан от двери — иначе AI не мог бы построить путь к игроку. Инварианты проверяются в:
+
+- `test_prop_navigation_integration.gd::test_all_doors_of_room_remain_connected` — двери между собой.
+- `test_prop_navigation_integration.gd::test_astar_path_exists_from_player_start_to_each_enemy_spawn` — AStar от player_start до каждого enemy_spawn на реальном Floor'е.
+- `test_room_decoration_planner.gd::test_reserved_anchor_stays_reachable_from_door_across_seeds` и `test_all_reservations_stay_mutually_reachable` — все anchor'ы взаимно достижимы.
 
 ### Signature prop правило
 
