@@ -24,6 +24,7 @@ run/flush_stdout_on_print=true
 GameState="*res://autoloads/game_state.gd"
 EventLog="*res://autoloads/event_log.gd"
 Balance="*res://autoloads/balance.gd"
+Analytics="*res://autoloads/analytics.gd"
 
 [debug]
 

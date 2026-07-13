@@ -21,6 +21,7 @@ func _ready() -> void:
 	$VBox/DebugButton.text = tr("UI_TITLE_DEBUG")
 	$VBox/PlayButton.grab_focus()
 	_refresh_run_stats_panel()
+	Analytics.start_session()
 
 func _refresh_run_stats_panel() -> void:
 	# Панель показывается только после смерти игрока (finish_run фиксирует
@@ -40,10 +41,22 @@ func _on_play_pressed() -> void:
 	# обнуляем прогресс. reset_run сам поднимет новый tower_seed через RNG.
 	GameState.clear_last_run_stats()
 	GameState.reset_run()
+	# ID оружия для аналитики — path-basename .tres ("short_sword"),
+	# а не display_name (i18n-ключ типа "WEAPON_SHORT_SWORD"). i18n-ключи
+	# могут переименовываться — resource_path стабильнее для reports.
+	var weapon_id := "unknown"
+	if GameState.equipped_weapon != null:
+		weapon_id = GameState.equipped_weapon.resource_path.get_file().get_basename()
+	Analytics.start_run({
+		"starting_weapon_id": weapon_id,
+		"starting_max_health": GameState.player_max_health,
+		"starting_level": GameState.player_level,
+	})
 	get_tree().change_scene_to_file(MAIN_SCENE_PATH)
 
 func _on_debug_pressed() -> void:
 	get_tree().change_scene_to_file(DEBUG_MENU_SCENE_PATH)
 
 func _on_exit_pressed() -> void:
+	Analytics.end_session(Analytics.SESSION_END_NORMAL)
 	get_tree().quit()

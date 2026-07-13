@@ -122,6 +122,7 @@ func clear_last_run_stats() -> void:
 
 func award_enemy_kill() -> void:
 	run_enemies_killed += 1
+	Analytics.record_enemy_killed()
 
 func add_health_potion() -> void:
 	health_potions += 1
@@ -174,6 +175,7 @@ func award_gold(amount: int) -> void:
 		return
 	total_gold += amount
 	run_gold += amount
+	Analytics.record_gold_earned(amount)
 	gold_changed.emit(total_gold)
 	_save()
 
