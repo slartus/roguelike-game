@@ -4,21 +4,24 @@ extends RefCounted
 # Data-driven mapping "floor number → BossDefinition". Заменяет прежний
 # hardcoded `BOSS_SCENE = preload(...)` в Main.gd.
 #
-# На этом PR:
-# - floor 5 → Necromancer (эксплицитная definition через floor_number=5);
+# После PR 2:
+# - floor 5 → Castellan Armor (эксплицитная definition через floor_number=5);
 # - floor 10 / 15 / 20 → Necromancer (временный fallback до PR 3–5,
-#   когда появятся Rune Golem, Castellan-переехавший-с-5, Crystal Wyrm).
+#   когда появятся Rune Golem, Necromancer-переехавший-на-15, Crystal Wyrm).
 #
 # Порядок роадмапы (см. plans/boss-roadmap-claude-plans/00_README_RUN_ORDER.md):
-# PR 2 переносит Некроманта с 5-го этажа и ставит на 5 нового босса,
-# PR 3 добавляет 10-й, PR 4 возвращает Некроманта на 15, PR 5 добавляет 20-й.
-# До этого fallback гарантирует, что boss floor'ы не ломаются.
+# PR 2 ставит Castellan Armor на 5-й этаж и снимает Некроманта с явного
+# слота (его definition остаётся живой только как fallback);
+# PR 3 добавляет 10-й (Rune Golem), PR 4 возвращает Некроманта на 15
+# (fallback выключится), PR 5 добавляет 20-й (Crystal Wyrm).
 #
 # Загружаем definitions лениво из preload'а .tres — это data, а не код,
 # reviewer'у проще менять состав через инспектор.
 
+const CASTELLAN_ARMOR_DEFINITION: Resource = preload("res://resources/bosses/castellan_armor_definition.tres")
 const NECROMANCER_DEFINITION: Resource = preload("res://resources/bosses/necromancer_definition.tres")
 const LEGACY_ARENA_PROFILE: Resource = preload("res://resources/bosses/legacy_arena_profile.tres")
+const CASTELLAN_HALL_ARENA_PROFILE: Resource = preload("res://resources/bosses/castellan_hall_arena.tres")
 
 # Boss floor'ы, для которых пока нет своей definition, но нужно провести
 # босса. Полностью data-driven — если завтра появится босс на floor 7,
@@ -59,14 +62,21 @@ static func arena_profile_for_floor(floor_number: int) -> BossArenaProfile:
 	var definition := definition_for_floor(floor_number)
 	if definition == null:
 		return null
-	# На этом этапе все definitions используют один legacy профиль
-	# (600×400). После PR 2 каждый босс получит собственную арену.
-	return LEGACY_ARENA_PROFILE
+	# Резолвим arena profile по `arena_profile_id` definition'а. Каждый
+	# босс с PR 2 может иметь свой профиль; неизвестный id — fallback на
+	# legacy 600×400, чтобы старые definitions не сломались.
+	match definition.arena_profile_id:
+		&"castellan_hall":
+			return CASTELLAN_HALL_ARENA_PROFILE
+		_:
+			return LEGACY_ARENA_PROFILE
 
 # Все зарегистрированные definitions. Используется тестами и будущей
 # аналитикой ("сколько боссов запланировано в башне").
 static func all_definitions() -> Array[BossDefinition]:
 	var result: Array[BossDefinition] = []
+	if CASTELLAN_ARMOR_DEFINITION != null:
+		result.append(CASTELLAN_ARMOR_DEFINITION)
 	if NECROMANCER_DEFINITION != null:
 		result.append(NECROMANCER_DEFINITION)
 	return result

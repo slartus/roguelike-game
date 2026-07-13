@@ -7,8 +7,8 @@ extends GutTest
 func test_floor_five_has_explicit_definition() -> void:
 	var definition := BossRegistry.definition_for_floor(5)
 	assert_not_null(definition, "floor 5 обязан иметь boss definition")
-	assert_eq(definition.id, &"necromancer",
-		"5 этаж — некромант (до PR 2)")
+	assert_eq(definition.id, &"castellan_armor",
+		"с PR 2 5 этаж — Castellan Armor, Necromancer больше не спавнится тут")
 
 func test_boss_floors_ten_fifteen_twenty_have_definitions() -> void:
 	# До PR 3–5 fallback возвращает Некроманта, но definition должна быть.
@@ -38,13 +38,19 @@ func test_scene_for_non_boss_floor_returns_null() -> void:
 	assert_null(BossRegistry.scene_for_floor(3),
 		"non-boss floor → нет scene")
 
-func test_arena_profile_for_boss_floor_is_legacy() -> void:
+func test_arena_profile_for_castellan_is_castellan_hall() -> void:
 	var profile := BossRegistry.arena_profile_for_floor(5)
 	assert_not_null(profile, "у boss floor должен быть arena profile")
+	assert_eq(profile.id, &"castellan_hall",
+		"Castellan Armor использует свой arena profile castellan_hall")
+
+func test_arena_profile_for_fallback_boss_is_legacy() -> void:
+	# Fallback slots (10/15/20) обслуживает Necromancer с legacy_600x400
+	# ареной — до PR 3–5 они делят один и тот же профиль.
+	var profile := BossRegistry.arena_profile_for_floor(10)
+	assert_not_null(profile, "fallback slot должен иметь arena profile")
 	assert_eq(profile.id, &"legacy_600x400",
-		"на PR 1 все боссы делят legacy profile")
-	assert_eq(profile.size, Vector2i(600, 400),
-		"legacy arena — 600×400 (сохраняем текущий размер)")
+		"fallback (Necromancer) продолжает делить legacy 600×400 профиль")
 
 func test_all_definitions_returns_registered_bosses() -> void:
 	var definitions := BossRegistry.all_definitions()

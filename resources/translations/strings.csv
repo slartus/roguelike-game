@@ -48,6 +48,7 @@ ENEMY_SKELETON_ARCHER_WOOD,"Skeleton Archer (wooden arrows)","Скелет-лу�
 ENEMY_SKELETON_ARCHER_IRON,"Skeleton Archer (iron arrows)","Скелет-лучник (железные стрелы)"
 ENEMY_LICH,"Lich","Лич"
 ENEMY_NECROMANCER,"Necromancer","Некромант"
+ENEMY_CASTELLAN_ARMOR,"Castellan Armor","Доспех Кастеляна"
 WEAPON_DAGGER,"Dagger","Кинжал"
 WEAPON_SHORT_SWORD,"Short Sword","Короткий меч"
 WEAPON_SPEAR,"Spear","Копьё"

@@ -382,6 +382,65 @@ NECROMANCER = [
 ]
 
 
+# ============================================================================
+# CASTELLAN ARMOR (32×32 boss) — оживший тяжёлый доспех кастеляна:
+# ведёрный шлем, полная кираса с гербовой пелериной, длинный меч в правой
+# руке, каплевидный щит в левой, связка ключей на поясе. Синий герб
+# отсылает к residential-зоне.
+# ============================================================================
+CASTELLAN_PALETTE = {
+    ".": (0, 0, 0, 0),
+    "S": (170, 175, 185, 255),     # сталь — светлая
+    "s": (110, 115, 130, 255),     # сталь — тень
+    "d": (60, 65, 80, 255),        # сталь — глубокая тень
+    "H": (200, 210, 225, 255),     # блик стали
+    "B": (10, 10, 15, 255),        # чернота (пустое забрало, стыки)
+    "R": (120, 30, 30, 255),       # свечение из глазниц (охранная магия)
+    "r": (200, 60, 60, 255),
+    "C": (35, 65, 145, 255),       # синий герб — residential
+    "c": (25, 45, 100, 255),
+    "G": (200, 175, 90, 255),      # золото — герб, рукоять, ключи
+    "g": (140, 115, 45, 255),
+    "K": (245, 230, 150, 255),     # блик золота
+    "W": (215, 220, 230, 255),     # клинок меча
+    "w": (145, 150, 165, 255),
+}
+CASTELLAN = [
+    "................................",
+    "................................",
+    "..........SSSSSSSSSS............",  # верх шлема (ведро)
+    ".........SHHHHHHHHHHS...........",
+    "........sSHHHHHHHHHHSs..........",
+    "........sSSSSSSSSSSSSs..........",
+    "........sSSBBBBBBBBSSs..........",  # прорезь забрала
+    "........sSSBRRBBRRBSSs...WW.....",  # красное свечение из глазниц
+    "........sSSBBBBBBBBSSs..WWWw....",  # клинок начинается справа
+    "........sSSSSSBBSSSSSs.WWWWw....",  # прорезь для рта
+    "........sdSSSSSSSSSSds.WWWWw....",
+    ".........sdssssssssds.WWWWWw....",  # плечи наплечники
+    "........SSSSCCCCCCSSSS.WWWWw....",  # пелерина с гербом (плечи)
+    ".......SSHCCCGGGGCCCSSS.WWWw....",  # золотое обрамление
+    "......SsCCCGGKKKKGGGCCcSSWWw....",  # герб — центр
+    "...CCCSsCCCGKKGGKKGGGCCcSSWw....",  # щит начинается слева
+    "..CGGCSsCCCGGCCCCGGGCCCcS.Ww....",  # щит: золото + герб + сталь
+    ".CCGgCSsCCCGCCCCCCCGCCCcS.......",
+    ".CCCGCSsSSCGCCCCCCCCCCcSs.......",  # рукоять меча в правой руке
+    ".CCCGCSsSSSSSSSSSSSSSSSs.gG.....",  # золотая рукоять
+    ".CGGCcSsSSGGSSSSSSSSSSSs.gG.....",  # пояс + ключи
+    ".CccCcSsSGGKGGSSSSSSSSs..gG.....",
+    "..CCCcSsSGGKGGGSSSSSSs...gG.....",
+    "...ccsSsSSGKGGSSSSSSSs...gG.....",  # низ щита сходит на нет
+    "....sSssSSGGGSSSSSSSSs...gG.....",  # набедренники
+    "....sSSssSSSSSSSSSSSSs...gG.....",
+    "....sdssssSSSSSSSSSSs....gG.....",  # начало ног
+    ".....sddsdSSssssssSSs....gG.....",
+    "......sddssssdddssSs.....gG.....",
+    ".......sdsddssdssdss.....ggG....",  # сапоги
+    "........ssddddssdss......ggg....",
+    "................................",
+]
+
+
 SPRITES: list[tuple[str, list[str], dict[str, tuple[int, int, int, int]]]] = [
     ("slime.png", SLIME, SLIME_PALETTE),
     ("goblin.png", GOBLIN, GOBLIN_PALETTE),
@@ -392,6 +451,7 @@ SPRITES: list[tuple[str, list[str], dict[str, tuple[int, int, int, int]]]] = [
     ("skeleton_archer.png", SKELETON_ARCHER, SKELETON_ARCHER_PALETTE),
     ("lich.png", LICH, LICH_PALETTE),
     ("necromancer.png", NECROMANCER, NECRO_PALETTE),
+    ("castellan_armor.png", CASTELLAN, CASTELLAN_PALETTE),
 ]
 
 

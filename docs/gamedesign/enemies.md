@@ -573,9 +573,151 @@ Bonus прибавляется к `damage` каждой заспавненной
 
 **Никаких наград с призванных.** `xp_reward = 0`, `gold_reward = 0`, `pickup_scene = null` устанавливаются в `_summon_skeleton` перед `add_child`. Иначе игрок бы «фармил» лича стоя на дистанции — за 5 минут получал бы бесконечно XP и зелий. Скелет-миньон при этом настоящий (в группе `enemy`, со всей арсенальной случайной комплектацией), просто без экономики.
 
-## Босс
+## Боссы
 
-### Necromancer (`boss.tscn`)
+### Castellan Armor (`castellan_armor.tscn`) — этаж 5
+
+Первый босс башни. Оживший тяжёлый доспех кастеляна — хранитель residential-зоны: ведёрный шлем с прорезью забрала, полная кираса с синим гербом и золотым обрамлением, длинный меч в правой руке, каплевидный щит в левой, связка ключей на поясе. Спрайт `castellan_armor.png` (32×32), коллизия r=14.
+
+Первый босс учит:
+
+- **читать телеграф** — все атаки имеют явное окно wind-up до damage frame'а;
+- **обходить сектор** — sweep поражает только 100° конус от `_attack_facing`;
+- **провоцировать charge в стену** — фиксированное направление, вложенный `wall stun = 1.2 s` — главное vulnerability window фазы 1;
+- **использовать recovery windows** — sweep/bash/charge имеют явные окна беспомощности;
+- **не жадничать** — контактный урон 1, но множественные атаки за короткий промежуток быстро съедают HP.
+
+Первый босс НЕ использует:
+
+- summons / bullet hell;
+- одновременные независимые угрозы;
+- ваншот-атаки обычным свингом.
+
+#### Базовые параметры
+
+| Параметр                | Значение |
+|-------------------------|---------:|
+| max_health              | 45       |
+| speed                   | 28       |
+| contact_damage          | 1        |
+| xp_reward               | 55       |
+| gold_reward             | 30       |
+| phase 2 HP fraction     | 0.55     |
+| phase 2 speed mult      | 1.12     |
+| phase transition dur    | 0.85 s   |
+
+#### Атаки
+
+**`sword_sweep`** — дуговая атака мечом.
+
+| Параметр        | Значение |
+|-----------------|---------:|
+| wind-up         | 0.45 s   |
+| active          | 0.10 s   |
+| recovery        | 0.45 s (0.32 s в phase 2) |
+| range           | 55 px    |
+| arc             | 100°     |
+| damage          | 2        |
+
+Damage не применяется до active frame. Direction фиксируется в момент `_start_attack` и не пересчитывается — игрок может выйти из сектора движением в сторону.
+
+**`shield_bash`** — короткий bash с высоким knockback'ом.
+
+| Параметр        | Значение |
+|-----------------|---------:|
+| wind-up         | 0.30 s   |
+| active          | 0.08 s   |
+| recovery        | 0.35 s   |
+| range           | 34 px    |
+| arc             | 70°      |
+| damage          | 1        |
+| knockback       | 260 px/s |
+
+Задача bash — сменить позицию игрока (втолкнуть в невыгодный угол), а не основной damage source. Не multi-hit: damage применяется один раз в damage frame, wall pin невозможен.
+
+**`shield_charge`** — фиксированный charge по прямой.
+
+| Параметр        | Значение |
+|-----------------|---------:|
+| telegraph       | 0.65 s   |
+| speed           | 220 px/s |
+| max duration    | 1.6 s    |
+| damage          | 3        |
+| wall stun       | 1.2 s    |
+| miss recovery   | 0.5 s    |
+| hit radius      | 24 px    |
+
+**Direction фиксируется до старта** и не пересчитывается в CHARGING (no homing). Damage применяется **один раз** за charge — не multi-hit. При столкновении:
+
+- с игроком — damage + `RECOVERY` (без stun'а: чтобы игрок не думал что charge всегда даёт punish-окно);
+- со стеной — `STUNNED` 1.2 s: главное vulnerability window фазы 1.
+
+Cadence guard: не более `MAX_CONSECUTIVE_CHARGES = 2` зарядов подряд. Третий выбор charge на том же дистанционном диапазоне подавляется — иначе паттерн заучивается как «доджь → wall → фарм stun window».
+
+**`ground_slam`** — только phase 2.
+
+| Параметр               | Значение |
+|------------------------|---------:|
+| telegraph              | 0.70 s   |
+| near-impact radius     | 48 px    |
+| near-impact damage     | 2        |
+| shockwaves             | 4 (orthogonal) |
+| shockwave damage       | 1        |
+| shockwave speed        | 140 px/s |
+| shockwave lifetime     | 1.4 s    |
+| recovery               | 0.60 s   |
+
+Никакого radial ring bullet-hell'а — ровно 4 orthogonal shockwave'а (`RIGHT`, `LEFT`, `UP`, `DOWN`). Большие промежутки между волнами — игрок читает вектор и выходит перпендикулярно. Shockwave исчезает при contact со стеной (StaticBody2D) или по lifetime.
+
+#### State machine
+
+```
+IDLE → APPROACH → { WINDUP → ATTACK → RECOVERY } → APPROACH
+                → { WINDUP → CHARGING → RECOVERY (hit / miss) }
+                → { WINDUP → CHARGING → STUNNED → APPROACH } (wall)
+                → PHASE_TRANSITION → APPROACH (при 55% HP)
+                → DEAD
+```
+
+Инвариант: одна атака за раз. `_state_timer` и `_current_attack` сбрасываются в `_set_state()`. Ни один timer не тикает во время STUNNED / PHASE_TRANSITION — новые атаки не могут стартовать. RECOVERY тоже не запускает атак — только tick таймера.
+
+#### Attack selection
+
+Weighted state-aware выбор через `_pick_next_action(distance)`:
+
+- дальняя дистанция (`RANGE_CHARGE_MIN..MAX = 90..260 px`) → `shield_charge` (если не превышен cadence-cap);
+- ближняя (`<= RANGE_MELEE = 60 px`) → `sword_sweep` (~65%) или `shield_bash` (~35%);
+- phase 2 средняя (`60..126 px`) → `ground_slam` (~55% если не был последним);
+- иначе → продолжаем движение к игроку.
+
+RNG — свой `RandomNumberGenerator` с seed `tower_seed * 1_299_709 + floor * 65_537 + 4_027`. Deterministic для «shared tower seed» реплеев; не смешивается с global randi.
+
+#### Phase transition (при 55% HP)
+
+- boss останавливается (velocity = 0);
+- визуальный tint пульсирует через `TRANSITION_TINT_COLOR = Color(1.4, 1.3, 0.7)` — читаемый «доспех трещит»;
+- пауза `0.85 s` — новые атаки не стартуют, damage игрока проходит нормально (transition не защищает, но и не damages back);
+- `phase_changed(2)` эмиттится **строго один раз** (идемпотентно через `BossBase.set_phase`);
+- movement speed × 1.12, добавляется `ground_slam`, `sword_sweep.recovery` = 0.32 s (было 0.45), damage не меняется.
+
+#### Балансные инварианты
+
+1. Ни одна атака не ваншотит full-health игрока первого boss tier (стартовое `player.max_health = 5`, max single-hit = 3 при charge).
+2. Максимальный single-hit damage = 3.
+3. Все damage attacks имеют telegraph до active frame.
+4. Charge direction зафиксирована — no homing.
+5. После sweep/bash/charge/slam есть recovery.
+6. Boss не атакует во время STUNNED / PHASE_TRANSITION / DEAD.
+7. Contact damage = 1, cooldown 0.8 s.
+8. Melee и ranged оружия имеют реальные окна damage: recovery sweep (0.45 s / 0.32 s), wall stun (1.2 s), phase transition (0.85 s).
+
+Contact/attack damage — const'ы в `castellan_armor.gd`, не exported. Balance.scaled_damage применяется только к `contact_damage` через `BossBase._apply_floor_scaling`; sweep/bash/charge/slam damage остаются под hard-cap'ом плана независимо от tuning'а `Balance`.
+
+#### Reward
+
+До PR 6 использует generic boss reward flow: XP + gold идут через стандартный `_handle_death`. `reward_profile_id = "castellan_reward_legacy"` — placeholder на PR 6 (уникальный relic).
+
+### Necromancer (`boss.tscn`) — fallback этажей 10/15/20
 
 Крупная фигура в тёмной робе с капюшоном, посох с зелёным кристаллом. Спрайт `necromancer.png` (32×32), коллизия r=14.
 
