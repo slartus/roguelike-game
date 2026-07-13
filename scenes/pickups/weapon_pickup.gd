@@ -20,7 +20,9 @@ func _ready() -> void:
 
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("player") and body.has_method("equip"):
-		body.equip(weapon)
+		# source=pickup — оружие лежало в комнате или выпало из сундука.
+		# equip() внутри вызовет Analytics.record_weapon_equipped.
+		body.equip(weapon, Analytics.WEAPON_SOURCE_PICKUP)
 		if weapon != null:
 			EventLog.log_weapon_pickup(weapon.display_name)
 		queue_free()

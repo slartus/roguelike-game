@@ -37,6 +37,7 @@ func _on_body_entered(body: Node) -> void:
 	# set_deferred для Area2D свойств во время in/out сигналов.
 	set_deferred("monitoring", false)
 	EventLog.log_chest_open()
+	Analytics.record_chest_opened()
 	_spawn_pickup()
 
 func _spawn_pickup() -> void:

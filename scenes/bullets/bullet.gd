@@ -17,6 +17,12 @@ extends Area2D
 var direction: Vector2 = Vector2.RIGHT
 var _pierce_remaining: int = 0
 var _hit_bodies: Dictionary = {}
+# Analytics attribution: source weapon для damage_dealt на enemy.
+# Заполняется в apply_weapon() / apply_weapon_stats(). Пустое → source_id="unknown".
+var source_weapon_id: StringName = &""
+var source_attack_id: StringName = &"projectile"
+# Track уникальных попаданий (targets_hit != projectiles_fired при pierce).
+var _analytics_registered_hit: bool = false
 # WeaponController выставляет direction и apply_weapon_stats(...) ДО
 # add_child, но @onready _visual ещё не существует — modulate тогда падает
 # на null visual, и на экран прилетает исходный цвет спрайта, а не
@@ -48,6 +54,8 @@ func apply_weapon(weapon: WeaponResource) -> void:
 	pierce = weapon.pierce
 	_pierce_remaining = pierce
 	_pending_visual_color = weapon.get_projectile_color()
+	source_weapon_id = StringName(weapon.resource_path.get_file().get_basename())
+	source_attack_id = StringName(weapon.attack_type)
 	# Если сцена уже в дереве (тестовый путь: add_child перед apply) —
 	# _visual уже разрешился через @onready, modulate можно применить сразу.
 	if _visual != null:
@@ -66,6 +74,11 @@ func apply_weapon_stats(stats: WeaponStats) -> void:
 	_pending_visual_color = stats.projectile_color
 	if _visual != null:
 		_visual.modulate = _pending_visual_color
+	# WeaponStats знает weapon_id + attack_type — используем для attribution.
+	if "source_weapon_id" in stats and stats.source_weapon_id != &"":
+		source_weapon_id = stats.source_weapon_id
+	if "attack_type" in stats and stats.attack_type != "":
+		source_attack_id = StringName(stats.attack_type)
 
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("player"):
@@ -80,7 +93,26 @@ func _on_body_entered(body: Node) -> void:
 	if not body.has_method("take_damage"):
 		queue_free()
 		return
-	body.take_damage(damage)
+	# Attribution: собираем DamageContext от source weapon → target enemy.
+	var ctx := DamageContext.new()
+	ctx.source_type = &"player_weapon"
+	ctx.source_id = source_weapon_id
+	ctx.attack_id = source_attack_id
+	ctx.target_type = &"enemy"
+	if body.scene_file_path != "":
+		ctx.target_id = StringName(body.scene_file_path.get_file().get_basename())
+	if "temperament_id" in body:
+		ctx.temperament_id = StringName(str(body.temperament_id))
+	if "elite_rank" in body:
+		ctx.elite_rank = int(body.elite_rank)
+	# source_level = уровень источника (weapon), НЕ target'а — оставляем 0.
+	body.take_damage(damage, ctx)
+	# projectile_hit каунтер: один раз на выстрел, независимо от pierce.
+	# targets_hit каунтер: инкрементится через add_damage_dealt (внутри
+	# enemy.take_damage → Analytics.record_damage_dealt).
+	if not _analytics_registered_hit:
+		Analytics.record_projectile_hit(source_weapon_id)
+		_analytics_registered_hit = true
 	_hit_bodies[body] = true
 	if _pierce_remaining > 0:
 		_pierce_remaining -= 1

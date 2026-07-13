@@ -166,6 +166,7 @@ func _spawn_bud() -> bool:
 	var bud = bud_scene.instantiate()
 	bud.global_position = spawn_pos
 	parent.add_child(bud)
+	_record_spawned_analytics(bud)
 	return true
 
 func _pick_bud_position() -> Vector2:
@@ -191,7 +192,7 @@ func _is_bud_walkable(floor_node: Node, pos: Vector2) -> bool:
 		return false
 	return not floor_node.astar_grid.is_point_solid(cell)
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, context: DamageContext = null) -> void:
 	# super.take_damage — coroutine с await get_tree().create_timer(0.08).
 	# Синхронная часть (health -= amount, modulate = red) уже выполнилась
 	# к моменту, когда super yield'нется на await. Не await'им super,
@@ -199,7 +200,7 @@ func take_damage(amount: int) -> void:
 	# уберёт мать из дерева — иначе get_parent()/global_position перестанут
 	# быть валидными.
 	var was_alive := health > 0
-	super.take_damage(amount)
+	super.take_damage(amount, context)
 	if was_alive and health <= 0 and not _is_sterile and can_split_on_death:
 		_spawn_death_split()
 
@@ -218,6 +219,7 @@ func _spawn_death_split() -> void:
 		var offset := axis if i == 0 else -axis
 		child.global_position = global_position + offset
 		parent.add_child(child)
+		_record_spawned_analytics(child)
 		# Осколки Small Slime уже балансируются собственными stat в
 		# small_slime.tscn (низкий HP, xp=2, gold=1). Экономически цепь
 		# «adult 5xp + 2 × 2xp = 9xp» слабее чем «одиночный adult
@@ -225,3 +227,18 @@ func _spawn_death_split() -> void:
 		# Pickup всё равно занулим — иначе small unconstrained мог бы
 		# ронять зелья и превращать почкование в лут-механику.
 		child.pickup_scene = null
+
+# Общий helper: record enemy_spawned для runtime-спавнов (бутоны, split).
+# main.gd делает это для initial spawn'ов, здесь — для тех, что появляются
+# в runtime, чтобы floor_enemy_summary.spawned совпадал с реальным числом.
+func _record_spawned_analytics(spawned_enemy: Node) -> void:
+	var enemy_id: StringName = &"unknown"
+	if spawned_enemy.scene_file_path != "":
+		enemy_id = StringName(spawned_enemy.scene_file_path.get_file().get_basename())
+	var temperament: StringName = &""
+	if "temperament_id" in spawned_enemy:
+		temperament = StringName(str(spawned_enemy.temperament_id))
+	var rank := 0
+	if "elite_rank" in spawned_enemy:
+		rank = int(spawned_enemy.elite_rank)
+	Analytics.record_enemy_spawned(enemy_id, temperament, rank)

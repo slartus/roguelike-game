@@ -41,15 +41,32 @@ func _ready() -> void:
 		EventLog.log_boss_floor(GameState.current_floor_number)
 	else:
 		EventLog.log_floor(GameState.current_floor_number)
+	# Analytics start_floor эмитим ДО spawn_enemies, чтобы enemy_spawned
+	# events шли уже внутри активного floor scope. Layout metrics берём из
+	# floor scene (rooms/enemies count известны после _spawn_floor).
+	Analytics.start_floor(_floor_context())
 	_spawn_enemies()
 	print("[main] enemies spawned: %d" % _alive_enemies)
 	_spawn_chests()
-	Analytics.start_floor({
+	print("[main] _ready done")
+
+func _floor_context() -> Dictionary:
+	# Layout metrics для floor_started payload. Часть полей плана
+	# (critical_path_length_cells, dead_end_count) требует полной
+	# graph-analysis дюнжона — не реализовано в PR 2, пропускаем.
+	var context := {
 		"floor": GameState.current_floor_number,
 		"layout_archetype": "unknown",
 		"zone": "unknown",
-	})
-	print("[main] _ready done")
+	}
+	if _floor != null:
+		context["room_count"] = _floor.layout.rooms.size() if _floor.layout != null else 0
+		context["enemy_count"] = _floor.enemy_spawn_positions.size()
+		context["chest_count"] = _floor.chest_positions.size()
+		if _floor.floor_size != null:
+			context["floor_width"] = int(_floor.floor_size.x)
+			context["floor_height"] = int(_floor.floor_size.y)
+	return context
 
 func _spawn_floor() -> void:
 	_floor = FLOOR_SCENE.instantiate()
@@ -104,6 +121,16 @@ func _spawn_enemies() -> void:
 			enemy.died_at.connect(_on_enemy_died_at)
 		_enemies_root.add_child(enemy)
 		_alive_enemies += 1
+		# Analytics: enemy_spawned для (enemy_id, temperament, elite_rank).
+		# configure_spawn мог назначить temperament_id из pool — читаем
+		# уже после add_child (когда enemy._ready() отработал).
+		var enemy_id: StringName = &"unknown"
+		if enemy.scene_file_path != "":
+			enemy_id = StringName(enemy.scene_file_path.get_file().get_basename())
+		var temperament: StringName = &""
+		if "temperament_id" in enemy:
+			temperament = StringName(str(enemy.temperament_id))
+		Analytics.record_enemy_spawned(enemy_id, temperament, elite)
 	if _alive_enemies == 0:
 		_open_door()
 
@@ -125,6 +152,7 @@ func _spawn_boss() -> void:
 		boss.died_at.connect(_on_enemy_died_at)
 	_enemies_root.add_child(boss)
 	_alive_enemies += 1
+	Analytics.record_enemy_spawned(&"boss", &"", 0)
 
 func _on_enemy_died_at(death_position: Vector2) -> void:
 	# Rename `position` -> `death_position` чтобы не шейдовить Node2D.position.

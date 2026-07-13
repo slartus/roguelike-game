@@ -334,7 +334,7 @@ func _handle_player_contact() -> void:
 		var col := get_slide_collision(i)
 		var collider := col.get_collider()
 		if collider and collider.is_in_group("player") and collider.has_method("take_damage"):
-			collider.take_damage(contact_damage)
+			collider.take_damage(contact_damage, DamageContext.from_enemy_attack(self, &"contact"))
 			_contact_timer = contact_cooldown
 			attack_played.emit(collider.global_position)
 			return
@@ -351,7 +351,7 @@ func _handle_player_contact() -> void:
 	# получал бы урон стоя за углом.
 	if not LineOfSight.is_clear(get_world_2d(), global_position, _target.global_position, [get_rid()]):
 		return
-	_target.take_damage(contact_damage)
+	_target.take_damage(contact_damage, DamageContext.from_enemy_attack(self, &"reach"))
 	_contact_timer = contact_cooldown
 	attack_played.emit(_target.global_position)
 
@@ -414,7 +414,11 @@ func _find_player() -> Node2D:
 	var players := get_tree().get_nodes_in_group("player")
 	return players[0] if players.size() > 0 else null
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, context: DamageContext = null) -> void:
+	# Analytics: floor_damage_dealt + weapon damage_dealt + enemy damage_received.
+	# context содержит source weapon_id и target enemy attribution. Legacy
+	# callers могут не передавать context — тогда attribution неполная.
+	Analytics.record_damage_dealt(mini(health, amount), context)
 	health -= amount
 	# Урон = игрок близко, «пробуждаем» AI в CHASE даже если был WANDER.
 	if _target != null and is_instance_valid(_target):
@@ -428,8 +432,8 @@ func take_damage(amount: int) -> void:
 		died_at.emit(global_position)
 		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
-		GameState.award_gold(gold_reward)
-		GameState.award_enemy_kill()
+		GameState.award_gold(gold_reward, &"enemy")
+		GameState.award_enemy_kill(context)
 		_drop_pickup()
 		queue_free()
 

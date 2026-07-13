@@ -135,7 +135,7 @@ func _physics_process(delta: float) -> void:
 		var collider := collision.get_collider()
 		if collider and collider.is_in_group("player") and _contact_timer <= 0.0:
 			if collider.has_method("take_damage"):
-				collider.take_damage(contact_damage)
+				collider.take_damage(contact_damage, DamageContext.from_enemy_attack(self, &"contact"))
 			_contact_timer = contact_cooldown
 
 	if _volley_timer <= 0.0:
@@ -153,6 +153,8 @@ func _fire_volley() -> void:
 		var bullet := bullet_scene.instantiate()
 		bullet.global_position = global_position
 		bullet.direction = Vector2.RIGHT.rotated(angle)
+		bullet.source_enemy = self
+		bullet.attack_id = &"volley"
 		get_tree().current_scene.add_child(bullet)
 	_volley_index += 1
 
@@ -181,6 +183,8 @@ func _fire_aimed_shot() -> void:
 	var bullet := aimed_bullet_scene.instantiate()
 	bullet.global_position = global_position
 	bullet.direction = direction
+	bullet.source_enemy = self
+	bullet.attack_id = &"aimed_shot"
 	get_tree().current_scene.add_child(bullet)
 
 # Pure-функция расчёта направления с упреждением. Копия формулы
@@ -269,6 +273,7 @@ func _spawn_melee_at(pos: Vector2, parent: Node) -> Node:
 	skeleton.configure_summon(_build_melee_profile())
 	skeleton.global_position = pos
 	parent.add_child(skeleton)
+	_record_spawned_analytics(skeleton)
 	return skeleton
 
 func _spawn_ranged_at(pos: Vector2, parent: Node) -> Node:
@@ -276,7 +281,20 @@ func _spawn_ranged_at(pos: Vector2, parent: Node) -> Node:
 	archer.configure_summon(_build_ranged_profile())
 	archer.global_position = pos
 	parent.add_child(archer)
+	_record_spawned_analytics(archer)
 	return archer
+
+func _record_spawned_analytics(spawned_enemy: Node) -> void:
+	var enemy_id: StringName = &"unknown"
+	if spawned_enemy.scene_file_path != "":
+		enemy_id = StringName(spawned_enemy.scene_file_path.get_file().get_basename())
+	var temperament: StringName = &""
+	if "temperament_id" in spawned_enemy:
+		temperament = StringName(str(spawned_enemy.temperament_id))
+	var rank: int = 0
+	if "elite_rank" in spawned_enemy:
+		rank = int(spawned_enemy.elite_rank)
+	Analytics.record_enemy_spawned(enemy_id, temperament, rank)
 
 func _build_melee_profile() -> SummonedCreatureProfile:
 	var p := SummonedCreatureProfile.new()
@@ -450,7 +468,8 @@ func _find_player() -> Node2D:
 	var players := get_tree().get_nodes_in_group("player")
 	return players[0] if players.size() > 0 else null
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, context: DamageContext = null) -> void:
+	Analytics.record_damage_dealt(mini(health, amount), context)
 	health -= amount
 	modulate = Color(1, 0.5, 0.5)
 	await get_tree().create_timer(0.08).timeout
@@ -460,6 +479,6 @@ func take_damage(amount: int) -> void:
 		died_at.emit(global_position)
 		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
-		GameState.award_gold(gold_reward)
-		GameState.award_enemy_kill()
+		GameState.award_gold(gold_reward, &"boss")
+		GameState.award_enemy_kill(context)
 		queue_free()

@@ -55,6 +55,9 @@ func try_attack(weapon: WeaponResource, target_global_position: Vector2) -> bool
 		# (например, оружие с забытым projectile_scene): visually ничего не
 		# происходит, но cooldown идёт, и мы не понимаем почему.
 		return false
+	# Analytics: одна activation = один attacks-count (для melee — swing;
+	# для projectile — попытка выстрела, независимо от числа projectiles).
+	Analytics.record_player_attack(StringName(weapon.resource_path.get_file().get_basename()))
 	# Cooldown берём из stats (учитывает archer/mage attack_interval_multiplier).
 	var mods := GameState.get_player_upgrade_modifiers()
 	var stats := WeaponStats.compute(weapon, mods)
@@ -115,6 +118,9 @@ func _attack_projectile(weapon: WeaponResource, direction: Vector2) -> bool:
 		# меняется; для тестов с GUT runner в собственной позиции — теперь
 		# spawn действительно попадает в spawn_origin.
 		bullet.global_position = spawn_origin
+		# Analytics: один record_projectile_fired на каждый реально созданный
+		# projectile — spread shot из 3 pellets = 3 fired.
+		Analytics.record_projectile_fired(stats.source_weapon_id)
 	return true
 
 func _attack_melee(weapon: WeaponResource, direction: Vector2) -> bool:
@@ -137,6 +143,9 @@ func _attack_melee(weapon: WeaponResource, direction: Vector2) -> bool:
 		stats.attack_type,
 		stats.arc_degrees,
 	)
+	# Attribution: source_weapon_id для аналитики (передаём после configure
+	# чтобы _ready() увидел его установленным).
+	hitbox.source_weapon_id = stats.source_weapon_id
 	var scene_root := get_tree().current_scene
 	if scene_root != null:
 		scene_root.add_child(hitbox)

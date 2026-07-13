@@ -138,7 +138,7 @@ func _physics_process(delta: float) -> void:
 				var collider := collision.get_collider()
 				if collider and collider.is_in_group("player") and _contact_timer <= 0.0:
 					if collider.has_method("take_damage"):
-						collider.take_damage(contact_damage)
+						collider.take_damage(contact_damage, DamageContext.from_enemy_attack(self, &"charge"))
 					_contact_timer = contact_cooldown
 			if _state_timer <= 0.0:
 				_enter_watch()
@@ -209,7 +209,8 @@ func _find_player() -> Node2D:
 	var players := get_tree().get_nodes_in_group("player")
 	return players[0] if players.size() > 0 else null
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, context: DamageContext = null) -> void:
+	Analytics.record_damage_dealt(mini(health, amount), context)
 	health -= amount
 	var current_state_color := modulate
 	modulate = Color(1, 0.5, 0.5)
@@ -220,8 +221,8 @@ func take_damage(amount: int) -> void:
 		died_at.emit(global_position)
 		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
-		GameState.award_gold(gold_reward)
-		GameState.award_enemy_kill()
+		GameState.award_gold(gold_reward, &"enemy")
+		GameState.award_enemy_kill(context)
 		_drop_pickup()
 		queue_free()
 

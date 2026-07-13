@@ -88,9 +88,18 @@ func test_floor_completed_event_has_floor() -> void:
 	Analytics.start_run({})
 	Analytics.start_floor({"floor": 7})
 	Analytics.finish_floor({})
-	var event: Dictionary = _sink.events.back()
+	# PR 2 finish_floor эмитит несколько events: floor_completed, floor_weapon_summary,
+	# floor_enemy_summary, floor_economy_summary. Ищем именно floor_completed.
+	var event := _find_event(_sink.events, "floor_completed")
+	assert_false(event.is_empty(), "floor_completed event must be emitted")
 	assert_eq(event["event_name"], "floor_completed")
 	assert_eq(event["floor"], 7)
+
+func _find_event(events: Array, name: String) -> Dictionary:
+	for e in events:
+		if e["event_name"] == name:
+			return e
+	return {}
 
 func test_run_finished_event_has_summary_fields() -> void:
 	Analytics.start_run({})
@@ -146,5 +155,6 @@ func test_duration_uses_monotonic_time() -> void:
 	Analytics.start_run({})
 	Analytics.start_floor({"floor": 1})
 	Analytics.finish_floor({})
-	var event: Dictionary = _sink.events.back()
+	var event := _find_event(_sink.events, "floor_completed")
+	assert_false(event.is_empty())
 	assert_true(event["payload"]["duration_seconds"] >= 0.0)

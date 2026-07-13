@@ -137,6 +137,7 @@ func _summon_skeleton() -> bool:
 	var skeleton = SkeletonScene.instantiate()
 	skeleton.global_position = spawn_pos
 	parent.add_child(skeleton)
+	Analytics.record_enemy_spawned(&"skeleton", &"", 0)
 	# Обнуляем награды ПОСЛЕ add_child. В _ready родительский
 	# enemy.gd прогоняет xp/gold через Balance.scaled_*_reward, где
 	# `maxi(1, …)` превращает 0 в 1 — обнулять до add_child
@@ -227,6 +228,8 @@ func _shoot() -> void:
 	var bullet := bullet_scene.instantiate()
 	bullet.global_position = global_position
 	bullet.direction = direction
+	bullet.source_enemy = self
+	bullet.attack_id = &"projectile"
 	_configure_bullet(bullet)
 	get_tree().current_scene.add_child(bullet)
 

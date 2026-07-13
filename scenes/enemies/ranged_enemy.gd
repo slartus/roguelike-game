@@ -283,6 +283,10 @@ func _shoot() -> void:
 	var bullet := bullet_scene.instantiate()
 	bullet.global_position = global_position
 	bullet.direction = direction
+	# Analytics attribution: bullet должен помнить кто выстрелил, иначе
+	# damage_history и floor_enemy_summary теряют source enemy.
+	bullet.source_enemy = self
+	bullet.attack_id = &"projectile"
 	_configure_bullet(bullet)
 	get_tree().current_scene.add_child(bullet)
 
@@ -296,7 +300,8 @@ func _find_player() -> Node2D:
 	var players := get_tree().get_nodes_in_group("player")
 	return players[0] if players.size() > 0 else null
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, context: DamageContext = null) -> void:
+	Analytics.record_damage_dealt(mini(health, amount), context)
 	health -= amount
 	modulate = Color(1, 0.5, 0.5)
 	await get_tree().create_timer(0.08).timeout
@@ -306,8 +311,8 @@ func take_damage(amount: int) -> void:
 		died_at.emit(global_position)
 		EventLog.log_kill(display_name, xp_reward, gold_reward)
 		GameState.award_xp(xp_reward)
-		GameState.award_gold(gold_reward)
-		GameState.award_enemy_kill()
+		GameState.award_gold(gold_reward, &"enemy")
+		GameState.award_enemy_kill(context)
 		_drop_pickup()
 		queue_free()
 

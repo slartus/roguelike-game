@@ -44,6 +44,12 @@ var active_time: float = 0.08
 var arc_degrees: float = 80.0
 var hitbox_length: float = 36.0
 var hitbox_width: float = 34.0
+# Attribution: weapon_id для аналитики. Пустая StringName → attribution
+# на level "unknown". WeaponController выставляет через configure().
+var source_weapon_id: StringName = &""
+# attacks_with_hit нужно инкрементить не более одного раза на activation,
+# даже если hitbox цепляет несколько targets в одном arc'е.
+var _analytics_hit_recorded: bool = false
 
 var _source_position: Vector2 = Vector2.ZERO
 var _shape: CollisionShape2D
@@ -159,7 +165,24 @@ func _try_hit(body: Node) -> void:
 		# доставать сквозь неё, даже если враг геометрически в секторе.
 		return
 	_hit_targets[body] = true
-	body.take_damage(damage)
+	# Attribution: собираем DamageContext от weapon → enemy.
+	var ctx := DamageContext.new()
+	ctx.source_type = &"player_weapon"
+	ctx.source_id = source_weapon_id
+	ctx.attack_id = StringName(attack_type)
+	ctx.target_type = &"enemy"
+	if body.scene_file_path != "":
+		ctx.target_id = StringName(body.scene_file_path.get_file().get_basename())
+	if "temperament_id" in body:
+		ctx.temperament_id = StringName(str(body.temperament_id))
+	if "elite_rank" in body:
+		ctx.elite_rank = int(body.elite_rank)
+	# source_level = уровень источника (weapon), НЕ target'а — оставляем 0.
+	body.take_damage(damage, ctx)
+	# attacks_with_hit — один раз на activation, независимо от N целей.
+	if not _analytics_hit_recorded:
+		Analytics.record_player_attack_hit(source_weapon_id)
+		_analytics_hit_recorded = true
 	# Knockback пока опциональный: если у target есть метод apply_knockback,
 	# зовём его. Иначе тихо игнорируем — M3 задокументировано как "если
 	# легко сделать". Сложный knockback остаётся на будущее.
