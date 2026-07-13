@@ -835,6 +835,134 @@ absi(tower_seed * 2654435761
 - `test_prop_navigation_integration.gd` — plan → AStar solid, connectivity после placement.
 - `test_room_compositions.gd` — фильтрация по zone.
 
+## Gameplay-props (PR 4)
+
+Отдельный слой props, у которых есть *взаимодействие*: destructibles,
+hazards и lore. Ставится **поверх** декоративного слоя PR 2 —
+декоративные объекты сохраняют свою природу (обычный `crate` в углу
+storage room по-прежнему не разрушается, это тот же texture asset).
+
+Различие обеспечивается через два новых поля в
+`EnvironmentPropDefinition` (см. `scenes/dungeon/environment_prop_definition.gd`):
+
+- `interaction_type: StringName` — `none` / `destructible` / `hazard_explosive` / `lore`.
+- `category: CATEGORY_INTERACTIVE` — планировщик собирает эти props
+  отдельным `_place_gameplay_props` pass'ом.
+
+Дополнительно у каждого gameplay-def'а:
+
+- `destructible_max_health: int` — HP для destructibles.
+- `damage_factions: Array[StringName]` — какие фракции могут ранить
+  (обычно `[FACTION_PLAYER]`).
+- `explosion_radius / explosion_damage / explosion_telegraph_time` —
+  для `interaction_type == hazard_explosive`.
+- `lore_prompt_key / lore_text_key` — i18n ключи для `lore`.
+- `max_per_room / max_per_floor` — жёсткие бюджеты сверху density limit.
+
+### Каталог gameplay-props (PR 4)
+
+| id                    | interaction         | HP | max/room | max/floor | Комментарий                                     |
+|-----------------------|---------------------|---:|---------:|----------:|-------------------------------------------------|
+| `destructible_crate`  | destructible        | 2  | 3        | 8         | wooden crate, low damage, чаще пустой           |
+| `destructible_barrel` | destructible        | 3  | 2        | 6         | storage barrel, low/medium HP                   |
+| `urn`                 | destructible        | 1  | 3        | 10        | ceramic urn/pot, HP=1 — бьётся с одного попадания |
+| `explosive_barrel`    | hazard_explosive    | 2  | 1        | 3         | telegraph 0.55 s, R = 42 px, damage 3           |
+| `lore_bookshelf`      | lore                | —  | 1        | 2         | `LORE_BOOKSHELF` snippet, `[E] Read` prompt     |
+
+Оригинальные `crate` / `barrel` / `bookshelf` из PR 2 **остаются
+декоративными** — их размещает `_plan_room` в обычном decorative pass'е.
+Gameplay-варианты имеют отдельный `id`, но переиспользуют текстуру.
+
+### Разрушение и drop-таблица
+
+`DamageableEnvironmentProp` (см. `scenes/dungeon/damageable_environment_prop.gd`)
+принимает `take_damage(amount)` от melee hitbox и bullet'а, при `_health <= 0`:
+
+1. Один раз эмиттит `destroyed(prop_id, world_position)`.
+2. Отключает collision через `set_deferred` (safe для body_entered
+   callback'а).
+3. `queue_free()` (наследники hazard могут отсрочить через
+   `_keep_alive_after_destroy`).
+
+`Floor.gd` слушает `destroyed`:
+
+- Освобождает AStar cells → AI перестраивает путь на следующем recalc'е.
+- Для non-hazard prop'ов — детерминированный roll через
+  `EnvironmentDropTable` (`scenes/dungeon/environment_drop_table.gd`).
+
+**Drop-таблица** (per-prop):
+
+| Результат       | Chance | Value (в budget) |
+|-----------------|-------:|-----------------:|
+| Nothing         | 80 %   | 0                |
+| Small gold      | 15 %   | 1                |
+| Potion          | 4 %    | 3                |
+| Rare gold stash | 1 %    | 5                |
+
+Floor-wide cap — `FLOOR_TOTAL_VALUE_CAP = 12`. При исчерпании ролл
+возвращает `RESULT_NONE`, даже если prop разбит.
+
+Seed drop'а: `hash(tower_seed, floor_number, prop_id, placement_index)`.
+Тот же placement на том же seed → тот же drop. Environment drop RNG
+не пересекается с gameplay RNG (спавны монстров, chest).
+
+### Explosive barrel
+
+Наследуется от `DamageableEnvironmentProp`. При `_destroy()` не
+free-ится сразу, а стартует telegraph:
+
+- Красная тональность и pulse-scale через `_process`.
+- По истечении `telegraph_time` — `_explode()`: обходит всех в
+  группах `player` / `enemy` / `damageable_prop` в радиусе
+  `explosion_radius`, зовёт `take_damage(explosion_damage)`.
+
+**Chain-reaction guard**: соседним `explosive_barrel` уходит
+`take_damage_from(FACTION_ENVIRONMENT, damage)`, а их
+`damage_factions = [FACTION_PLAYER]` — фильтр отсекает environment
+damage, бесконечных цепочек не будет. Обычные destructibles тоже
+принимают только `FACTION_PLAYER`, поэтому взрыв не разрушает соседний
+crate «за компанию».
+
+### Lore interaction
+
+`LoreInteractable` (`scenes/dungeon/lore_interactable.gd`) — StaticBody2D
+с child DetectionArea (48×48 px). При overlap с player:
+
+- Эмиттит `prompt_shown(prompt_key)` → `EventLog.log_lore_prompt`
+  показывает подсказку `[E] Read`.
+- По нажатию `interact` (E) — `read(text_key)` → snippet в combat log.
+- Флаг `_already_read` — one-shot, повторное чтение не даёт эффекта.
+
+### Placement rules
+
+`_place_gameplay_props` в `room_decoration_planner.gd`:
+
+- Работает поверх занятой decorative grid — не пересекает существующие
+  props.
+- Skip hazards в ролях `entrance / exit_core / boss_arena /
+  treasure_room / corridor` (`_NO_HAZARD_ROLES`).
+- Skip hazards в первой/последней комнате (`_is_boundary_room`) — где
+  расположены `player_start / exit_position`.
+- Skip hazards, если placement origin в 1 клетке от doorway
+  (`_is_near_door`).
+- Hard cap `_GAMEPLAY_PROPS_PER_ROOM_CAP = 4` gameplay props на комнату
+  сверх per-prop `max_per_room`.
+- Per-prop `max_per_floor` пересекает все rooms этажа через
+  `floor_counts`-словарь.
+
+### Тесты (PR 4)
+
+- `test_damageable_environment_prop.gd` — take_damage, faction фильтр,
+  idempotent destroy, destroyed signal один раз.
+- `test_interactive_prop_budget.gd` — max_per_room / max_per_floor,
+  hazards в запрещённых ролях, entrance/exit clear.
+- `test_environment_prop_drops.gd` — determinism per seed, floor cap,
+  распределение результатов.
+- `test_environment_hazards.gd` — telegraph delay, radial damage, chain
+  reaction guard.
+- `test_environment_interactions.gd` — lore prompt on overlap, one-shot
+  read, i18n keys существуют.
+
 ## Baseline metrics (PR 3, average over 5 seeds)
 
 | Floor | Zone | Rooms | Hops (E→X) | Branches | Cycles | Walkable px² |

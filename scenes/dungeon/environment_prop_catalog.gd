@@ -51,6 +51,22 @@ const PROP_MUSHROOM: StringName = &"mushroom"
 const PROP_CRYSTAL: StringName = &"crystal"
 const PROP_ROOTS: StringName = &"roots"
 
+# --- Gameplay props (PR4) ------------------------------------------------
+# Destructibles: керамический urn (very low HP, минимальный шанс монеты).
+# Оригинальные PROP_CRATE / PROP_BARREL остаются декоративными; их
+# gameplay-варианты (destructible_crate / destructible_barrel) — отдельные
+# записи каталога с одинаковой текстурой, но с interaction_type =
+# INTERACTION_DESTRUCTIBLE и destructible_max_health > 0.
+const PROP_URN: StringName = &"urn"
+const PROP_DESTRUCTIBLE_CRATE: StringName = &"destructible_crate"
+const PROP_DESTRUCTIBLE_BARREL: StringName = &"destructible_barrel"
+# Hazard: explosive alchemical barrel — telegraphed explosion.
+const PROP_EXPLOSIVE_BARREL: StringName = &"explosive_barrel"
+# Lore: interactive book (переиспользует bookshelf-текстуру, но
+# отдельная запись каталога — чтобы планировщик мог поставить обычный
+# декоративный bookshelf независимо от lore-варианта).
+const PROP_LORE_BOOKSHELF: StringName = &"lore_bookshelf"
+
 static var _defs: Dictionary = {}
 
 static func get_definition(id: StringName) -> EnvironmentPropDefinition:
@@ -105,6 +121,7 @@ static func _build() -> void:
 	_register_storage()
 	_register_technical()
 	_register_basement_cave()
+	_register_gameplay_props()
 
 static func _make(
 	id: StringName,
@@ -449,3 +466,138 @@ static func _register_basement_cave() -> void:
 	roots.allowed_room_roles = [StringName(_ROLE.ROLE_CAVE_CHAMBER)]
 	roots.weight = 1
 	_register(roots)
+
+# --- Gameplay props (PR4) -------------------------------------------------
+# Регистрируются в отдельной категории CATEGORY_INTERACTIVE, чтобы
+# planner собирал их gameplay-pass'ом отдельно от декоративного слоя.
+# Каждый gameplay-prop имеет:
+# - interaction_type ≠ INTERACTION_NONE — идентификатор поведения в floor.gd;
+# - damage_factions — кто может нанести урон;
+# - max_per_room / max_per_floor — жёсткие лимиты, дублирующие бюджет
+#   планировщика.
+
+static func _register_gameplay_props() -> void:
+	_register_destructible_crate()
+	_register_destructible_barrel()
+	_register_urn()
+	_register_explosive_barrel()
+	_register_lore_bookshelf()
+
+static func _register_destructible_crate() -> void:
+	# Wooden crate: low HP, чаще пустой, редкий small drop. Разрешён
+	# везде где обычный crate — storage/warehouse/kitchen/treasure/small.
+	var crate := _make(PROP_DESTRUCTIBLE_CRATE, _DEF.CATEGORY_INTERACTIVE,
+		_tex(PROP_CRATE), Vector2i(1, 1), true)
+	crate.blocks_projectiles = true
+	crate.interaction_type = _DEF.INTERACTION_DESTRUCTIBLE
+	crate.destructible_max_health = 2
+	crate.damage_factions = [_DEF.FACTION_PLAYER]
+	crate.max_per_room = 3
+	crate.max_per_floor = 8
+	crate.allowed_room_roles = [
+		StringName(_ROLE.ROLE_STORAGE),
+		StringName(_ROLE.ROLE_WAREHOUSE),
+		StringName(_ROLE.ROLE_KITCHEN),
+		StringName(_ROLE.ROLE_TREASURE_ROOM),
+		StringName(_ROLE.ROLE_SMALL_ROOM),
+	]
+	crate.weight = 2
+	_register(crate)
+
+static func _register_destructible_barrel() -> void:
+	# Storage barrel: low/medium HP, обычно пустая или low-value.
+	var barrel := _make(PROP_DESTRUCTIBLE_BARREL, _DEF.CATEGORY_INTERACTIVE,
+		_tex(PROP_BARREL), Vector2i(1, 1), true)
+	barrel.blocks_projectiles = true
+	barrel.interaction_type = _DEF.INTERACTION_DESTRUCTIBLE
+	barrel.destructible_max_health = 3
+	barrel.damage_factions = [_DEF.FACTION_PLAYER]
+	barrel.max_per_room = 2
+	barrel.max_per_floor = 6
+	barrel.allowed_room_roles = [
+		StringName(_ROLE.ROLE_STORAGE),
+		StringName(_ROLE.ROLE_WAREHOUSE),
+		StringName(_ROLE.ROLE_KITCHEN),
+		StringName(_ROLE.ROLE_MACHINE_ROOM),
+		StringName(_ROLE.ROLE_BOILER_ROOM),
+	]
+	barrel.weight = 2
+	_register(barrel)
+
+static func _register_urn() -> void:
+	# Ceramic urn/pot: very low HP, минимальный шанс монеты.
+	# blocks_projectiles = true — в MVP все destructibles на общем
+	# physics layer, отдельного layer'а для projectile pass-through
+	# пока нет. HP=1 гарантирует разрушение первым попаданием, поэтому
+	# для игрока это визуально «пуля разбивает».
+	var urn := _make(PROP_URN, _DEF.CATEGORY_INTERACTIVE,
+		_tex(PROP_URN), Vector2i(1, 1), true)
+	urn.blocks_projectiles = true
+	urn.interaction_type = _DEF.INTERACTION_DESTRUCTIBLE
+	urn.destructible_max_health = 1
+	urn.damage_factions = [_DEF.FACTION_PLAYER]
+	urn.max_per_room = 3
+	urn.max_per_floor = 10
+	urn.allowed_zones = [
+		StringName(_ZONE.ZONE_BASEMENT),
+		StringName(_ZONE.ZONE_CAVES),
+		StringName(_ZONE.ZONE_RESIDENTIAL),
+	]
+	urn.allowed_room_roles = [
+		StringName(_ROLE.ROLE_BASEMENT_CELL),
+		StringName(_ROLE.ROLE_RUINED_ROOM),
+		StringName(_ROLE.ROLE_CAVE_CHAMBER),
+		StringName(_ROLE.ROLE_KITCHEN),
+		StringName(_ROLE.ROLE_STORAGE),
+	]
+	urn.weight = 1
+	_register(urn)
+
+static func _register_explosive_barrel() -> void:
+	# Explosive alchemical barrel: unique silhouette (см. gen_prop_sprites),
+	# telegraph explosion, radial damage. Не разрешён в entrance/exit — это
+	# делает placement pass через budget rules.
+	var barrel := _make(PROP_EXPLOSIVE_BARREL, _DEF.CATEGORY_INTERACTIVE,
+		_tex(PROP_EXPLOSIVE_BARREL), Vector2i(1, 1), true)
+	barrel.blocks_projectiles = true
+	barrel.interaction_type = _DEF.INTERACTION_HAZARD_EXPLOSIVE
+	barrel.destructible_max_health = 2
+	# Только player-damage триггерит взрыв — вражеские снаряды не
+	# запускают chain, что исключает случайное обрушение уровня.
+	barrel.damage_factions = [_DEF.FACTION_PLAYER]
+	barrel.explosion_radius = 42.0
+	barrel.explosion_damage = 3
+	barrel.explosion_telegraph_time = 0.55
+	barrel.max_per_room = 1
+	barrel.max_per_floor = 3
+	barrel.allowed_zones = [
+		StringName(_ZONE.ZONE_TECHNICAL),
+		StringName(_ZONE.ZONE_BASEMENT),
+	]
+	barrel.allowed_room_roles = [
+		StringName(_ROLE.ROLE_MACHINE_ROOM),
+		StringName(_ROLE.ROLE_BOILER_ROOM),
+		StringName(_ROLE.ROLE_STORAGE),
+		StringName(_ROLE.ROLE_WAREHOUSE),
+	]
+	barrel.weight = 1
+	_register(barrel)
+
+static func _register_lore_bookshelf() -> void:
+	# Lore interactive: bookshelf со snippet'ом. Не разрушаемый, только
+	# read-on-interact. Placement — wall_adjacent, footprint 2x1.
+	var shelf := _make(PROP_LORE_BOOKSHELF, _DEF.CATEGORY_INTERACTIVE,
+		_tex(PROP_BOOKSHELF), Vector2i(2, 1), true)
+	shelf.blocks_projectiles = true
+	shelf.interaction_type = _DEF.INTERACTION_LORE
+	shelf.lore_prompt_key = "LORE_PROMPT_READ"
+	shelf.lore_text_key = "LORE_BOOKSHELF"
+	shelf.max_per_room = 1
+	shelf.max_per_floor = 2
+	shelf.min_room_size_cells = Vector2i(4, 4)
+	shelf.allowed_room_roles = [
+		StringName(_ROLE.ROLE_STUDY),
+		StringName(_ROLE.ROLE_LIVING_ROOM),
+	]
+	shelf.weight = 1
+	_register(shelf)

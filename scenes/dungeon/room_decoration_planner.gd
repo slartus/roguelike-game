@@ -94,8 +94,12 @@ static func plan_floor(
 	# reservations внутри каждой комнаты и не пишет обратно во внешний
 	# словарь — floor.gd видит только blocked_cells (blocking props).
 	var plan := FloorPlan.new()
+	# Global-state для gameplay pass: сколько раз каждый prop_id уже
+	# размещён на всём этаже. Проверяется в _try_place_gameplay_prop
+	# против def.max_per_floor.
+	var floor_counts: Dictionary = {}
 	for room_index in layout.rooms.size():
-		_plan_room(plan, layout, room_index, reservations, tower_seed, floor_number)
+		_plan_room(plan, layout, room_index, reservations, tower_seed, floor_number, floor_counts)
 	return plan
 
 # --- Планирование одной комнаты -----------------------------------------
@@ -107,6 +111,7 @@ static func _plan_room(
 	external_reservations: Dictionary,
 	tower_seed: int,
 	floor_number: int,
+	floor_counts: Dictionary = {},
 ) -> void:
 	var room: Rect2i = layout.rooms[room_index]
 	var room_cells := _rect_to_cells(room)
@@ -189,6 +194,16 @@ static func _plan_room(
 		placements, grid, room_cells, role_key, zone_key, rng,
 		door_cells, room_index, _DEF.CATEGORY_FLOOR_DECAL,
 	)
+
+	# Gameplay pass (PR4): destructibles / hazards / lore идут последним,
+	# после того как декоративный слой уже занял grid. Отдельный pass
+	# использует бюджет max_per_room / max_per_floor вместо density limit,
+	# потому что gameplay-пропы редкие по своей природе.
+	if not is_tiny:
+		_place_gameplay_props(
+			placements, grid, room_cells, role_key, zone_key, rng,
+			door_cells, room_index, floor_counts, layout,
+		)
 
 	for p in placements:
 		var placement: Placement = p
@@ -297,6 +312,158 @@ static func _place_non_blocking(
 		if placement != null:
 			placements.append(placement)
 			placed += 1
+
+# --- Gameplay pass (PR4) ------------------------------------------------
+
+# Gameplay-role → уровень допустимых hazards. Комнаты entrance/exit_core /
+# boss_arena / treasure_room не должны получать hazards.
+const _NO_HAZARD_ROLES: Array[String] = [
+	_ROLE.ROLE_ENTRANCE,
+	_ROLE.ROLE_EXIT_CORE,
+	_ROLE.ROLE_BOSS_ARENA,
+	_ROLE.ROLE_TREASURE_ROOM,
+	_ROLE.ROLE_CORRIDOR,
+]
+
+# Максимум gameplay props (всех типов) на одну комнату — hard cap
+# поверх per-prop max_per_room.
+const _GAMEPLAY_PROPS_PER_ROOM_CAP: int = 4
+
+static func _place_gameplay_props(
+	placements: Array,
+	grid: Dictionary,
+	room_cells: Rect2i,
+	role_key: StringName,
+	zone_key: StringName,
+	rng: RandomNumberGenerator,
+	door_cells: Array,
+	room_index: int,
+	floor_counts: Dictionary,
+	layout: DungeonLayout,
+) -> void:
+	# Собираем кандидатов gameplay-props из каталога — только категория
+	# INTERACTIVE, отфильтрованная по zone/role/room_size.
+	var candidates := _filter_and_sort(
+		_CATALOG.filter(zone_key, role_key, room_cells.size, _DEF.CATEGORY_INTERACTIVE),
+		role_key,
+	)
+	if candidates.is_empty():
+		return
+	# Фильтруем hazards из «запрещённых» ролей и запретной 1-й / последней
+	# комнаты — в MVP entrance/exit/boss/treasure не получают hazard'ов.
+	var filtered: Array = []
+	var role_str: String = String(role_key)
+	var is_hazard_free_room: bool = _NO_HAZARD_ROLES.has(role_str)
+	# Первая и последняя комнаты — где расположены player_start и exit —
+	# тоже без hazards, даже если роль не в списке (для robustness).
+	var is_boundary_room: bool = _is_boundary_room(room_index, layout)
+	for def in candidates:
+		var d: EnvironmentPropDefinition = def
+		if d.is_hazard():
+			if is_hazard_free_room or is_boundary_room:
+				continue
+			# Hazards не ставятся рядом с дверями — держим distance 2 cell.
+			# Проверка потом при выборе origin, здесь просто пропускаем.
+		filtered.append(d)
+	if filtered.is_empty():
+		return
+	# per-room room_counts: сколько раз prop_id уже стоит в этой комнате.
+	var room_counts: Dictionary = {}
+	var placed_gameplay: int = 0
+	var attempts: int = 0
+	var max_attempts: int = filtered.size() * 4
+	while placed_gameplay < _GAMEPLAY_PROPS_PER_ROOM_CAP and attempts < max_attempts:
+		attempts += 1
+		var def: EnvironmentPropDefinition = _pick_weighted(filtered, rng)
+		if not _gameplay_budget_available(def, room_counts, floor_counts):
+			continue
+		var placement := _try_place_gameplay_prop(
+			def, grid, room_cells, rng, door_cells, room_index,
+		)
+		if placement == null:
+			continue
+		placements.append(placement)
+		room_counts[def.id] = int(room_counts.get(def.id, 0)) + 1
+		floor_counts[def.id] = int(floor_counts.get(def.id, 0)) + 1
+		placed_gameplay += 1
+
+static func _gameplay_budget_available(
+	def: EnvironmentPropDefinition,
+	room_counts: Dictionary,
+	floor_counts: Dictionary,
+) -> bool:
+	if def.max_per_room > 0:
+		var room_count: int = int(room_counts.get(def.id, 0))
+		if room_count >= def.max_per_room:
+			return false
+	if def.max_per_floor > 0:
+		var floor_count: int = int(floor_counts.get(def.id, 0))
+		if floor_count >= def.max_per_floor:
+			return false
+	return true
+
+static func _try_place_gameplay_prop(
+	def: EnvironmentPropDefinition,
+	grid: Dictionary,
+	room_cells: Rect2i,
+	rng: RandomNumberGenerator,
+	door_cells: Array,
+	room_index: int,
+) -> Placement:
+	# Тот же placement primitive, что для декоративных props — но с
+	# дополнительной проверкой connectivity для blocking gameplay props.
+	# Hazards дополнительно проверяют что не стоят на doorway cell'е.
+	var candidate_origins: Array = _candidate_origins(def, room_cells)
+	_shuffle(candidate_origins, rng)
+	for origin in candidate_origins:
+		if not _can_place(def, origin, grid):
+			continue
+		if def.is_hazard() and _is_near_door(origin, def.footprint_cells, door_cells, 1):
+			continue
+		if def.blocks_movement:
+			if not _would_keep_connected(grid, room_cells, origin, def.footprint_cells, door_cells):
+				continue
+		var occ_kind: int = OCC_BLOCKED if def.blocks_movement else OCC_FREE
+		# Non-blocking gameplay props (пока таких нет, но контракт готов)
+		# должны хотя бы не позволять поверх ставить другой prop.
+		if not def.blocks_movement:
+			occ_kind = OCC_DECAL
+		_mark_footprint(grid, origin, def.footprint_cells, occ_kind)
+		var placement := Placement.new()
+		placement.def = def
+		placement.cell_origin = origin
+		placement.footprint_cells = def.footprint_cells
+		placement.wall_side = _wall_side_of(origin, def.footprint_cells, room_cells)
+		placement.room_index = room_index
+		return placement
+	return null
+
+static func _is_near_door(
+	origin: Vector2i,
+	footprint: Vector2i,
+	door_cells: Array,
+	radius: int,
+) -> bool:
+	# Есть ли door_cell в квадрате [origin - radius, origin + footprint + radius]?
+	# Простой bounding-box test — hazards не должны блокировать doorway.
+	if door_cells.is_empty():
+		return false
+	for offset_x in range(-radius, footprint.x + radius):
+		for offset_y in range(-radius, footprint.y + radius):
+			var cell: Vector2i = origin + Vector2i(offset_x, offset_y)
+			if door_cells.has(cell):
+				return true
+	return false
+
+static func _is_boundary_room(room_index: int, layout: DungeonLayout) -> bool:
+	# Первая и последняя room в списке — обычно entrance / exit-core.
+	# Даже если роль не выставлена, geometrically именно эти комнаты
+	# держат player_start / exit_position.
+	if room_index == 0:
+		return true
+	if layout != null and room_index == layout.rooms.size() - 1:
+		return true
+	return false
 
 # --- Placement primitive ------------------------------------------------
 
@@ -644,6 +811,10 @@ static func _pick_weighted(
 	defs: Array,
 	rng: RandomNumberGenerator,
 ) -> EnvironmentPropDefinition:
+	# Guard: пустой массив → null. Внешние callsite'ы предохранены,
+	# но метод-контракт защищаем — иначе randi_range(0, -1) даёт error.
+	if defs.is_empty():
+		return null
 	var total := 0
 	for d in defs:
 		total += maxi(1, d.weight)

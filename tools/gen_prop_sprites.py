@@ -739,6 +739,68 @@ def render_roots(cells_w: int, cells_h: int) -> Image.Image:
     return img
 
 
+# --- Gameplay props (PR4) ------------------------------------------------
+
+
+def render_urn(cells_w: int, cells_h: int) -> Image.Image:
+    """Керамический urn/pot: округлое основание, узкое горло, светлая
+    керамика с 2-мя декоративными полосами. Silhouette легко отличим
+    от crate/barrel — читается как «хрупкая штука»."""
+    img = new_image(cells_w, cells_h)
+    d = ImageDraw.Draw(img)
+    dark = (55, 40, 25, 255)
+    ceramic = (200, 175, 130, 255)
+    ceramic_light = (230, 210, 170, 255)
+    band = (110, 65, 40, 255)
+    w, h = cells_w * TILE, cells_h * TILE
+    # основание — округлое, шире вершины
+    d.ellipse((3, 6, w - 4, h - 3), fill=ceramic, outline=dark)
+    # горлышко — узкий прямоугольник сверху
+    d.rectangle((w // 2 - 3, 2, w // 2 + 2, 7), fill=ceramic, outline=dark)
+    d.rectangle((w // 2 - 4, 2, w // 2 + 3, 4), fill=ceramic_light, outline=dark)
+    # декоративные полоски
+    d.line([(4, 10), (w - 5, 10)], fill=band, width=1)
+    d.line([(4, h - 6), (w - 5, h - 6)], fill=band, width=1)
+    # блик света
+    d.line([(5, 8), (7, 12)], fill=ceramic_light, width=1)
+    return img
+
+
+def render_explosive_barrel(cells_w: int, cells_h: int) -> Image.Image:
+    """Explosive alchemical barrel: чёрный корпус с яркой rune-полосой
+    и красным глифом опасности. Silhouette отличается от обычной barrel
+    формой (треугольный «предупреждающий» знак сверху) — не только цвет.
+    """
+    img = new_image(cells_w, cells_h)
+    d = ImageDraw.Draw(img)
+    dark = (25, 20, 30, 255)
+    body = (55, 50, 60, 255)
+    body_light = (95, 85, 100, 255)
+    rune = (255, 170, 60, 255)
+    danger = (220, 55, 40, 255)
+    w, h = cells_w * TILE, cells_h * TILE
+    # тело барреля — вертикальный овал
+    d.ellipse((3, 3, w - 4, h - 3), fill=body, outline=dark)
+    d.line([(4, 6), (w - 5, 6)], fill=body_light, width=1)
+    # rune-полоса в центре
+    d.line([(4, h // 2 - 1), (w - 5, h // 2 - 1)], fill=rune, width=1)
+    d.line([(4, h // 2 + 1), (w - 5, h // 2 + 1)], fill=rune, width=1)
+    # danger-глиф в центре — треугольник
+    cx = w // 2
+    cy = h // 2
+    d.polygon(
+        [(cx, cy - 3), (cx - 3, cy + 2), (cx + 3, cy + 2)],
+        fill=danger,
+        outline=dark,
+    )
+    d.point((cx, cy - 1), fill=dark)
+    d.point((cx, cy), fill=dark)
+    d.point((cx, cy + 1), fill=dark)
+    # верхняя крышка — тёмная
+    d.line([(w // 2 - 2, 3), (w // 2 + 1, 3)], fill=dark, width=1)
+    return img
+
+
 # --- Registry ------------------------------------------------------------
 
 # (id, cells_w, cells_h, render_fn)
@@ -779,6 +841,9 @@ PROPS: list[tuple[str, int, int, Renderer]] = [
     ("mushroom", 1, 1, render_mushroom),
     ("crystal", 1, 1, render_crystal),
     ("roots", 1, 1, render_roots),
+    # Gameplay props (PR4)
+    ("urn", 1, 1, render_urn),
+    ("explosive_barrel", 1, 1, render_explosive_barrel),
 ]
 
 

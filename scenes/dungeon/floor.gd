@@ -29,6 +29,16 @@ const CANDLE_SCENE: PackedScene = preload("res://scenes/dungeon/candle.tscn")
 const FLOOR_CRACK_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor_crack.png")
 const FLOOR_BLOOD_TEXTURE: Texture2D = preload("res://assets/sprites/environment/floor_blood.png")
 const RoomDecorationPlannerClass = preload("res://scenes/dungeon/room_decoration_planner.gd")
+const _DEF := preload("res://scenes/dungeon/environment_prop_definition.gd")
+# Gameplay-prop сцены (PR4). Выбор по def.interaction_type в
+# _instantiate_placement. Отдельный interaction_scene в самом def
+# имеет приоритет — так catalog может подставить кастомную сцену
+# без нового interaction_type.
+const DAMAGEABLE_PROP_SCENE: PackedScene = preload("res://scenes/dungeon/damageable_environment_prop.tscn")
+const EXPLOSIVE_BARREL_SCENE: PackedScene = preload("res://scenes/dungeon/explosive_barrel.tscn")
+const LORE_INTERACTABLE_SCENE: PackedScene = preload("res://scenes/dungeon/lore_interactable.tscn")
+const HEALTH_PICKUP_SCENE: PackedScene = preload("res://scenes/pickups/health_pickup.tscn")
+const _DROP_TABLE := preload("res://scenes/dungeon/environment_drop_table.gd")
 
 const TILE_SIZE: int = 20
 # Клетки, зарезервированные вокруг critical anchor'ов (player start,
@@ -70,6 +80,13 @@ var _doorway_threshold_texture: Texture2D
 # AStar. Заполняется в _plan_and_place_props, читается тестами и
 # instantiate-логикой.
 var floor_plan: RoomDecorationPlannerClass.FloorPlan
+# Drop-table для destructible props. Один инстанс на этаж, чтобы
+# floor-wide budget пересекал все разрушенные destructibles.
+var drop_table: EnvironmentDropTable
+# Список placement_index'ов, уже разрушенных на этом этаже. Тесты и
+# наблюдатели могут читать. Повторный destroyed сигнал с тем же
+# индексом игнорируется — guard от chain-reaction race.
+var _destroyed_placement_indices: Dictionary = {}
 
 @onready var _floors_root: Node2D = $FloorsRoot
 @onready var _walls_root: Node2D = $WallsRoot
@@ -343,8 +360,12 @@ func _plan_and_place_props() -> void:
 		GameState.tower_seed,
 		GameState.current_floor_number,
 	)
-	for placement in floor_plan.placements:
-		_instantiate_placement(placement)
+	drop_table = _DROP_TABLE.new_for_floor(
+		GameState.tower_seed,
+		GameState.current_floor_number,
+	)
+	for i in floor_plan.placements.size():
+		_instantiate_placement(floor_plan.placements[i], i)
 
 func _collect_reservations() -> Dictionary:
 	# Возвращает Dictionary Vector2i(col, row) → true. Все критичные
@@ -368,12 +389,20 @@ func _reserve_around(reserved: Dictionary, pixel_pos: Vector2i, radius_cells: in
 		for dx in range(-radius_cells, radius_cells + 1):
 			reserved[center + Vector2i(dx, dy)] = true
 
-func _instantiate_placement(placement: RoomDecorationPlannerClass.Placement) -> void:
+func _instantiate_placement(
+	placement: RoomDecorationPlannerClass.Placement,
+	placement_index: int,
+) -> void:
 	var def: EnvironmentPropDefinition = placement.def
-	# Если у definition задана PackedScene — инстанцируем её (для сложных
-	# пропов с собственной иерархией: анимация, интерактивность). Иначе —
-	# fallback на простой Sprite2D с texture. В M2 все каталожные пропы
-	# используют texture; scene зарезервировано под PR4.
+	# Gameplay props (PR4): destructible / hazard / lore инстанцируются
+	# через свою scene (DamageableEnvironmentProp / ExplosiveBarrel /
+	# LoreInteractable), а не через generic sprite+body. Пропы получают
+	# configure() до add_child(), чтобы _ready видел финальные поля.
+	if def.is_gameplay_prop():
+		_instantiate_gameplay_prop(placement, placement_index)
+		return
+	# Опциональный override сцены для сложных декоративных пропов —
+	# используется если catalog задаст def.scene.
 	if def.scene != null:
 		var node: Node2D = def.scene.instantiate()
 		node.position = placement.center_pixel()
@@ -401,6 +430,168 @@ func _instantiate_placement(placement: RoomDecorationPlannerClass.Placement) -> 
 		_props_root.add_child(body)
 	else:
 		_props_root.add_child(sprite)
+
+func _instantiate_gameplay_prop(
+	placement: RoomDecorationPlannerClass.Placement,
+	placement_index: int,
+) -> void:
+	var def: EnvironmentPropDefinition = placement.def
+	var scene: PackedScene = def.interaction_scene
+	if scene == null:
+		scene = _gameplay_prop_scene_for(def.interaction_type)
+	if scene == null:
+		return
+	var node: Node2D = scene.instantiate()
+	# Настраиваем visual (texture) сразу — большинство gameplay-props
+	# берут спрайт из def.texture, так же как декоративные.
+	var visual: Sprite2D = node.get_node_or_null("Visual") as Sprite2D
+	if visual != null and def.texture != null:
+		visual.texture = def.texture
+	# CollisionShape2D по footprint. Стандартный размер сцены = 20x20 —
+	# для не-1x1 пропов расширяем shape через RectangleShape2D.
+	_resize_prop_collision(node, def.footprint_cells)
+	# Инстансу передаём typed configure. Ветка по interaction_type
+	# гарантирует, что каждой сцене прилетают именно те поля, которые
+	# она умеет читать — без лишних if'ов внутри самой сцены.
+	# placement_index связывается прямо с сигналом destroyed через bind()
+	# — handler получает индекс без O(N) поиска по позиции.
+	match def.interaction_type:
+		_DEF.INTERACTION_DESTRUCTIBLE:
+			_configure_destructible(node, def, placement_index)
+		_DEF.INTERACTION_HAZARD_EXPLOSIVE:
+			_configure_explosive(node, def, placement_index)
+		_DEF.INTERACTION_LORE:
+			_configure_lore(node, def)
+	node.position = placement.center_pixel()
+	_props_root.add_child(node)
+
+func _gameplay_prop_scene_for(interaction_type: StringName) -> PackedScene:
+	match interaction_type:
+		_DEF.INTERACTION_DESTRUCTIBLE:
+			return DAMAGEABLE_PROP_SCENE
+		_DEF.INTERACTION_HAZARD_EXPLOSIVE:
+			return EXPLOSIVE_BARREL_SCENE
+		_DEF.INTERACTION_LORE:
+			return LORE_INTERACTABLE_SCENE
+		_:
+			return null
+
+func _resize_prop_collision(node: Node2D, footprint_cells: Vector2i) -> void:
+	var collision: CollisionShape2D = node.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if collision == null or collision.shape == null:
+		return
+	if collision.shape is RectangleShape2D:
+		(collision.shape as RectangleShape2D).size = Vector2(footprint_cells * TILE_SIZE)
+
+func _configure_destructible(
+	node: Node2D,
+	def: EnvironmentPropDefinition,
+	placement_index: int,
+) -> void:
+	if node is DamageableEnvironmentProp:
+		var prop := node as DamageableEnvironmentProp
+		prop.configure(def.id, def.destructible_max_health, def.damage_factions, def.footprint_cells)
+		# bind(placement_index) — handler получает индекс O(1) без
+		# поиска по позиции.
+		prop.destroyed.connect(_on_damageable_prop_destroyed.bind(placement_index))
+
+func _configure_explosive(
+	node: Node2D,
+	def: EnvironmentPropDefinition,
+	placement_index: int,
+) -> void:
+	if not (node is DamageableEnvironmentProp):
+		return
+	var prop := node as DamageableEnvironmentProp
+	prop.configure(def.id, def.destructible_max_health, def.damage_factions, def.footprint_cells)
+	if node.has_method("configure_hazard"):
+		node.call("configure_hazard", def.explosion_radius, def.explosion_damage, def.explosion_telegraph_time)
+	prop.destroyed.connect(_on_hazard_destroyed.bind(placement_index))
+
+func _configure_lore(node: Node2D, def: EnvironmentPropDefinition) -> void:
+	if node is LoreInteractable:
+		var lore := node as LoreInteractable
+		lore.configure(def.id, def.lore_prompt_key, def.lore_text_key, def.footprint_cells)
+		lore.prompt_shown.connect(EventLog.log_lore_prompt)
+		lore.read.connect(EventLog.log_lore_text)
+
+func _on_damageable_prop_destroyed(
+	prop_id: StringName,
+	world_position: Vector2,
+	placement_index: int,
+) -> void:
+	_handle_prop_destroyed(prop_id, world_position, placement_index, false)
+
+func _on_hazard_destroyed(
+	prop_id: StringName,
+	world_position: Vector2,
+	placement_index: int,
+) -> void:
+	# Hazard тоже освобождает AStar cell (иначе после взрыва враги
+	# считают что там всё ещё стена). Drop у hazard'а не роллим — план
+	# явно говорит «hazard damages, а не rewards».
+	_handle_prop_destroyed(prop_id, world_position, placement_index, true)
+	EventLog.log_hazard_explosion()
+
+func _handle_prop_destroyed(
+	prop_id: StringName,
+	world_position: Vector2,
+	placement_index: int,
+	is_hazard: bool,
+) -> void:
+	if placement_index < 0:
+		return
+	if _destroyed_placement_indices.has(placement_index):
+		return
+	_destroyed_placement_indices[placement_index] = true
+	# Освобождаем клетки в AStar — AI перестроит путь на следующем recalc'е.
+	_release_prop_cells(placement_index)
+	# Drop rolling только для чистых destructibles, не hazards.
+	if not is_hazard:
+		_roll_and_spawn_drop(prop_id, placement_index, world_position)
+
+func _release_prop_cells(placement_index: int) -> void:
+	if floor_plan == null or astar_grid == null:
+		return
+	if placement_index < 0 or placement_index >= floor_plan.placements.size():
+		return
+	var placement: RoomDecorationPlannerClass.Placement = floor_plan.placements[placement_index]
+	for offset_x in placement.footprint_cells.x:
+		for offset_y in placement.footprint_cells.y:
+			var cell: Vector2i = placement.cell_origin + Vector2i(offset_x, offset_y)
+			floor_plan.blocked_cells.erase(cell)
+			if astar_grid.region.has_point(cell):
+				# Только если клетка не является wall (первоначальный
+				# solid из _build_walls). Wall_kind_at решает — если это
+				# была wall, не сбрасываем.
+				if _wall_kind_at(cell.x, cell.y) != "solid":
+					astar_grid.set_point_solid(cell, false)
+
+func _roll_and_spawn_drop(prop_id: StringName, placement_index: int, world_position: Vector2) -> void:
+	if drop_table == null:
+		return
+	var result := drop_table.roll(prop_id, placement_index)
+	if result == _DROP_TABLE.RESULT_NONE:
+		return
+	match result:
+		_DROP_TABLE.RESULT_GOLD_SMALL:
+			GameState.award_gold(_DROP_TABLE.VALUE_GOLD_SMALL)
+			EventLog.log_prop_drop(result, _DROP_TABLE.VALUE_GOLD_SMALL)
+		_DROP_TABLE.RESULT_GOLD_LARGE:
+			GameState.award_gold(_DROP_TABLE.VALUE_GOLD_LARGE)
+			EventLog.log_prop_drop(result, _DROP_TABLE.VALUE_GOLD_LARGE)
+		_DROP_TABLE.RESULT_POTION:
+			# Спавним потион как pickup на floor'е — floor.gd не может
+			# инжектировать его в inventory без коллизии с save/load
+			# invariant'ом (game_state.gd не сохраняет потионы между
+			# floor'ами; spawn через pickup даёт игроку возможность
+			# сначала подойти и подобрать, если inventory не полон).
+			# Parent = _markers_root (тот же, что для door) — position
+			# в координатах Floor'а, независимо от transform current_scene.
+			var pickup := HEALTH_PICKUP_SCENE.instantiate()
+			pickup.position = world_position
+			_markers_root.add_child.call_deferred(pickup)
+			EventLog.log_prop_drop(result, 1)
 
 func _place_decor(seed_value: int) -> void:
 	# Декор — чисто визуальные Sprite2D без коллизии. Раскладывается
