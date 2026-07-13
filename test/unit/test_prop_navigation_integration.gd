@@ -87,6 +87,72 @@ func test_astar_leaves_decal_cells_walkable() -> void:
 	assert_gt(decal_defs_checked, 0,
 		"каталог должен содержать хотя бы один floor_decal")
 
+func test_destroying_gameplay_prop_releases_astar_cell() -> void:
+	# Integration: разрушение destructible prop'а должно освободить
+	# AStar cell'ы, чтобы AI перестроил путь. Пробуем несколько seed'ов
+	# до нахождения этажа с реальным destructible prop'ом, потом
+	# зовём destroy(), ждём один frame, проверяем что AStar cells
+	# больше не solid и что blocked_cells больше не содержит эти клетки.
+	var damageable: DamageableEnvironmentProp = null
+	var damageable_placement_index: int = -1
+	var floor_node = null
+	var candidate_seeds: Array[int] = [20250712, 987654, 42, 100, 12345, 555]
+	var candidate_floors: Array[int] = [4, 5, 6, 7]
+	for seed_v in candidate_seeds:
+		for floor_v in candidate_floors:
+			GameState.tower_seed = seed_v
+			GameState.current_floor_number = floor_v
+			var f = _FLOOR_SCENE.instantiate()
+			add_child_autofree(f)
+			await get_tree().process_frame
+			for i in f.floor_plan.placements.size():
+				var p_search: _PLANNER.Placement = f.floor_plan.placements[i]
+				if not p_search.def.is_destructible():
+					continue
+				if p_search.def.is_hazard():
+					continue
+				var props_root: Node2D = f.get_node("PropsRoot")
+				var center: Vector2 = p_search.center_pixel()
+				for child in props_root.get_children():
+					if child is DamageableEnvironmentProp and Vector2(child.position).distance_squared_to(center) < 0.25:
+						damageable = child
+						damageable_placement_index = i
+						floor_node = f
+						break
+				if damageable != null:
+					break
+			if damageable != null:
+				break
+		if damageable != null:
+			break
+	# Guard: тест должен найти destructible; если нет — регрессия в
+	# планировщике или каталоге. Assert явный, а не silent-skip.
+	assert_not_null(damageable,
+		"на всех проверенных seed'ах не оказалось destructible prop'ов — регрессия в planner/catalog?")
+	if damageable == null:
+		return
+	# Клетки, которые prop занимал.
+	var placement: _PLANNER.Placement = floor_node.floor_plan.placements[damageable_placement_index]
+	var occupied_cells: Array = []
+	for offset_x in placement.footprint_cells.x:
+		for offset_y in placement.footprint_cells.y:
+			occupied_cells.append(placement.cell_origin + Vector2i(offset_x, offset_y))
+	# До destroy: клетки solid в AStar и присутствуют в blocked_cells.
+	for cell in occupied_cells:
+		assert_true(floor_node.astar_grid.is_point_solid(cell),
+			"до destroy клетка %s должна быть solid" % cell)
+		assert_true(floor_node.floor_plan.blocked_cells.has(cell),
+			"до destroy клетка %s должна быть в blocked_cells" % cell)
+	# Разрушаем.
+	damageable.destroy()
+	await get_tree().process_frame
+	# После destroy: клетки НЕ solid и удалены из blocked_cells.
+	for cell in occupied_cells:
+		assert_false(floor_node.astar_grid.is_point_solid(cell),
+			"после destroy клетка %s должна освободиться (is_point_solid=false)" % cell)
+		assert_false(floor_node.floor_plan.blocked_cells.has(cell),
+			"после destroy клетка %s должна быть удалена из blocked_cells" % cell)
+
 func test_all_doors_of_room_remain_connected() -> void:
 	# Основной инвариант: планировщик не должен перекрыть маршрут между
 	# двумя дверьми одной комнаты. Проверяем через реальный layout — берём

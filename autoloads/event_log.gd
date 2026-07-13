@@ -59,3 +59,28 @@ func log_tower_seed(seed_value: int) -> void:
 func log_upgrade_selected(display_name: String) -> void:
 	# Тот же tint что у level-up — семантически связано.
 	entry_added.emit(tr("LOG_UPGRADE_SELECTED") % display_name, LEVEL_TINT)
+
+# --- Environment interactions (PR4) ---
+const LORE_TINT: Color = Color(0.80, 0.85, 0.65)
+const PROP_DROP_TINT: Color = Color(0.95, 0.80, 0.50)
+const HAZARD_TINT: Color = Color(1.0, 0.60, 0.40)
+
+# Prompt отображается один раз, пока игрок в диапазоне lore prop'а.
+# HUD.combat log просто печатает строку с fade-out — этого хватит для
+# MVP без специальной UI-панели.
+func log_lore_prompt(prompt_key: String) -> void:
+	if prompt_key.is_empty():
+		return
+	entry_added.emit(tr(prompt_key), LORE_TINT)
+
+func log_lore_text(text_key: String) -> void:
+	if text_key.is_empty():
+		return
+	entry_added.emit(tr(text_key), LORE_TINT)
+
+func log_prop_drop(result: StringName, amount: int) -> void:
+	var key := "LOG_PROP_DROP_%s" % String(result).to_upper()
+	entry_added.emit(tr(key) % amount, PROP_DROP_TINT)
+
+func log_hazard_explosion() -> void:
+	entry_added.emit(tr("LOG_HAZARD_EXPLOSION"), HAZARD_TINT)

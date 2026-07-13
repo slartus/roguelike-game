@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/dungeon/damageable_environment_prop.gd" id="1_prop"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_prop"]
+size = Vector2(20, 20)
+
+[node name="DamageableEnvironmentProp" type="StaticBody2D"]
+script = ExtResource("1_prop")
+
+[node name="Visual" type="Sprite2D" parent="."]
+centered = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_prop")
