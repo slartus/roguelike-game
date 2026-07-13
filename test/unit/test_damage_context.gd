@@ -72,3 +72,47 @@ func test_unknown_context_returns_defaults() -> void:
 	var ctx := DamageContext.unknown()
 	assert_eq(ctx.source_type, &"unknown")
 	assert_eq(ctx.attack_id, &"unknown")
+
+# Regression: enemy_bullet держит source_enemy: Node = null, но если враг
+# успел queue_free до попадания пули — reference становится "previously freed"
+# (Godot 4 не обнуляет). Type-check на `enemy: Node` крашится при вызове
+# фабрики: "Object-derived class of argument 1 (previously freed)". Фабрики
+# принимают untyped + is_instance_valid; freed → source_id="unknown".
+func test_from_enemy_projectile_survives_freed_source() -> void:
+	var freed := FakeEnemy.new()
+	freed.free()
+	var ctx: DamageContext = DamageContext.from_enemy_projectile(freed, &"aimed_shot")
+	assert_eq(ctx.source_type, &"enemy_projectile")
+	assert_eq(ctx.source_id, &"unknown")
+	assert_eq(ctx.attack_id, &"aimed_shot")
+
+func test_from_enemy_attack_survives_freed_source() -> void:
+	var freed := FakeEnemy.new()
+	freed.free()
+	var ctx: DamageContext = DamageContext.from_enemy_attack(freed, &"contact")
+	assert_eq(ctx.source_type, &"enemy")
+	assert_eq(ctx.source_id, &"unknown")
+
+func test_from_enemy_ability_survives_freed_source() -> void:
+	var freed := FakeEnemy.new()
+	freed.free()
+	var ctx: DamageContext = DamageContext.from_enemy_ability(freed, &"poison_tick")
+	assert_eq(ctx.source_type, &"enemy_ability")
+	assert_eq(ctx.source_id, &"unknown")
+	assert_eq(ctx.damage_type, &"poison")
+
+func test_from_enemy_projectile_null_source_returns_unknown() -> void:
+	var ctx: DamageContext = DamageContext.from_enemy_projectile(null, &"projectile")
+	assert_eq(ctx.source_type, &"enemy_projectile")
+	assert_eq(ctx.source_id, &"unknown")
+
+func test_from_enemy_attack_null_source_returns_unknown() -> void:
+	var ctx: DamageContext = DamageContext.from_enemy_attack(null, &"contact")
+	assert_eq(ctx.source_type, &"enemy")
+	assert_eq(ctx.source_id, &"unknown")
+
+func test_from_enemy_ability_null_source_returns_unknown() -> void:
+	var ctx: DamageContext = DamageContext.from_enemy_ability(null, &"poison_tick")
+	assert_eq(ctx.source_type, &"enemy_ability")
+	assert_eq(ctx.source_id, &"unknown")
+	assert_eq(ctx.damage_type, &"poison")

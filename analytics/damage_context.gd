@@ -67,35 +67,41 @@ static func from_player_weapon(weapon: WeaponResource, target: Node) -> DamageCo
 
 # Enemy contact/melee damage → player.
 # attack_id: "contact", "reach", "charge".
-static func from_enemy_attack(enemy: Node, attack: StringName) -> DamageContext:
+# enemy — untyped: у callsite может оказаться freed reference (Godot не обнуляет
+# ссылки при queue_free). Типизированный `Node` крашится type-check'ом при вызове;
+# untyped + is_instance_valid деградирует до source_id="unknown".
+static func from_enemy_attack(enemy, attack: StringName) -> DamageContext:
 	var ctx := DamageContext.new()
 	ctx.source_type = &"enemy"
 	ctx.attack_id = attack
 	ctx.target_type = &"player"
 	ctx.target_id = &"player"
-	_populate_enemy_fields(ctx, enemy)
+	if is_instance_valid(enemy):
+		_populate_enemy_fields(ctx, enemy)
 	return ctx
 
 # Enemy projectile hit → player.
-static func from_enemy_projectile(source_enemy: Node, attack: StringName) -> DamageContext:
+# source_enemy untyped — см. from_enemy_attack (freed reference защита).
+static func from_enemy_projectile(source_enemy, attack: StringName) -> DamageContext:
 	var ctx := DamageContext.new()
 	ctx.source_type = &"enemy_projectile"
 	ctx.attack_id = attack
 	ctx.target_type = &"player"
 	ctx.target_id = &"player"
-	if source_enemy != null:
+	if is_instance_valid(source_enemy):
 		_populate_enemy_fields(ctx, source_enemy)
 	return ctx
 
 # Ability hit (poison cloud tick, aoe) → player.
-static func from_enemy_ability(source_enemy: Node, attack: StringName) -> DamageContext:
+# source_enemy untyped — см. from_enemy_attack (freed reference защита).
+static func from_enemy_ability(source_enemy, attack: StringName) -> DamageContext:
 	var ctx := DamageContext.new()
 	ctx.source_type = &"enemy_ability"
 	ctx.attack_id = attack
 	ctx.target_type = &"player"
 	ctx.target_id = &"player"
 	ctx.damage_type = &"poison" if attack == &"poison_tick" else &"physical"
-	if source_enemy != null:
+	if is_instance_valid(source_enemy):
 		_populate_enemy_fields(ctx, source_enemy)
 	return ctx
 
