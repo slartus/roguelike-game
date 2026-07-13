@@ -5,7 +5,7 @@ extends GutTest
 # - stone_metal_grid не появляется в residential (кухня даёт tile,
 #   стены — дерево, коридор — camень); zone заметно отличается от
 #   caves даже на visual level;
-# - wall face и wall cap рендерятся разными Texture2D;
+# - wall face и wall cap рендерятся разными Texture2D (обе в StaticBody2D);
 # - Floors/Walls Root не создают Sprite2D per cell (только Polygon2D /
 #   StaticBody2D-обёртки);
 # - тот же seed / floor даёт ту же раскладку материалов (детерминизм);
@@ -45,19 +45,6 @@ func _floor_textures_in_root(f: Node2D) -> Array:
 			out.append(child.texture.resource_path)
 	return out
 
-func _wall_textures_in_root(f: Node2D) -> Array:
-	# StaticBody2D дети имеют Polygon2D внутри — берём их texture.
-	# «Голые» Polygon2D (cap) — тоже. Возвращаем плоский список путей.
-	var out: Array = []
-	for child in f.get_node("WallsRoot").get_children():
-		if child is StaticBody2D:
-			for sub in child.get_children():
-				if sub is Polygon2D and sub.texture != null:
-					out.append(sub.texture.resource_path)
-		elif child is Polygon2D and child.texture != null:
-			out.append(child.texture.resource_path)
-	return out
-
 # --- Профиль на инстансе ---------------------------------------------------
 
 func test_floor_resolves_profile_for_current_zone() -> void:
@@ -84,32 +71,33 @@ func test_floor_resolves_profile_for_basement_floor() -> void:
 
 func test_walls_use_face_and_cap_textures_from_profile() -> void:
 	# floor 4 → residential; wood_panel_wall / wood_panel_wall_cap.
+	# Все wall-tiles (и solid, и cap) обёрнуты в StaticBody2D. Различаем
+	# по texture path: face или cap — обе текстуры должны появляться в
+	# профиле residential.
 	var f := _spawn_floor(42, 4)
 	await get_tree().process_frame
 	var face_path := "res://assets/sprites/environment/wood_panel_wall.png"
 	var cap_path := "res://assets/sprites/environment/wood_panel_wall_cap.png"
-	# Solid стены (StaticBody2D) обязаны использовать face texture.
-	var solid_textures: Array = []
-	# «Голые» Polygon2D (cap) обязаны использовать cap texture — если
-	# они вообще есть в этом layout.
-	var cap_textures: Array = []
+	var face_count := 0
+	var cap_count := 0
+	var unexpected_paths: Array = []
 	for child in f.get_node("WallsRoot").get_children():
 		if child is StaticBody2D:
 			for sub in child.get_children():
 				if sub is Polygon2D and sub.texture != null:
-					solid_textures.append(sub.texture.resource_path)
-		elif child is Polygon2D and child.texture != null:
-			cap_textures.append(child.texture.resource_path)
-	assert_gt(solid_textures.size(), 0, "должна быть хоть одна solid стена")
-	for path in solid_textures:
-		assert_eq(path, face_path,
-			"solid стены residential зоны должны использовать wood_panel_wall face")
-	# Cap опционален (зависит от layout), но если появился — обязан быть cap
-	# texture, а не face. Это ловит regression, где cap случайно рисуется
-	# той же текстурой что и solid.
-	for path in cap_textures:
-		assert_eq(path, cap_path,
-			"cap-обёртка обязана использовать wood_panel_wall_cap, не face")
+					var path: String = sub.texture.resource_path
+					if path == face_path:
+						face_count += 1
+					elif path == cap_path:
+						cap_count += 1
+					else:
+						unexpected_paths.append(path)
+	assert_gt(face_count, 0,
+		"должна быть хоть одна solid-стена с face texture")
+	assert_gt(cap_count, 0,
+		"на seed=42 floor=4 должна быть хотя бы одна cap-стена с cap texture")
+	assert_eq(unexpected_paths.size(), 0,
+		"WallsRoot содержит незапланированные текстуры: %s" % [unexpected_paths])
 
 # --- Zones визуально различаются ------------------------------------------
 

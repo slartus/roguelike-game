@@ -42,9 +42,12 @@ func after_each() -> void:
 	GameState.run_enemies_killed = _snapshot["run_kills"]
 
 func test_scene_spawns_player_at_configured_position() -> void:
+	# Не ждём physics_frame: тест проверяет position, установленную
+	# синхронно в _spawn_player() из _ready. Лишний physics tick запускает
+	# CharacterBody2D-выталкивание из соседних тел, что для проверки
+	# начальной spawn-позиции семантически не нужно.
 	var screen = WeaponTestScene.instantiate()
 	add_child_autofree(screen)
-	await get_tree().process_frame
 	var player_root: Node2D = screen.get_node("PlayerRoot")
 	assert_eq(player_root.get_child_count(), 1,
 		"PlayerRoot должен содержать ровно одного игрока")

@@ -249,12 +249,14 @@ func _draw_stretched_rect(rect: Rect2i, texture: Texture2D) -> void:
 	_floors_root.add_child(poly)
 
 func _build_walls() -> void:
-	# Каждая wall-tile может быть двух видов:
-	# - solid — обычная стена с коллизией; рисуется _wall_face_texture.
-	# - cap — верхний ряд толстой (2+ tile) горизонтальной стены;
-	#   рендерится _wall_cap_texture (визуально «козырёк над коллизией»).
-	# Merge горизонтальных span'ов идёт отдельно для каждого вида — они
-	# разные Godot-объекты (StaticBody2D vs pure Polygon2D).
+	# Каждая wall-tile может быть двух видов, различаются только текстурой:
+	# - solid — обычная стена; рисуется _wall_face_texture.
+	# - cap — верхний ряд толстой (2+ tile) горизонтальной стены; рисуется
+	#   _wall_cap_texture (визуальный «козырёк над кромкой»).
+	# Коллизия одинаковая — оба варианта StaticBody2D + CollisionShape2D,
+	# чтобы игрок и мобы не могли зайти в нижние стены снизу. Merge
+	# горизонтальных span'ов идёт отдельно для каждого вида, чтобы у span'а
+	# была одна текстура.
 	var bounds := layout.floor_bounds
 	var cols := int(ceil(float(bounds.size.x) / TILE_SIZE))
 	var rows := int(ceil(float(bounds.size.y) / TILE_SIZE))
@@ -276,9 +278,9 @@ func _build_wall_row(row: int, cols: int, kind: String) -> void:
 		_create_wall_span(span_start, cols, row, kind)
 
 func _wall_kind_at(col: int, row: int) -> String:
-	# "solid" — обычная стена, есть коллизия. "cap" — верхний ряд толстой
-	# стены (сверху комната/коридор, снизу ещё wall), только визуал.
-	# "" (пустая строка) — не wall (пол).
+	# "solid" — обычная стена. "cap" — верхний ряд толстой стены (сверху
+	# комната/коридор, снизу ещё wall). Оба вида дают коллизию, отличаются
+	# только текстурой. "" (пустая строка) — не wall (пол).
 	var center := Vector2i(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
 	if not _is_wall_at(center):
 		return ""
@@ -328,13 +330,9 @@ func _create_wall_span(col_start: int, col_end: int, row: int, kind: String) -> 
 	else:
 		visual.texture = _wall_face_texture
 	visual.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	if kind == "cap":
-		# Cap-tile: только визуал, без body/collision. Позиция ставится на
-		# Polygon2D напрямую, потому что нет обёртки-body.
-		visual.position = origin_pos
-		_walls_root.add_child(visual)
-		return
-	# solid: StaticBody2D + collision + visual (child).
+	# И solid, и cap оборачиваются в StaticBody2D + CollisionShape2D. Отличие
+	# только в текстуре Polygon2D — cap рисует «козырёк», но физически это
+	# всё равно стена: игрок и мобы не должны заходить в неё сверху вниз.
 	var body := StaticBody2D.new()
 	body.position = origin_pos
 	var collision := CollisionShape2D.new()
@@ -561,10 +559,10 @@ func _release_prop_cells(placement_index: int) -> void:
 			var cell: Vector2i = placement.cell_origin + Vector2i(offset_x, offset_y)
 			floor_plan.blocked_cells.erase(cell)
 			if astar_grid.region.has_point(cell):
-				# Только если клетка не является wall (первоначальный
-				# solid из _build_walls). Wall_kind_at решает — если это
-				# была wall, не сбрасываем.
-				if _wall_kind_at(cell.x, cell.y) != "solid":
+				# Только если клетка вообще не wall (ни solid, ни cap —
+				# первоначальный wall из _build_walls). Иначе AI сможет
+				# пройти сквозь стену после того, как рядом разбили проп.
+				if _wall_kind_at(cell.x, cell.y) == "":
 					astar_grid.set_point_solid(cell, false)
 
 func _roll_and_spawn_drop(prop_id: StringName, placement_index: int, world_position: Vector2) -> void:
@@ -666,7 +664,9 @@ func _build_astar_grid() -> void:
 	astar_grid.update()
 	for row in rows:
 		for col in cols:
-			if _wall_kind_at(col, row) == "solid":
+			# Обе wall-разновидности (solid и cap) блокируют pathfinding —
+			# у cap теперь тоже коллизия, AI и физика должны совпадать.
+			if _wall_kind_at(col, row) != "":
 				astar_grid.set_point_solid(Vector2i(col, row), true)
 	# Пропы, помеченные blocks_movement, тоже solid — иначе AI (и pathing
 	# summon fallback) уйдёт сквозь мебель. Список приходит от planner'а;
