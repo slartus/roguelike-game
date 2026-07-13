@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BossDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/boss_definition.gd" id="1_bd"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/rune_golem.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_bd")
+id = &"rune_golem"
+display_name_key = &"ENEMY_RUNE_GOLEM"
+scene = ExtResource("2_scene")
+floor_number = 10
+zone = &"technical"
+arena_profile_id = &"rune_engine_chamber"
+reward_profile_id = &"rune_golem_reward_legacy"
+fallback_allowed = false
