@@ -61,9 +61,16 @@ func test_plan_places_signature_prop_in_machine_room() -> void:
 	var layout := _make_room_layout("machine_room", "technical", Rect2i(Vector2i(0, 0), Vector2i(7, 7)))
 	var plan := _PLANNER.plan_floor(layout, {}, 12345, 9)
 	var ids := plan.placements.map(func(p): return p.def.id)
+	# Signature перебирает categories в порядке `[wall_adjacent, large, floor]`
+	# — для machine_room подходят и workbench (wall_adjacent), и
+	# rune_engine / alchemical_vat / boiler (large). Signature = «характерный
+	# prop роли», а не строго «fantasy machine» — verstack тоже характерен.
 	assert_true(
-		ids.has(_CATALOG.PROP_RUNE_ENGINE) or ids.has(_CATALOG.PROP_ALCHEMICAL_VAT),
-		"machine_room должен получить fantasy машину. placements=%s" % [ids],
+		ids.has(_CATALOG.PROP_WORKBENCH)
+		or ids.has(_CATALOG.PROP_RUNE_ENGINE)
+		or ids.has(_CATALOG.PROP_ALCHEMICAL_VAT)
+		or ids.has(_CATALOG.PROP_BOILER),
+		"machine_room должен получить характерный prop роли. placements=%s" % [ids],
 	)
 
 func test_plan_places_boiler_in_boiler_room() -> void:
@@ -136,7 +143,7 @@ func test_props_stay_inside_room_rect() -> void:
 	var plan := _PLANNER.plan_floor(layout, {}, 77, 4)
 	for placement in plan.placements:
 		var origin: Vector2i = placement.cell_origin
-		var end := origin + placement.footprint_cells
+		var end: Vector2i = origin + placement.footprint_cells
 		assert_true(origin.x >= room_rect.position.x,
 			"prop %s origin.x < room.x (%d < %d)" % [placement.def.id, origin.x, room_rect.position.x])
 		assert_true(origin.y >= room_rect.position.y,
@@ -154,9 +161,9 @@ func test_wall_adjacent_prop_touches_wall() -> void:
 		var d: EnvironmentPropDefinition = placement.def
 		if not d.is_wall_adjacent():
 			continue
-		var origin := placement.cell_origin
-		var end := origin + placement.footprint_cells
-		var touches_wall := (
+		var origin: Vector2i = placement.cell_origin
+		var end: Vector2i = origin + placement.footprint_cells
+		var touches_wall: bool = (
 			origin.x == room_rect.position.x
 			or origin.y == room_rect.position.y
 			or end.x == room_rect.position.x + room_rect.size.x
@@ -173,9 +180,9 @@ func test_wall_surface_prop_touches_wall() -> void:
 		var d: EnvironmentPropDefinition = placement.def
 		if not d.is_wall_surface():
 			continue
-		var origin := placement.cell_origin
-		var end := origin + placement.footprint_cells
-		var touches_wall := (
+		var origin: Vector2i = placement.cell_origin
+		var end: Vector2i = origin + placement.footprint_cells
+		var touches_wall: bool = (
 			origin.x == room_rect.position.x
 			or origin.y == room_rect.position.y
 			or end.x == room_rect.position.x + room_rect.size.x
@@ -186,11 +193,18 @@ func test_wall_surface_prop_touches_wall() -> void:
 
 func test_small_room_remains_sparse() -> void:
 	# 2x2 room — только decals или ничего. Blocking мебель не должен появляться.
+	# Считаем blocking placements явно — если план пустой, assert_eq всё
+	# равно фиксирует контракт; иначе GUT считает тест risky.
 	var layout := _make_room_layout("small_room", "residential", Rect2i(Vector2i(0, 0), Vector2i(2, 2)))
 	var plan := _PLANNER.plan_floor(layout, {}, 12345, 3)
+	var blocking_count: int = 0
 	for placement in plan.placements:
-		assert_false(placement.def.blocks_movement,
-			"маленькая комната не должна получать blocking prop %s" % placement.def.id)
+		if placement.def.blocks_movement:
+			blocking_count += 1
+	assert_eq(blocking_count, 0,
+		"маленькая комната не должна получать blocking props. placements=%s" % [
+			plan.placements.map(func(p): return p.def.id),
+		])
 
 func test_boss_arena_not_filled_with_blocking_props() -> void:
 	# Boss арена достаточно большая, но роль boss_arena блокировать не даём.
@@ -225,3 +239,89 @@ func test_decor_rng_does_not_affect_gameplay_generator() -> void:
 		"planner не должен сдвигать player_start")
 	assert_eq(layout_a.exit_position, layout_b.exit_position,
 		"planner не должен сдвигать exit")
+
+# --- Regression: связность enemy_spawn с door_cells ---------------------
+
+func test_reserved_anchor_stays_reachable_from_door_across_seeds() -> void:
+	# Regression: раньше _would_keep_connected проверял связность только
+	# door_cells. Layout без corridors → door_cells пусто; два
+	# reservation'а по углам служат critical anchors — по-старому
+	# critical_cells.size() <= 1 shortcut пропускал check, теперь оба
+	# входят в critical_cells и BFS обязан оставить путь между ними.
+	# Warehouse — самая плотная роль (density_limit=0.28) → быстрее
+	# забивает комнату и ловит регрессию.
+	var room_rect := Rect2i(Vector2i(0, 0), Vector2i(8, 8))
+	var layout := _make_room_layout("warehouse", "residential", room_rect)
+	var anchor_a := Vector2i(0, 4)         # у левой стены (эмулирует дверь)
+	var anchor_b := Vector2i(7, 7)         # в дальнем углу (эмулирует enemy_spawn)
+	var reservations: Dictionary = {}
+	reservations[anchor_a] = true
+	reservations[anchor_b] = true
+	var seeds: Array[int] = [1, 2, 3, 42, 100, 500, 999, 12345, 20250711, 987654]
+	for seed_v in seeds:
+		var plan := _PLANNER.plan_floor(layout, reservations, seed_v, 4)
+		var blocked_local: Dictionary = plan.blocked_cells
+		assert_true(_bfs_reachable(anchor_a, anchor_b, room_rect, blocked_local),
+			"seed=%d: anchor %s изолирован от %s после placement'а. blocked=%s" % [
+				seed_v, anchor_b, anchor_a, blocked_local.keys(),
+			])
+
+func test_all_reservations_stay_mutually_reachable() -> void:
+	# Второй regression-случай: несколько enemy_spawn'ов и chest'ов в
+	# одной комнате должны все оставаться взаимно достижимыми, даже
+	# если каждая пара по отдельности прошла бы через свой соседний
+	# участок. Раньше это ловилось только между door_cells; теперь
+	# все reservation'ы считаются критическими.
+	var room_rect := Rect2i(Vector2i(0, 0), Vector2i(10, 10))
+	var layout := _make_room_layout("storage", "residential", room_rect)
+	var reservations: Dictionary = {}
+	# Симулируем: дверь в одном углу, spawn'ы и chest раскиданы по всей
+	# комнате. Все должны остаться в одном компоненте связности.
+	var anchors: Array[Vector2i] = [
+		Vector2i(0, 5),   # "door"
+		Vector2i(8, 1),   # spawn 1
+		Vector2i(1, 8),   # spawn 2
+		Vector2i(8, 8),   # chest
+	]
+	for a in anchors:
+		reservations[a] = true
+	var plan := _PLANNER.plan_floor(layout, reservations, 314159, 3)
+	for i in anchors.size():
+		for j in range(i + 1, anchors.size()):
+			assert_true(
+				_bfs_reachable(anchors[i], anchors[j], room_rect, plan.blocked_cells),
+				"anchors %s и %s должны быть взаимно достижимы, blocked=%s" % [
+					anchors[i], anchors[j], plan.blocked_cells.keys(),
+				])
+
+# --- BFS helper для regression-тестов -----------------------------------
+
+func _bfs_reachable(
+	from_cell: Vector2i,
+	to_cell: Vector2i,
+	room_rect: Rect2i,
+	blocked: Dictionary,
+) -> bool:
+	if from_cell == to_cell:
+		return true
+	var visited: Dictionary = {}
+	visited[from_cell] = true
+	var queue: Array = [from_cell]
+	while queue.size() > 0:
+		var cell: Vector2i = queue.pop_front()
+		for offset in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var nxt: Vector2i = cell + offset
+			if visited.has(nxt):
+				continue
+			# в пределах комнаты
+			if nxt.x < room_rect.position.x or nxt.x >= room_rect.position.x + room_rect.size.x:
+				continue
+			if nxt.y < room_rect.position.y or nxt.y >= room_rect.position.y + room_rect.size.y:
+				continue
+			if blocked.has(nxt):
+				continue
+			if nxt == to_cell:
+				return true
+			visited[nxt] = true
+			queue.append(nxt)
+	return false

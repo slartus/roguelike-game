@@ -153,6 +153,60 @@ func test_destroying_gameplay_prop_releases_astar_cell() -> void:
 		assert_false(floor_node.floor_plan.blocked_cells.has(cell),
 			"после destroy клетка %s должна быть удалена из blocked_cells" % cell)
 
+func test_astar_path_exists_from_player_start_to_each_enemy_spawn() -> void:
+	# Regression: пропы не должны отрезать enemy_spawn'ы от player_start.
+	# Раньше planner в _would_keep_connected проверял только door_cells,
+	# и в комнатах с одной дверью (или между door и spawn'ом внутри
+	# любой комнаты) мебель могла оставить моба недостижимым — AI
+	# получал пустой путь и не двигался, "предметы блокировали проход".
+	# Тест инстанциирует реальный Floor и через AStar убеждается, что
+	# путь от player_start до каждого spawn'а существует.
+	var candidate_seeds: Array[int] = [20250711, 987654, 42, 100, 12345, 555, 314159, 20250712]
+	var candidate_floors: Array[int] = [4, 5, 6, 7, 8]
+	var checked: int = 0
+	for seed_v in candidate_seeds:
+		for floor_v in candidate_floors:
+			GameState.tower_seed = seed_v
+			GameState.current_floor_number = floor_v
+			var f = _FLOOR_SCENE.instantiate()
+			add_child(f)
+			await get_tree().process_frame
+			if not f.enemy_spawn_positions.is_empty():
+				var start_cell: Vector2i = Vector2i(
+					int(f.player_start.x) / TILE,
+					int(f.player_start.y) / TILE,
+				)
+				var start_ok: bool = (
+					f.astar_grid.region.has_point(start_cell)
+					and not f.astar_grid.is_point_solid(start_cell)
+				)
+				if start_ok:
+					for spawn_pos in f.enemy_spawn_positions:
+						var spawn_cell: Vector2i = Vector2i(
+							int(spawn_pos.x) / TILE,
+							int(spawn_pos.y) / TILE,
+						)
+						if not f.astar_grid.region.has_point(spawn_cell):
+							continue
+						# spawn попал в solid (пиксельное совпадение со
+						# стеной) — отдельная проблема генератора, не
+						# planner'а.
+						if f.astar_grid.is_point_solid(spawn_cell):
+							continue
+						var path: PackedVector2Array = f.astar_grid.get_point_path(start_cell, spawn_cell)
+						assert_gt(path.size(), 0,
+							"seed=%d floor=%d: AStar не нашёл путь от player_start %s до enemy_spawn %s — spawn отрезан пропами" % [
+								seed_v, floor_v, start_cell, spawn_cell,
+							])
+						checked += 1
+			# Явно освобождаем Floor, чтобы 40 сцен не жили одновременно
+			# в scene tree и не жгли physics tick'и.
+			f.queue_free()
+			await get_tree().process_frame
+	# Guard: тест должен что-то реально проверить, иначе silent-green.
+	assert_gt(checked, 0,
+		"тест не проверил ни одной пары player_start ↔ enemy_spawn — регрессия в генераторе?")
+
 func test_all_doors_of_room_remain_connected() -> void:
 	# Основной инвариант: планировщик не должен перекрыть маршрут между
 	# двумя дверьми одной комнаты. Проверяем через реальный layout — берём
