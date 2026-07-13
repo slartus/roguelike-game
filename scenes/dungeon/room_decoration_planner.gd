@@ -145,6 +145,21 @@ static func _plan_room(
 	# anchor'ов. Это уже сделано через external_reservations, если Floor.gd
 	# передал clear zone — планировщик здесь просто уважает уже занятое.
 
+	# critical_cells — anchor'ы, обязанные оставаться взаимно достижимыми
+	# через свободные клетки после каждого blocking placement'а. Включает
+	# door_cells (входы в комнату) + external_reservations (player_start /
+	# exit / chest / enemy_spawn с clear-radius), попавшие внутрь room_cells.
+	# Corridor route reservations сюда НЕ включаются — это защитная
+	# разметка маршрута между дверьми, а не must-reach anchor.
+	# Без anchor'ов enemy_spawn'а _would_keep_connected пропускал бы
+	# placement, отрезающий моба от двери — AI не мог найти путь к игроку.
+	# Возвращаем dict Vector2i → true: BFS-check дёргает `.has()` на
+	# каждый шаг за пределы room, а он вызывается на каждое blocking
+	# placement — на плотных этажах linear scan заметен.
+	var critical_cells := _collect_critical_cells(
+		room_cells, door_cells, external_reservations,
+	)
+
 	# Порядок placement: signature → wall-adjacent → large → floor → wall
 	# surface → decals. Blocking placement всегда проверяет connectivity.
 	var placements: Array = []
@@ -156,7 +171,7 @@ static func _plan_room(
 	if not is_tiny:
 		# Signature prop — характерный объект комнаты. Пытаемся поставить.
 		var signature_result := _place_signature(
-			grid, room_cells, role_key, zone_key, rng, door_cells, room_index,
+			grid, room_cells, role_key, zone_key, rng, critical_cells, room_index,
 		)
 		if signature_result != null:
 			placements.append(signature_result)
@@ -165,34 +180,34 @@ static func _plan_room(
 		# Wall-adjacent (шкафы, стеллажи, verstack).
 		blocked_area_cells = _place_category_until_budget(
 			placements, grid, room_cells, role_key, zone_key, rng,
-			door_cells, room_index, _DEF.CATEGORY_WALL_ADJACENT_PROP,
+			critical_cells, room_index, _DEF.CATEGORY_WALL_ADJACENT_PROP,
 			blocked_area_cells, blocking_budget,
 		)
 
 		# Large props (котёл, рунический двигатель, sтaлагмит).
 		blocked_area_cells = _place_category_until_budget(
 			placements, grid, room_cells, role_key, zone_key, rng,
-			door_cells, room_index, _DEF.CATEGORY_LARGE_PROP,
+			critical_cells, room_index, _DEF.CATEGORY_LARGE_PROP,
 			blocked_area_cells, blocking_budget,
 		)
 
 		# Floor props (столы, стулья, ящики, бочки).
 		blocked_area_cells = _place_category_until_budget(
 			placements, grid, room_cells, role_key, zone_key, rng,
-			door_cells, room_index, _DEF.CATEGORY_FLOOR_PROP,
+			critical_cells, room_index, _DEF.CATEGORY_FLOOR_PROP,
 			blocked_area_cells, blocking_budget,
 		)
 
 	# Wall surfaces (картины, трубы, вентили, цепи) — non-blocking.
 	_place_non_blocking(
 		placements, grid, room_cells, role_key, zone_key, rng,
-		door_cells, room_index, _DEF.CATEGORY_WALL_SURFACE,
+		critical_cells, room_index, _DEF.CATEGORY_WALL_SURFACE,
 	)
 
 	# Floor decals (ковёр, кости, щебень, корни, решётка) — non-blocking.
 	_place_non_blocking(
 		placements, grid, room_cells, role_key, zone_key, rng,
-		door_cells, room_index, _DEF.CATEGORY_FLOOR_DECAL,
+		critical_cells, room_index, _DEF.CATEGORY_FLOOR_DECAL,
 	)
 
 	# Gameplay pass (PR4): destructibles / hazards / lore идут последним,
@@ -202,7 +217,7 @@ static func _plan_room(
 	if not is_tiny:
 		_place_gameplay_props(
 			placements, grid, room_cells, role_key, zone_key, rng,
-			door_cells, room_index, floor_counts, layout,
+			door_cells, critical_cells, room_index, floor_counts, layout,
 		)
 
 	for p in placements:
@@ -222,7 +237,7 @@ static func _place_signature(
 	role_key: StringName,
 	zone_key: StringName,
 	rng: RandomNumberGenerator,
-	door_cells: Array,
+	critical_cells: Dictionary,
 	room_index: int,
 ) -> Placement:
 	# Signature — «характерный» prop роли: bed для bedroom, boiler для
@@ -244,7 +259,7 @@ static func _place_signature(
 		)
 		for def in candidates:
 			var d: EnvironmentPropDefinition = def
-			var placement := _try_place_prop(grid, room_cells, d, rng, door_cells, room_index)
+			var placement := _try_place_prop(grid, room_cells, d, rng, critical_cells, room_index)
 			if placement != null:
 				return placement
 	return null
@@ -256,7 +271,7 @@ static func _place_category_until_budget(
 	role_key: StringName,
 	zone_key: StringName,
 	rng: RandomNumberGenerator,
-	door_cells: Array,
+	critical_cells: Dictionary,
 	room_index: int,
 	category: StringName,
 	blocked_area_cells: int,
@@ -274,7 +289,7 @@ static func _place_category_until_budget(
 		if candidates.is_empty():
 			return current
 		var def: EnvironmentPropDefinition = _pick_weighted(candidates, rng)
-		var placement := _try_place_prop(grid, room_cells, def, rng, door_cells, room_index)
+		var placement := _try_place_prop(grid, room_cells, def, rng, critical_cells, room_index)
 		if placement == null:
 			continue
 		placements.append(placement)
@@ -288,7 +303,7 @@ static func _place_non_blocking(
 	role_key: StringName,
 	zone_key: StringName,
 	rng: RandomNumberGenerator,
-	door_cells: Array,
+	critical_cells: Dictionary,
 	room_index: int,
 	category: StringName,
 ) -> void:
@@ -308,7 +323,7 @@ static func _place_non_blocking(
 	while placed < placement_budget and attempts < max_attempts:
 		attempts += 1
 		var def: EnvironmentPropDefinition = _pick_weighted(candidates, rng)
-		var placement := _try_place_prop(grid, room_cells, def, rng, door_cells, room_index)
+		var placement := _try_place_prop(grid, room_cells, def, rng, critical_cells, room_index)
 		if placement != null:
 			placements.append(placement)
 			placed += 1
@@ -337,6 +352,7 @@ static func _place_gameplay_props(
 	zone_key: StringName,
 	rng: RandomNumberGenerator,
 	door_cells: Array,
+	critical_cells: Dictionary,
 	room_index: int,
 	floor_counts: Dictionary,
 	layout: DungeonLayout,
@@ -378,7 +394,7 @@ static func _place_gameplay_props(
 		if not _gameplay_budget_available(def, room_counts, floor_counts):
 			continue
 		var placement := _try_place_gameplay_prop(
-			def, grid, room_cells, rng, door_cells, room_index,
+			def, grid, room_cells, rng, door_cells, critical_cells, room_index,
 		)
 		if placement == null:
 			continue
@@ -408,6 +424,7 @@ static func _try_place_gameplay_prop(
 	room_cells: Rect2i,
 	rng: RandomNumberGenerator,
 	door_cells: Array,
+	critical_cells: Dictionary,
 	room_index: int,
 ) -> Placement:
 	# Тот же placement primitive, что для декоративных props — но с
@@ -421,7 +438,7 @@ static func _try_place_gameplay_prop(
 		if def.is_hazard() and _is_near_door(origin, def.footprint_cells, door_cells, 1):
 			continue
 		if def.blocks_movement:
-			if not _would_keep_connected(grid, room_cells, origin, def.footprint_cells, door_cells):
+			if not _would_keep_connected(grid, room_cells, origin, def.footprint_cells, critical_cells):
 				continue
 		var occ_kind: int = OCC_BLOCKED if def.blocks_movement else OCC_FREE
 		# Non-blocking gameplay props (пока таких нет, но контракт готов)
@@ -472,12 +489,13 @@ static func _try_place_prop(
 	room_cells: Rect2i,
 	def: EnvironmentPropDefinition,
 	rng: RandomNumberGenerator,
-	door_cells: Array,
+	critical_cells: Dictionary,
 	room_index: int,
 ) -> Placement:
 	# Генерируем candidate origins по category. Пробуем по одному, первое
 	# успешное — placement. blocking props дополнительно проверяют что не
-	# ломают связность door_cells.
+	# ломают связность critical_cells (двери + must-reach anchors: spawn'ы,
+	# сундуки, входы/выходы).
 	var candidate_origins: Array = _candidate_origins(def, room_cells)
 	_shuffle(candidate_origins, rng)
 	for origin in candidate_origins:
@@ -485,7 +503,7 @@ static func _try_place_prop(
 			continue
 		# Для blocking prop'ов — pre-check connectivity.
 		if def.blocks_movement:
-			if not _would_keep_connected(grid, room_cells, origin, def.footprint_cells, door_cells):
+			if not _would_keep_connected(grid, room_cells, origin, def.footprint_cells, critical_cells):
 				continue
 		# Success — фиксируем в grid и возвращаем Placement.
 		var occ_kind: int = OCC_FREE
@@ -575,12 +593,12 @@ static func _would_keep_connected(
 	room_cells: Rect2i,
 	blocking_origin: Vector2i,
 	blocking_footprint: Vector2i,
-	door_cells: Array,
+	critical_cells: Dictionary,
 ) -> bool:
 	# Копию делаем упрощённо: сохраняем оригинальные значения занятости
 	# только для клеток footprint'а, ставим их временно в OCC_BLOCKED,
 	# после проверки — восстанавливаем.
-	if door_cells.size() <= 1:
+	if critical_cells.size() <= 1:
 		return true
 	var saved: Array = []
 	for offset_x in blocking_footprint.x:
@@ -588,23 +606,25 @@ static func _would_keep_connected(
 			var cell: Vector2i = blocking_origin + Vector2i(offset_x, offset_y)
 			saved.append([cell, grid[cell]])
 			grid[cell] = OCC_BLOCKED
-	var connected := _all_doors_connected(grid, room_cells, door_cells)
+	var connected := _all_critical_connected(grid, room_cells, critical_cells)
 	for entry in saved:
 		grid[entry[0]] = entry[1]
 	return connected
 
-static func _all_doors_connected(
+static func _all_critical_connected(
 	grid: Dictionary,
 	room_cells: Rect2i,
-	door_cells: Array,
+	critical_cells: Dictionary,
 ) -> bool:
-	# BFS от первого door cell — все остальные должны быть достижимы через
+	# BFS от первой critical cell — все остальные должны быть достижимы через
 	# клетки, которые не OCC_BLOCKED (reserved, decal, wall_surface, free —
 	# все проходимы физически). AI ходит через AStar по 20px клеткам, blocking
-	# footprint ставит solid, всё остальное — passable.
-	if door_cells.is_empty():
+	# footprint ставит solid, всё остальное — passable. Dictionary keys —
+	# lookup O(1) в BFS-boundary check.
+	if critical_cells.is_empty():
 		return true
-	var start: Vector2i = door_cells[0]
+	var keys: Array = critical_cells.keys()
+	var start: Vector2i = keys[0]
 	var visited: Dictionary = {}
 	visited[start] = true
 	var queue: Array = [start]
@@ -614,24 +634,41 @@ static func _all_doors_connected(
 			var next_cell: Vector2i = cell + offset
 			if visited.has(next_cell):
 				continue
-			# Разрешаем ходить в пределах room + door_cells (двери могут быть
-			# чуть за room boundary — corridor cell).
-			if not room_cells.has_point(next_cell) and not _is_door_cell(next_cell, door_cells):
+			# Разрешаем ходить в пределах room + critical_cells (двери могут
+			# быть чуть за room boundary — corridor cell).
+			if not room_cells.has_point(next_cell) and not critical_cells.has(next_cell):
 				continue
 			if grid.has(next_cell) and grid[next_cell] == OCC_BLOCKED:
 				continue
 			visited[next_cell] = true
 			queue.append(next_cell)
-	for cell in door_cells:
+	for cell in keys:
 		if not visited.has(cell):
 			return false
 	return true
 
-static func _is_door_cell(cell: Vector2i, door_cells: Array) -> bool:
+static func _collect_critical_cells(
+	room_cells: Rect2i,
+	door_cells: Array,
+	external_reservations: Dictionary,
+) -> Dictionary:
+	# Собираем anchor'ы, которые должны оставаться взаимно достижимыми:
+	# двери комнаты (гарантируют вход/выход) + external reservations,
+	# попадающие внутрь room_cells (player_start / exit / chest / enemy
+	# spawn clear-radius). Возвращаем dict для O(1) lookup внутри BFS —
+	# двери и reservations могут пересекаться, dict сам дедупит.
+	# Порядок ключей стабилен: сначала двери, потом reservations — важно
+	# для детерминизма BFS start-точки при equal seed.
+	var result: Dictionary = {}
 	for door in door_cells:
-		if door == cell:
-			return true
-	return false
+		result[door] = true
+	for cell in external_reservations.keys():
+		if result.has(cell):
+			continue
+		if not _cell_in_rect(cell, room_cells):
+			continue
+		result[cell] = true
+	return result
 
 # --- Reservations -------------------------------------------------------
 
