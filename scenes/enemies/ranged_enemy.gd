@@ -69,6 +69,11 @@ var temperament_seed: int = 0
 var retreat_speed_multiplier: float = 1.0
 var _has_explicit_seed: bool = false
 var _temperament_applied: bool = false
+# Профиль вызова свиты (см. summoned_creature_profile.gd). Задаётся
+# боссом ДО add_child() через configure_summon(). Подклассы (архер)
+# читают arsenal_pool и max_damage, базовый класс — первое-выстрел
+# delay, fire_interval override и reward-guard'ы.
+var _summon_profile: SummonedCreatureProfile
 var _target: Node2D
 var _fire_timer: float = 0.0
 var _stuck_timer: float = 0.0
@@ -86,7 +91,25 @@ func _ready() -> void:
 	xp_reward = Balance.scaled_xp_reward(xp_reward, level)
 	gold_reward = Balance.scaled_gold_reward(gold_reward, level)
 	health = max_health
-	_fire_timer = randf() * fire_interval
+	# Summon guard: применяется ПОСЛЕ scaled_*, чтобы окончательные
+	# rewards обнулились даже при mid-fight изменении Balance.
+	if _summon_profile != null:
+		if not _summon_profile.grants_xp:
+			xp_reward = 0
+		if not _summon_profile.grants_gold:
+			gold_reward = 0
+		if not _summon_profile.grants_drops:
+			pickup_scene = null
+		if _summon_profile.fire_interval_override > 0.0:
+			fire_interval = _summon_profile.fire_interval_override
+	# First-shot delay: свежий summon не должен стрелять почти мгновенно
+	# — игроку нужно окно чтобы «заметить новый источник угрозы».
+	# `_fire_timer` ловится каждый physics-frame в _physics_process:
+	# пока > 0, выстрела нет.
+	if _summon_profile != null and _summon_profile.first_attack_delay > 0.0:
+		_fire_timer = _summon_profile.first_attack_delay
+	else:
+		_fire_timer = randf() * fire_interval
 
 func get_effective_monster_level() -> int:
 	return MonsterLevelUtil.effective_level(monster_level, elite_rank)
@@ -96,6 +119,24 @@ func configure_spawn(level: int, elite: int = 0, creature_seed: int = 0) -> void
 	elite_rank = maxi(0, elite)
 	temperament_seed = creature_seed
 	_has_explicit_seed = true
+
+func configure_summon(profile: SummonedCreatureProfile) -> void:
+	# Вызвать ДО add_child(). После add_child() Godot запускает _ready(),
+	# где стоит super._ready() → Balance.scaled_*, temperament resolve,
+	# _fire_timer инициализация — «поздний» override уже не подхватится.
+	_summon_profile = profile
+	monster_level = maxi(1, profile.monster_level)
+	elite_rank = maxi(0, profile.elite_rank)
+	temperament_seed = 0
+	_has_explicit_seed = true
+	if profile.temperament_id != &"":
+		temperament_id = profile.temperament_id
+
+# Роль миньона в свите босса. Используется boss.gd для раздельного
+# учёта живых minion'ов по квоте (3 melee / 2 ranged). Возвращает
+# пустой StringName для обычного лучника вне boss-summon'а.
+func get_summon_role() -> StringName:
+	return _summon_profile.summon_role if _summon_profile != null else &""
 
 func _apply_temperament() -> void:
 	if _temperament_applied:

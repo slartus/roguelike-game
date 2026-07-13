@@ -1,8 +1,9 @@
 extends GutTest
 
-# Necromancer (босс) призывает батчем 5 скелетов с кулдауном 10s.
-# После каст-фазы 1.2s топ-апит до SUMMON_COUNT — если убили не всех,
-# спавнит только недостающих.
+# Necromancer (босс) призывает свиту в фиксированной композиции
+# 3 melee + 2 archer. Кулдаун 10s, каст 1.2s. После каст-фазы топ-апит
+# раздельно по ролям — если убили только melee, спавнит только melee.
+# Cм. plans/necromancer-minion-rebalance.
 
 const BossScene = preload("res://scenes/enemies/boss.tscn")
 
@@ -42,8 +43,10 @@ func test_boss_summon_cooldown_starts_at_zero_for_immediate_cast() -> void:
 		"кулдаун стартует нулевым — каст свиты стартует на первом же тике")
 	assert_eq(boss._summon_cast_timer, 0.0,
 		"каст ещё не стартовал, это делает _maybe_start_summon в _physics_process")
-	assert_eq(boss._minions.size(), 0,
-		"миньонов пока нет: скелет появляется после SUMMON_CAST_DURATION")
+	assert_eq(boss._melee_minions.size(), 0,
+		"melee-миньонов пока нет: скелеты появятся после SUMMON_CAST_DURATION")
+	assert_eq(boss._ranged_minions.size(), 0,
+		"ranged-миньонов пока нет: лучники появятся после SUMMON_CAST_DURATION")
 
 func test_boss_summons_full_batch_of_five_on_first_cast() -> void:
 	_spawn_player_and_floor()
@@ -55,38 +58,49 @@ func test_boss_summons_full_batch_of_five_on_first_cast() -> void:
 	boss._maybe_start_summon(0.05)
 	assert_gt(boss._summon_cast_timer, 0.0, "каст должен стартовать")
 	boss._tick_cast(boss.SUMMON_CAST_DURATION + 0.1)
-	assert_eq(boss._minions.size(), boss.SUMMON_COUNT,
-		"первый каст должен призвать полный батч из %d скелетов" % boss.SUMMON_COUNT)
+	assert_eq(boss._melee_minions.size(), boss.SUMMON_MELEE_COUNT,
+		"первый каст должен призвать %d melee-скелетов" % boss.SUMMON_MELEE_COUNT)
+	assert_eq(boss._ranged_minions.size(), boss.SUMMON_RANGED_COUNT,
+		"первый каст должен призвать %d ranged-лучников" % boss.SUMMON_RANGED_COUNT)
+	assert_eq(boss._total_alive_minions(), boss.SUMMON_COUNT,
+		"общее число миньонов = melee + ranged = %d" % boss.SUMMON_COUNT)
 	# Кулдаун сбрасывается на новую константу после успешного спавна.
 	assert_almost_eq(boss._summon_cooldown_timer, boss.SUMMON_COOLDOWN, 0.001)
 
-func test_boss_tops_up_partial_batch() -> void:
-	# Если 3 миньона выжили — следующий каст доспавнит только 2,
-	# не 5. Это удерживает популяцию на SUMMON_COUNT, а не растёт.
+func test_boss_tops_up_missing_melee_only_when_ranged_full() -> void:
+	# Если 3 melee убиты, а 2 ranged живы — следующий каст доспавнит
+	# только 3 melee. Не «5 недостающих», не «случайный микс». Каждая
+	# роль пополняется по своей квоте.
 	_spawn_player_and_floor()
 	var boss = _spawn_boss()
 	boss.global_position = Vector2(400, 400)
 	boss._target = get_tree().get_first_node_in_group("player")
-	# Пре-заполняем 3-мя fake-минионами.
-	for i in 3:
+	# Пре-заполняем 2 fake-ranged'а.
+	for i in boss.SUMMON_RANGED_COUNT:
 		var fake := Node2D.new()
 		add_child_autofree(fake)
-		boss._minions.append(fake)
+		boss._ranged_minions.append(fake)
 	boss._summon_cooldown_timer = 0.0
 	boss._maybe_start_summon(0.05)
 	boss._tick_cast(boss.SUMMON_CAST_DURATION + 0.1)
-	assert_eq(boss._minions.size(), boss.SUMMON_COUNT,
-		"после topping-up должно быть ровно SUMMON_COUNT миньонов")
+	assert_eq(boss._melee_minions.size(), boss.SUMMON_MELEE_COUNT,
+		"melee квота должна восстановиться до %d" % boss.SUMMON_MELEE_COUNT)
+	assert_eq(boss._ranged_minions.size(), boss.SUMMON_RANGED_COUNT,
+		"ranged квота не превышена: как было 2, так и осталось 2")
 
-func test_boss_skips_cast_if_already_full() -> void:
+func test_boss_skips_cast_if_all_quotas_full() -> void:
 	_spawn_player_and_floor()
 	var boss = _spawn_boss()
 	boss._target = get_tree().get_first_node_in_group("player")
-	# Пре-заполняем полный комплект.
-	for i in boss.SUMMON_COUNT:
+	# Пре-заполняем полный комплект по обеим ролям.
+	for i in boss.SUMMON_MELEE_COUNT:
 		var fake := Node2D.new()
 		add_child_autofree(fake)
-		boss._minions.append(fake)
+		boss._melee_minions.append(fake)
+	for i in boss.SUMMON_RANGED_COUNT:
+		var fake := Node2D.new()
+		add_child_autofree(fake)
+		boss._ranged_minions.append(fake)
 	boss._summon_cooldown_timer = 0.0
 	boss._maybe_start_summon(0.05)
 	assert_eq(boss._summon_cast_timer, 0.0,
@@ -103,21 +117,20 @@ func test_boss_cast_visual_tints_green() -> void:
 	assert_eq(visual.modulate, boss._visual_base_modulate,
 		"после reset — базовый modulate")
 
-func test_boss_summons_biased_toward_player() -> void:
+func test_boss_cleanup_removes_freed_minions_from_role_lists() -> void:
+	# Когда скелеты queue_free()'нулись между кастами, _cleanup_minions
+	# должен вычистить invalid ссылки из ОБЕИХ role-list'ов, иначе
+	# _total_alive_minions() перекрутит и следующий каст пропустит спавн.
 	_spawn_player_and_floor()
-	var player := get_tree().get_first_node_in_group("player")
 	var boss = _spawn_boss()
-	boss.global_position = Vector2(400, 100)  # игрок в (600, 100) — справа.
-	boss._target = player
-	boss._summon_cooldown_timer = 0.0
-	boss._maybe_start_summon(0.05)
-	boss._tick_cast(boss.SUMMON_CAST_DURATION + 0.1)
-	var toward_player: Vector2 = (player.global_position - boss.global_position).normalized()
-	var hits := 0
-	for minion in boss._minions:
-		var to_minion: Vector2 = (minion.global_position - boss.global_position).normalized()
-		if to_minion.dot(toward_player) > 0.2:
-			hits += 1
-	assert_gte(hits, boss.SUMMON_COUNT - 1,
-		"минимум %d из %d миньонов должны появиться в сторону игрока (получили %d)" %
-		[boss.SUMMON_COUNT - 1, boss.SUMMON_COUNT, hits])
+	var dead_melee := Node2D.new()
+	var dead_ranged := Node2D.new()
+	boss._melee_minions.append(dead_melee)
+	boss._ranged_minions.append(dead_ranged)
+	dead_melee.free()
+	dead_ranged.free()
+	boss._cleanup_minions()
+	assert_eq(boss._melee_minions.size(), 0,
+		"melee list должен очиститься от freed nodes")
+	assert_eq(boss._ranged_minions.size(), 0,
+		"ranged list должен очиститься от freed nodes")

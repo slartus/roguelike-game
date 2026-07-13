@@ -18,9 +18,30 @@ const WEAPON_SWING_ANGLE: float = PI * 0.55
 
 var _visual_base_position: Vector2 = Vector2.ZERO
 var _lunge_tween: Tween
+# Профиль вызова свиты. Задаётся боссом через configure_summon() ДО
+# add_child(). Если null — скелет спавнится обычным путём (floor mob).
+var _summon_profile: SummonedCreatureProfile
+
+func configure_summon(profile: SummonedCreatureProfile) -> void:
+	# Вызвать ДО add_child(). После add_child() Godot запускает _ready(),
+	# где стоит super._ready() → Balance.scaled_damage / temperament
+	# resolve, и «поздний» override уже не подхватится.
+	_summon_profile = profile
+	monster_level = maxi(1, profile.monster_level)
+	elite_rank = maxi(0, profile.elite_rank)
+	# `configure_spawn`-семантика (детерминированный seed для темперамента
+	# всё равно нужен, даже если override будет применён — resolve_id
+	# проверяет override первым).
+	temperament_seed = 0
+	_has_explicit_seed = true
+	if profile.temperament_id != &"":
+		temperament_id = profile.temperament_id
 
 func _ready() -> void:
-	var variant: Dictionary = SkeletonArsenal.pick(SkeletonArsenal.MELEE_VARIANTS)
+	var pool: Array = SkeletonArsenal.MELEE_VARIANTS
+	if _summon_profile != null and not _summon_profile.arsenal_pool.is_empty():
+		pool = _summon_profile.arsenal_pool
+	var variant: Dictionary = SkeletonArsenal.pick(pool)
 	display_name = variant["display_key"]
 	# Bonus применяется ДО super._ready(), чтобы Balance.scaled_damage
 	# в базовом _ready увидел уже увеличенный contact_damage и умножил
@@ -28,12 +49,30 @@ func _ready() -> void:
 	contact_damage += variant["damage_bonus"]
 	attack_radius = variant.get("attack_radius", 0.0)
 	super._ready()
+	# --- Summon guard: применяется ПОСЛЕ Balance.scaled_* и temperament,
+	# чтобы окончательные значения не превысили заявленный cap даже
+	# при будущих изменениях Balance. Cм. plans/necromancer-minion-rebalance.
+	if _summon_profile != null:
+		if not _summon_profile.grants_xp:
+			xp_reward = 0
+		if not _summon_profile.grants_gold:
+			gold_reward = 0
+		if not _summon_profile.grants_drops:
+			pickup_scene = null
+		if _summon_profile.max_damage > 0:
+			contact_damage = mini(contact_damage, _summon_profile.max_damage)
 	var visual: Sprite2D = get_node_or_null("Visual") as Sprite2D
 	if visual != null:
 		visual.modulate = variant["tint"]
 		_visual_base_position = visual.position
 	_apply_weapon_sprite(variant.get("weapon_sprite", ""))
 	attack_played.connect(_play_lunge_animation)
+
+# Роль миньона в свите босса. Используется boss.gd для раздельного
+# учёта живых minion'ов по квоте (3 melee / 2 ranged). Возвращает
+# пустой StringName для обычного скелета вне boss-summon'а.
+func get_summon_role() -> StringName:
+	return _summon_profile.summon_role if _summon_profile != null else &""
 
 func _apply_weapon_sprite(sprite_path: String) -> void:
 	# Weapon-нода в skeleton.tscn стартует со `visible = false` — она
