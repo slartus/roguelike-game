@@ -100,9 +100,10 @@ func _ready() -> void:
 	var generator := DungeonGeneratorClass.new()
 	var floor_num := GameState.current_floor_number
 	# Boss arena size приходит из BossArenaProfile.size (через
-	# BossRegistry): legacy_600x400 для fallback-босса Necromancer'а
-	# (этажи 10/15/20) или castellan_hall (640×420) для этажа 5.
-	# Vector2i.ZERO → generator использует свой default BOSS_ROOM_SIZE.
+	# BossRegistry): castellan_hall (640×420) для этажа 5, rune_engine_chamber
+	# (620×420) для этажа 10, ritual_crypt (680×460) для этажей 15 / 20
+	# (20 — fallback Necromancer'а до PR 5). Vector2i.ZERO → generator
+	# использует свой default BOSS_ROOM_SIZE.
 	var boss_arena_size: Vector2i = Vector2i.ZERO
 	if _is_boss_floor():
 		var arena_profile := BossRegistry.arena_profile_for_floor(floor_num)

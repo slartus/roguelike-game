@@ -4,17 +4,18 @@ extends RefCounted
 # Data-driven mapping "floor number → BossDefinition". Заменяет прежний
 # hardcoded `BOSS_SCENE = preload(...)` в Main.gd.
 #
-# После PR 3:
-# - floor 5 → Castellan Armor (эксплицитная definition через floor_number=5);
-# - floor 10 → Rune Golem (эксплицитная definition через floor_number=10);
-# - floor 15 / 20 → Necromancer (временный fallback до PR 4–5, когда
-#   Necromancer переедет на 15 и появится Crystal Wyrm на 20).
+# После PR 4:
+# - floor 5  → Castellan Armor (эксплицитная definition, floor_number=5);
+# - floor 10 → Rune Golem (эксплицитная definition, floor_number=10);
+# - floor 15 → Necromancer (эксплицитная definition, floor_number=15,
+#   ритуальная арена basement-зоны);
+# - floor 20 → Necromancer как fallback до PR 5 (Crystal Wyrm).
 #
 # Порядок роадмапы (см. plans/boss-roadmap-claude-plans/00_README_RUN_ORDER.md):
 # PR 2 ставит Castellan Armor на 5-й этаж и снимает Некроманта с явного
 # слота (его definition остаётся живой только как fallback);
 # PR 3 добавляет 10-й (Rune Golem); PR 4 возвращает Некроманта на 15
-# (fallback выключится); PR 5 добавляет 20-й (Crystal Wyrm).
+# и переселяет его в ritual_crypt-арену; PR 5 добавит 20-й (Crystal Wyrm).
 #
 # Загружаем definitions лениво из preload'а .tres — это data, а не код,
 # reviewer'у проще менять состав через инспектор.
@@ -25,16 +26,15 @@ const NECROMANCER_DEFINITION: Resource = preload("res://resources/bosses/necroma
 const LEGACY_ARENA_PROFILE: Resource = preload("res://resources/bosses/legacy_arena_profile.tres")
 const CASTELLAN_HALL_ARENA_PROFILE: Resource = preload("res://resources/bosses/castellan_hall_arena.tres")
 const RUNE_ENGINE_CHAMBER_ARENA_PROFILE: Resource = preload("res://resources/bosses/rune_engine_chamber_arena.tres")
+const RITUAL_CRYPT_ARENA_PROFILE: Resource = preload("res://resources/bosses/ritual_crypt_arena.tres")
 
 # Boss floor'ы, для которых пока нет своей definition, но нужно провести
 # босса. Полностью data-driven — если завтра появится босс на floor 7,
 # он просто добавится через all_definitions() с floor_number=7, а если
 # кому-то нужен fallback slot на 7 — добавляется сюда. Не magic constant.
-# После PR 3: floor 10 занял Rune Golem, но fallback list не сокращаем —
-# Necromancer продолжает обслуживать 15/20, а 10 в списке всё ещё нужен
-# как явное признание «этот floor — boss floor» (Rune Golem резолвится
-# как explicit через шаг 1, fallback шаг 2 просто не срабатывает).
-const FALLBACK_BOSS_FLOORS: Array[int] = [10, 15, 20]
+# После PR 4: floor 15 занял свой Necromancer (explicit), остался только
+# 20 — он обслуживается тем же Necromancer'ом как fallback до PR 5.
+const FALLBACK_BOSS_FLOORS: Array[int] = [20]
 
 # Возвращает definition для boss floor'а. Для non-boss floor'а — null.
 # Порядок разрешения:
@@ -77,6 +77,8 @@ static func arena_profile_for_floor(floor_number: int) -> BossArenaProfile:
 			return CASTELLAN_HALL_ARENA_PROFILE
 		&"rune_engine_chamber":
 			return RUNE_ENGINE_CHAMBER_ARENA_PROFILE
+		&"ritual_crypt":
+			return RITUAL_CRYPT_ARENA_PROFILE
 		_:
 			return LEGACY_ARENA_PROFILE
 

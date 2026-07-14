@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="BossArenaProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/boss_arena_profile.gd" id="1_ap"]
+
+[resource]
+script = ExtResource("1_ap")
+id = &"ritual_crypt"
+size = Vector2i(680, 460)
+zone = &"basement"
+material_profile_id = &"ritual_crypt"
+clear_center_radius = 110.0

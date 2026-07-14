@@ -22,13 +22,14 @@ class FakeFloor:
 var _game_state_snapshot: Dictionary
 
 func before_each() -> void:
-	# Balance.scaled_* читает GameState.current_floor_number. Тесты
-	# симулируют первый boss floor = 5, чтобы проверить именно тот
-	# scenario, где обычные скелеты получали 6-7 damage.
+	# Balance.scaled_* читает GameState.current_floor_number. С PR 4
+	# Necromancer живёт на floor 15 (basement, третий босс). Тесты
+	# симулируют реальный boss floor 15 — если снова случайно попадёт
+	# iron sword в свиту, damage cap должен по-прежнему держать <=3.
 	_game_state_snapshot = {
 		"floor": GameState.current_floor_number,
 	}
-	GameState.current_floor_number = 5
+	GameState.current_floor_number = 15
 
 func after_each() -> void:
 	GameState.current_floor_number = _game_state_snapshot["floor"]
@@ -65,8 +66,11 @@ func test_first_summon_spawns_three_melee_and_two_ranged() -> void:
 	boss.global_position = Vector2(400, 400)
 	boss._target = get_tree().get_first_node_in_group("player")
 	boss._summon_cooldown_timer = 0.0
-	boss._maybe_start_summon(0.05)
-	boss._tick_cast(boss.SUMMON_CAST_DURATION + 0.1)
+	# PR 4: scheduler-state-machine — переход в SUMMON_CAST через APPROACH,
+	# затем прокрутка cast'а до финала (spawn'а).
+	boss._set_state(boss.State.APPROACH)
+	boss._tick_approach(0.05)
+	boss._tick_summon_cast(boss.SUMMON_CAST_DURATION + 0.1)
 	assert_eq(boss._melee_minions.size(), 3)
 	assert_eq(boss._ranged_minions.size(), 2)
 

@@ -860,47 +860,80 @@ Rune Engine Chamber (`rune_engine_chamber_arena.tres`) — 620×420 px, technica
 
 До PR 6 использует generic boss reward flow: XP + gold через стандартный `_handle_death`. `reward_profile_id = "rune_golem_reward_legacy"` — placeholder.
 
-### Necromancer (`boss.tscn`) — fallback этажей 15/20
+### Necromancer (`boss.tscn`) — третий босс, этаж 15 (basement, ritual_crypt)
+
+С PR 4 Некромант — **третий босс башни**, занимает этаж 15 как эксплицитная definition в `BossRegistry`. Legacy-fallback на этаж 20 остаётся до появления Crystal Wyrm (PR 5).
 
 Крупная фигура в тёмной робе с капюшоном, посох с зелёным кристаллом. Спрайт `necromancer.png` (32×32), коллизия r=14.
 
+К моменту 15-го этажа игрок уже знаком с melee-скелетами, скелетами-лучниками, лич-подобными projectile'ами, зомби, темпераментами существ и арена-hazard'ами. Necromancer становится проверкой приоритета целей (кого убивать раньше — босса, лучников, мечников), контроля свиты, уклонения от phase-меняющегося projectile pressure и использования cast-окна для отхода.
+
 | Параметр | Значение |
 |----------|----------|
-| max_health | 30 |
+| max_health | 30 (base — скейлится `Balance.scaled_hp(30, 15) = 80`) |
 | speed | 25 |
 | contact_damage | 3 |
 | contact_cooldown | 0.8 s |
-| volley_interval | 2.0 s |
-| volley_count | 8 |
-| aimed_fire_interval | 1.0 s |
-| xp_reward | 40 |
-| gold_reward | 20 |
+| xp_reward | 40 (скейлится) |
+| gold_reward | 20 (скейлится) |
 
-**Поведение:**
-- Медленно идёт к игроку через `move_and_collide`.
-- Контактный урон 3, cooldown 0.8s.
-- Каждые `volley_interval` выпускает `volley_count` штук `dark_orb_bullet.tscn` **по кругу** — направления через равные `TAU / volley_count` радиан (45° между пулями). Каждый второй залп сдвигается на `step / 2` (22.5° при `volley_count = 8`), чтобы звёздочка визуально вращалась между кадрами и игрок не мог заучить статичные коридоры безопасности.
-- Параллельно, каждые `aimed_fire_interval = 1.0 s`, выпускает **прицельный `magic_bolt_bullet.tscn`** — как обычный лич. Направление считается с упреждением по вектору движения игрока: `predicted = target.pos + target.velocity * (distance / AIMED_BULLET_SPEED)`, `AIMED_BULLET_SPEED = 100` (совпадает с `magic_bolt::speed`). Формула идентична `lich.gd::_compute_lead_direction`, вынесена в pure-функцию для тестов. Aimed shot добавляет постоянное давление между залпами звёздочек — раньше игрок в промежутках между volley спокойно вложить урон.
+**Scheduler — одна атака за раз (`necromancer.gd::State` enum).**
+
+Все три атаки (aimed / radial / summon) mutually exclusive: работают через явный state machine `IDLE → APPROACH → (AIMED_TELEGRAPH | RADIAL_TELEGRAPH | SUMMON_CAST) → ... → RECOVERY → APPROACH`. Cadence-таймеры (`_aimed_cooldown_timer`, `_radial_cooldown_timer`, `_summon_cooldown_timer`) тикают только в `APPROACH` — вне выбора атаки они не двигаются, поэтому «пока идёт telegraph одной атаки, другая свою очередь не пропустит». Приоритет в `_pick_next_action`: **summon** (если квоты не полные) > **radial** (только phase 2+) > **aimed** > движение.
+
+Boss-specific RNG (`_rng: RandomNumberGenerator`) детерминирован по `(tower_seed, floor)` — реплеи стабильны, тот же сид → та же последовательность выбора углов summon-arc'а и т.п.
+
+**Фазы по HP.** Плановые пороги 60% и 25%; переход — visible `PHASE_TRANSITION`-стейт (~0.75 s пауза scheduler'а, визуальная фиолетовая пульсация), сигнал `phase_changed` эмиттится ровно один раз на порог.
+
+| Фаза | HP | Атаки | Cadence-изменения |
+|------|-----|-------|-------------------|
+| 1 | 100–60% | aimed + summon | aimed 1.8 s, aimed damage 2, summon cd 10 s. **Radial НЕ доступен.** |
+| 2 | 60–25% | + radial_volley | aimed damage → 3, radial 3.0 s интервал, radial damage 1. |
+| 3 | 25–0% | те же | aimed 1.2 s (быстрее), summon cd 7.5 s. Damage per hit **не растёт**, minion count **не увеличивается**. |
+
+**Aimed projectile (`_fire_aimed_shot`).**
+
+- Snake-oil «как у лича»: `magic_bolt_bullet.tscn` с упреждением по вектору движения игрока (`predicted = target.pos + target.velocity * (distance / AIMED_BULLET_SPEED)`, `AIMED_BULLET_SPEED = 100`). Формула pure-функция, идентична `lich.gd::_compute_lead_direction`.
+- Telegraph `AIMED_TELEGRAPH = 0.45 s` перед выстрелом — окно на реакцию.
+- Damage: **2 в phase 1, 3 в phase 2/3** (cap 3, не ваншот).
+- Cadence: 1.8 s (phase 1/2) → 1.2 s (phase 3).
+- First-shot delay: `_aimed_cooldown_timer` инициализирован `AIMED_INTERVAL_PHASE1 * 0.5 = 0.9 s` — первый выстрел не летит на первом кадре после спавна (инвариант «no instant shot on spawn», окно >= telegraph 0.45 s).
+
+**Radial volley (`_fire_volley`, phase 2+).**
+
+- Только с phase 2: `_pick_next_action` игнорирует radial'ы в phase 1, даже если cooldown готов (плановый инвариант «phase 1 без radial»).
+- 8 лучей `dark_orb_bullet.tscn` по кругу (`RADIAL_BULLET_COUNT = 8`), damage cap **1** на снаряд. Каждый второй залп сдвинут на `step/2` (22.5°) — звёздочка визуально вращается между кадрами.
+- Telegraph `RADIAL_TELEGRAPH = 0.7 s`, cooldown `RADIAL_INTERVAL = 3.0 s`.
+- После залпа взводится `_post_radial_pause_timer = RADIAL_MIN_PAUSE = 0.6 s` — плановое окно «после radial никакая атака не выбирается» (не даёт scheduler'у сразу выстрелить aimed'ом поверх).
+- Radial и aimed никогда не летят одновременно: один в telegraph → другой не может стартовать.
 
 **Призыв свиты — фиксированная композиция 3 melee + 2 archer.**
 
 | Параметр | Значение |
 |----------|----------|
-| SUMMON_COOLDOWN | 10.0 s |
+| SUMMON_COOLDOWN_PHASE12 | 10.0 s |
+| SUMMON_COOLDOWN_PHASE3 | 7.5 s (короче на 25%) |
 | SUMMON_CAST_DURATION | 1.2 s |
+| SUMMON_RECOVERY | 0.5 s |
 | SUMMON_MELEE_COUNT | 3 |
 | SUMMON_RANGED_COUNT | 2 |
-| SUMMON_COUNT | 5 (сумма) |
+| SUMMON_COUNT | 5 (сумма, не растёт по фазам) |
 
 - **Раздельные квоты по ролям.** `_melee_minions` и `_ranged_minions` — отдельные списки живых миньонов. `_cleanup_minions` каждый тик прополняет мёртвых (`is_instance_valid`) в каждом списке независимо. Гибель конкретной роли пополняется именно этой ролью: убили всех melee → следующий каст призовёт 3 melee, не подмену случайными.
 - **Первый каст стартует сразу.** `_summon_cooldown_timer` инициализирован нулём — босс со входа в комнату начинает колдовать свиту, а не тратит 10 s на «зарядку». Игрок мгновенно понимает роль призывателя; `SUMMON_CAST_DURATION = 1.2 s` даёт окно среагировать до появления первой пятёрки миньонов.
 - **Топ-ап, не всегда 5.** Пример: 2 melee + 2 ranged живы → следующий каст = 1 melee. 3 melee + 0 ranged → 2 ranged.
-- Если оба списка полные (`_total_alive_minions() >= SUMMON_COUNT`) — каст не стартует, кулдаун ждёт снижения популяции.
-- Каст (1.2 s) полностью тормозит босса: `_summon_cast_timer > 0` → пропускается движение (`velocity = 0`), контактный урон (не двигается — нет `move_and_collide`), и volley-таймер тоже пропускается (декремент только вне каста). Игрок получает окно «босс колдует, добивай минионов пока свежие не появились».
+- Если оба списка полные (`_total_alive_minions() >= SUMMON_COUNT`) — scheduler не выбирает summon, кулдаун ждёт снижения популяции.
+- Каст (1.2 s) полностью тормозит босса: `_state == SUMMON_CAST` → `_physics_process` не движется и не бьёт (`velocity = 0`), а cadence-таймеры aimed/radial не тикают → aimed/radial не стартуют во время cast'а (инвариант «no projectile during cast»). Игрок получает окно «босс колдует, добивай минионов пока свежие не появились».
 - Каст-визуал: `Visual.modulate` мешается с `Color(0.7, 1.6, 0.85)` через синусоидальную пульсацию поверх линейного прогресса — тот же паттерн что у лича, но более длинная фаза телеграфа. Gif `media/cast_pulse.gif` рендерит 0.8 s (длительность лича); у босса эта же пульсация растянута до 1.2 s.
 
   ![Cast pulse (та же формула, у босса растянута до 1.2 s)](media/cast_pulse.gif)
 - **Formation — не рандомный сектор.** Melee идут во фронт между боссом и игроком: 3 слота по anchor'ам `boss + forward * (28|34) + right * (-22|0|+22)`. Ranged занимают фланги чуть позади: 2 слота `boss - forward * 10 + right * (±56)`. Если основной anchor попал в стену, `_find_walkable_near` разлетается по 30°-спирали радиусами 20/40/60 px; крайний fallback — прежний random-arc-обход. Формация создаёт перекрёстный fire и не окружает игрока сразу.
+
+**Cleanup on death.** Killing blow вызывает `_set_state(DEAD)` перед `queue_free()`. В `DEAD` state `_physics_process` возвращается сразу — никакие атаки не стартуют, cadence-таймеры не тикают, cast/telegraph не завершается. Свита не даёт наград (`grants_xp/gold/drops = false`), поэтому оставшиеся после смерти босса миньоны продолжают жить и могут быть добиты игроком, но не фармятся — плановый инвариант «no farming».
+
+#### Arena
+
+Ritual Crypt (`ritual_crypt_arena.tres`) — 680×460 px, basement zone, `clear_center_radius = 110 px`. Больше, чем Castellan Hall (640×420) и Rune Engine Chamber (620×420), чтобы вместить босса + 5 миньонов + игрока + два одновременных снаряда-паттерна без ситуации «неминуемое окружение». Идея: ритуальный круг в центре, 2–4 боковых alcoves; текущая реализация ограничена профилем (`size`, `zone`, `clear_center_radius`, `material_profile_id`) — детальный декор придёт с материалом-профилем.
 
 #### Профили миньонов (`SummonedCreatureProfile`)
 
