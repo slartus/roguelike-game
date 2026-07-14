@@ -11,11 +11,28 @@ func test_floor_five_has_explicit_definition() -> void:
 		"с PR 2 5 этаж — Castellan Armor, Necromancer больше не спавнится тут")
 
 func test_boss_floors_ten_fifteen_twenty_have_definitions() -> void:
-	# До PR 3–5 fallback возвращает Некроманта, но definition должна быть.
+	# PR 4: 10 → Rune Golem (explicit), 15 → Necromancer (explicit),
+	# 20 → Necromancer (fallback до PR 5 Crystal Wyrm).
 	for floor in [10, 15, 20]:
 		var definition := BossRegistry.definition_for_floor(floor)
 		assert_not_null(definition,
-			"boss floor %d должен резолвиться через fallback" % floor)
+			"boss floor %d должен резолвиться" % floor)
+
+func test_floor_fifteen_resolves_to_necromancer_explicit() -> void:
+	# PR 4: Necromancer занимает 15 явной definition — не через fallback slot.
+	var definition := BossRegistry.definition_for_floor(15)
+	assert_not_null(definition, "floor 15 обязан иметь boss definition")
+	assert_eq(definition.id, &"necromancer",
+		"этаж 15 — Necromancer (третий босс)")
+	assert_eq(definition.floor_number, 15,
+		"definition резолвится через explicit floor_number, а не fallback")
+
+func test_floor_twenty_resolves_to_necromancer_fallback() -> void:
+	# PR 4: 20 — единственный fallback slot до PR 5 Crystal Wyrm.
+	var definition := BossRegistry.definition_for_floor(20)
+	assert_not_null(definition, "floor 20 обязан иметь boss definition")
+	assert_eq(definition.id, &"necromancer",
+		"этаж 20 обслуживается Necromancer'ом как fallback")
 
 func test_non_boss_floors_return_null() -> void:
 	for floor in [1, 2, 3, 4, 6, 7, 11, 19]:
@@ -44,13 +61,22 @@ func test_arena_profile_for_castellan_is_castellan_hall() -> void:
 	assert_eq(profile.id, &"castellan_hall",
 		"Castellan Armor использует свой arena profile castellan_hall")
 
-func test_arena_profile_for_fallback_boss_is_legacy() -> void:
-	# После PR 3 fallback slot остаётся только на floor 15 и 20 (Necromancer);
-	# floor 10 занял Rune Golem со своей ареной. Проверяем 15.
+func test_arena_profile_for_necromancer_is_ritual_crypt() -> void:
+	# PR 4: Necromancer на 15 переезжает в свою ritual_crypt-арену (basement).
 	var profile := BossRegistry.arena_profile_for_floor(15)
+	assert_not_null(profile, "у floor 15 должен быть arena profile")
+	assert_eq(profile.id, &"ritual_crypt",
+		"Necromancer использует свою arena profile ritual_crypt")
+
+func test_arena_profile_for_fallback_boss_is_ritual_crypt() -> void:
+	# После PR 4 fallback slot остался только на floor 20 (Necromancer).
+	# Profile резолвится через `definition.arena_profile_id`, а не по
+	# номеру этажа — значит floor 20 fallback наследует ritual_crypt от
+	# Necromancer'а до PR 5 (Crystal Wyrm со своим профилем).
+	var profile := BossRegistry.arena_profile_for_floor(20)
 	assert_not_null(profile, "fallback slot должен иметь arena profile")
-	assert_eq(profile.id, &"legacy_600x400",
-		"fallback (Necromancer) продолжает делить legacy 600×400 профиль на 15/20")
+	assert_eq(profile.id, &"ritual_crypt",
+		"floor 20 fallback наследует ritual_crypt через necromancer definition")
 
 func test_all_definitions_returns_registered_bosses() -> void:
 	var definitions := BossRegistry.all_definitions()

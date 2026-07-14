@@ -95,8 +95,10 @@ func test_boss_scene_uses_default_stats_and_has_bullet_scene() -> void:
 	assert_eq(instance.max_health, 30)
 	assert_eq(instance.speed, 25.0)
 	assert_eq(instance.contact_damage, 3)
-	assert_eq(instance.volley_interval, 2.0)
-	assert_eq(instance.volley_count, 8)
+	# PR 4: volley_interval/volley_count заменены на RADIAL_INTERVAL /
+	# RADIAL_BULLET_COUNT (const) — radial встроен в scheduler-state-machine.
+	assert_almost_eq(instance.RADIAL_INTERVAL, 3.0, 0.001)
+	assert_eq(instance.RADIAL_BULLET_COUNT, 8)
 	assert_eq(instance.xp_reward, 40)
 	assert_eq(instance.gold_reward, 20)
 	assert_not_null(instance.bullet_scene, "boss must have bullet_scene wired")

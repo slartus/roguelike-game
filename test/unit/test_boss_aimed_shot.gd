@@ -1,9 +1,10 @@
 extends GutTest
 
-# Boss.Necromancer помимо залпа звёздочек стреляет прицельным aimed
-# снарядом (как обычный лич) с упреждением по вектору движения игрока.
-# Тесты проверяют pure формулу _compute_lead_direction + факт того что
-# aimed_bullet_scene установлен в .tscn.
+# Necromancer помимо radial-залпа стреляет прицельным aimed-снарядом (как
+# обычный лич) с упреждением по вектору движения игрока. После PR 4 aimed
+# управляется scheduler-state-machine: AIMED_TELEGRAPH (0.45s) → fire →
+# AIMED_RECOVERY (0.35s). Damage растёт от phase 1 (2) к phase 2/3 (3).
+# Cadence: phase 1/2 = 1.8 s, phase 3 = 1.2 s.
 
 const BossScene = preload("res://scenes/enemies/boss.tscn")
 
@@ -54,29 +55,32 @@ func test_target_at_boss_position_returns_zero() -> void:
 	assert_eq(dir, Vector2.ZERO,
 		"distance=0 → ZERO, никакой пули")
 
-func test_aimed_fire_interval_is_reasonable() -> void:
-	# Sanity: интервал не 0 (бесконечный спам) и не гигантский.
+func test_aimed_interval_shortens_in_phase_three() -> void:
+	# Плановый инвариант: в phase 3 aimed cadence немного быстрее, но
+	# damage per hit не увеличивается сверх phase 2 cap.
 	var boss = _spawn_boss()
-	assert_gt(boss.aimed_fire_interval, 0.1,
-		"aimed_fire_interval > 0.1 — иначе босс превратится в пулемёт")
-	assert_lt(boss.aimed_fire_interval, 5.0,
-		"aimed_fire_interval < 5s — иначе фича неощутима")
+	boss.current_phase = 1
+	assert_almost_eq(boss._aimed_interval_for_phase(), boss.AIMED_INTERVAL_PHASE1, 0.001)
+	boss.current_phase = 2
+	assert_almost_eq(boss._aimed_interval_for_phase(), boss.AIMED_INTERVAL_PHASE2, 0.001)
+	boss.current_phase = 3
+	assert_almost_eq(boss._aimed_interval_for_phase(), boss.AIMED_INTERVAL_PHASE3, 0.001,
+		"phase 3 использует более короткий cooldown между aimed'ами")
+	assert_lt(boss.AIMED_INTERVAL_PHASE3, boss.AIMED_INTERVAL_PHASE1,
+		"phase 3 aimed interval < phase 1 aimed interval")
 
-func test_volley_and_aimed_timers_are_independent() -> void:
-	# Пользовательский инвариант: залп звёзд и aimed shot не должны
-	# влиять друг на друга. Разные поля, разные декременты, разные
-	# reload'ы. Проверяем что таймеры существуют раздельно и что
-	# reload одного не затрагивает другой.
+func test_aimed_damage_scales_up_at_phase_two_but_capped() -> void:
+	# Плановый cap: aimed damage не выше 2–3 (не ваншот). Phase 1 = 2,
+	# phase 2/3 = 3.
 	var boss = _spawn_boss()
-	boss._volley_timer = 0.5
-	boss._aimed_fire_timer = 1.5
-	assert_ne(boss._volley_timer, boss._aimed_fire_timer,
-		"таймеры — отдельные поля")
-	# Симулируем сброс volley: только его reload, aimed не тронут.
-	boss._volley_timer = boss.volley_interval
-	assert_almost_eq(boss._aimed_fire_timer, 1.5, 0.001,
-		"перезарядка volley не влияет на aimed_fire_timer")
-	# И наоборот.
-	boss._aimed_fire_timer = boss.aimed_fire_interval
-	assert_almost_eq(boss._volley_timer, boss.volley_interval, 0.001,
-		"перезарядка aimed не влияет на _volley_timer")
+	boss.current_phase = 1
+	assert_eq(boss._aimed_damage_for_phase(), boss.AIMED_BULLET_DAMAGE_PHASE1,
+		"phase 1 aimed damage = мягкий cap 2")
+	boss.current_phase = 2
+	assert_eq(boss._aimed_damage_for_phase(), boss.AIMED_BULLET_DAMAGE_PHASE23,
+		"phase 2 aimed damage = 3")
+	boss.current_phase = 3
+	assert_eq(boss._aimed_damage_for_phase(), boss.AIMED_BULLET_DAMAGE_PHASE23,
+		"phase 3 aimed damage не превышает phase 2 (плановый инвариант «damage single-hit не растёт»)")
+	assert_lte(boss.AIMED_BULLET_DAMAGE_PHASE23, 3,
+		"aimed damage cap = 3 (плановый invariant)")
